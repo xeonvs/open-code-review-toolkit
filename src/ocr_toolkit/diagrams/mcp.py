@@ -7,12 +7,12 @@ from typing import Any
 
 from ocr_toolkit.diagrams.collector import DiagramCollector
 from ocr_toolkit.diagrams.contracts import DIAGRAM_TOOL_NAME as DIAGRAM_TOOL_NAME
-from ocr_toolkit.diagrams.contracts import bounded_json
+from ocr_toolkit.diagrams.contracts import MAX_SUBMISSIONS, bounded_json
 from ocr_toolkit.diagrams.lifecycle import diagram_warning
 
 
 def diagram_tool_definition() -> dict[str, object]:
-    """Describe the closed tagged union without granting paths or provider writes."""
+    """Advertise bounded structure; the server enforces the canonical tagged grammar."""
 
     def obj(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
         return {
@@ -36,28 +36,30 @@ def diagram_tool_definition() -> dict[str, object]:
             }
         ),
     }
-    message = obj(
-        {
-            "kind": {"const": "message"},
+
+    def sequence_steps(depth: int) -> dict[str, Any]:
+        # The finite structural projection avoids provider-specific reference or
+        # union support. The canonical parser owns tagged-field requirements and
+        # totals across branches; clients must omit fields of the other variant.
+        properties = {
+            "kind": {"type": "string", "enum": ["message", "alt"] if depth < 2 else ["message"]},
             "source": identifier,
             "target": identifier,
             "message_type": {"type": "string", "enum": ["call", "return"]},
             "label": label,
             "references": refs,
         }
-    )
-    steps = {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/step"}}
-    alt = obj(
-        {
-            "kind": {"const": "alt"},
-            "branches": {
+        if depth < 2:
+            properties["branches"] = {
                 "type": "array",
                 "minItems": 2,
                 "maxItems": 2,
-                "items": obj({"condition": label, "references": refs, "steps": steps}),
-            },
-        }
-    )
+                "items": obj(
+                    {"condition": label, "references": refs, "steps": sequence_steps(depth + 1)}
+                ),
+            }
+        return {"type": "array", "maxItems": 20, "items": obj(properties, ["kind"])}
+
     edge = obj(
         {
             "source": identifier,
@@ -66,13 +68,9 @@ def diagram_tool_definition() -> dict[str, object]:
             "references": {**refs, "minItems": 0},
         }
     )
-    edge["oneOf"] = [
-        {"properties": {"condition": {"const": ""}}},
-        {"properties": {"condition": {"minLength": 1}, "references": {"minItems": 1}}},
-    ]
-    flow = obj(
+    diagram = obj(
         {
-            "kind": {"const": "flowchart"},
+            "kind": {"type": "string", "enum": ["flowchart", "sequence"]},
             "nodes": {
                 "type": "array",
                 "minItems": 1,
@@ -86,51 +84,38 @@ def diagram_tool_definition() -> dict[str, object]:
                     }
                 ),
             },
-            "edges": {
-                "type": "array",
-                "maxItems": 16,
-                "items": edge,
-            },
-        }
-    )
-    sequence = obj(
-        {
-            "kind": {"const": "sequence"},
+            "edges": {"type": "array", "maxItems": 16, "items": edge},
             "participants": {
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 8,
                 "items": obj({"id": identifier, "label": label, "references": refs}),
             },
-            "steps": steps,
-        }
+            "steps": sequence_steps(0),
+        },
+        ["kind"],
     )
     schema = obj(
         {
             "state": {"type": "string", "enum": ["generated", "not-applicable"]},
             "base_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
             "head_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
-            "diagram": {"oneOf": [flow, sequence]},
+            "diagram": diagram,
         },
         ["state", "base_sha", "head_sha"],
     )
-    schema["$defs"] = {"step": {"oneOf": [message, alt]}}
-    schema["oneOf"] = [
-        {"properties": {"state": {"const": "generated"}}, "required": ["diagram"]},
-        {"properties": {"state": {"const": "not-applicable"}}, "not": {"required": ["diagram"]}},
-    ]
     return {
         "name": DIAGRAM_TOOL_NAME,
         "description": (
-            "Submit the requested model-proposed summary for the exact full review range. "
-            "Choose flowchart for decisions or sequence for ordered component interactions. "
+            "Submit state=generated with a typed diagram for the exact full review range. "
+            "diagram.kind chooses flowchart (nodes/edges) or sequence (participants/steps). Omit fields of the other variant. "
             "Use not-applicable without diagram for changes with no useful behavioral summary. "
             "Do not send prose reasons, raw Mermaid, HTML, styles or output paths. "
             "Labels/conditions: one line, 80 code points/320 UTF-8 bytes. Candidate: 16 KiB. "
             "Sequence totals across ALL branches: 16 messages, four alt fragments, depth two. "
             "References point to reviewed head. Every node/participant/message/branch condition "
             "requires 1-2 references; conditional flow edges also require references. "
-            "All groups share eight submissions/128 KiB; different candidates omit the diagram. "
+            "All groups share eight submissions/128 KiB. Correct invalid replies while retryable; different valid candidates omit the diagram. "
             "A response confirms private collection only, not final admission or publication."
         ),
         "inputSchema": schema,
@@ -152,11 +137,18 @@ def call_diagram_tool(
         if collector is None:
             raise ValueError("diagram output unavailable")
         snapshot = collector.submit(arguments, input_bytes=request_bytes)
-        result = (
+        result: dict[str, object] = (
             {"state": "received"}
             if snapshot.reason == "none"
             else {"state": "omitted-invalid", "reason": snapshot.reason}
         )
+        if snapshot.last_error is not None:
+            result = {
+                "state": "invalid",
+                "retryable": snapshot.retryable,
+                "error": snapshot.last_error,
+                "submissions_left": max(0, MAX_SUBMISSIONS - snapshot.submissions),
+            }
         return {"content": [{"type": "text", "text": json.dumps(result, sort_keys=True)}]}
     except Exception:
         # Only this optional output boundary catches unexpected implementation
@@ -177,7 +169,9 @@ def diagram_status(collector: DiagramCollector | None) -> dict[str, str]:
         try:
             snapshot = collector.read()
             state = (
-                "omitted-invalid"
+                "retryable-invalid"
+                if snapshot.reason == "invalid" and snapshot.retryable
+                else "omitted-invalid"
                 if snapshot.reason != "none"
                 else "received"
                 if snapshot.candidate is not None

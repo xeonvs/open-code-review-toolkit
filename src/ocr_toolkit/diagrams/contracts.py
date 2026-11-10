@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, cast
 
+from ocr_toolkit.diagrams.diagnostics import DiagramError as DiagramError
+from ocr_toolkit.diagrams.diagnostics import at_pointer
 from ocr_toolkit.result_contract import OcrResultContractError
 from ocr_toolkit.review_range import ReviewRange
 
@@ -24,10 +27,6 @@ DiagramState = Literal[
 DiagramReason = Literal[
     "none", "invalid", "conflict", "budget", "unavailable", "range", "reference", "dlp"
 ]
-
-
-class DiagramError(ValueError):
-    """A candidate violates the closed optional diagram contract."""
 
 
 def parse_diagram_mode(raw: str | None, *, local: bool) -> DiagramMode:
@@ -146,8 +145,17 @@ class DiagramResult:
 
 def _object(value: object, keys: set[str]) -> dict[str, object]:
     if not isinstance(value, dict) or set(value) != keys:
-        raise DiagramError("diagram object has an invalid closed shape")
+        raise DiagramError(
+            "diagram object has an invalid closed shape", allowed=tuple(sorted(keys))
+        )
     return value
+
+
+def _field[T](raw: dict[str, object], key: str, reader: Callable[[object], T]) -> T:
+    """Locate a value failure under a known canonical property."""
+
+    with at_pointer("/" + key):
+        return reader(raw[key])
 
 
 def _array(value: object, minimum: int, maximum: int) -> list[object]:
@@ -180,19 +188,22 @@ def _identifier(value: object) -> str:
 
 def _references(value: object, *, required: bool = True) -> tuple[SourceReference, ...]:
     references = []
-    for item in _array(value, 1 if required else 0, 2):
-        raw = _object(item, {"path", "start_line", "end_line"})
-        path = _text(raw["path"], path=True)
-        if (
-            path.startswith(("/", "-"))
-            or "\\" in path
-            or any(part in {"", ".", ".."} for part in path.split("/"))
-        ):
-            raise DiagramError("diagram source path is not normalized and relative")
-        start, end = raw["start_line"], raw["end_line"]
-        if type(start) is not int or type(end) is not int or not 1 <= start <= end <= 1_000_000:
-            raise DiagramError("diagram source span is invalid")
-        references.append(SourceReference(path, start, end))
+    for item_index, item in enumerate(_array(value, 1 if required else 0, 2)):
+        with at_pointer(f"/{item_index}"):
+            raw = _object(item, {"path", "start_line", "end_line"})
+            path = _field(raw, "path", lambda v: _text(v, path=True))
+            if (
+                path.startswith(("/", "-"))
+                or "\\" in path
+                or any(part in {"", ".", ".."} for part in path.split("/"))
+            ):
+                raise DiagramError(
+                    "diagram source path is not normalized and relative", path="/path"
+                )
+            start, end = raw["start_line"], raw["end_line"]
+            if type(start) is not int or type(end) is not int or not 1 <= start <= end <= 1_000_000:
+                raise DiagramError("diagram source span is invalid")
+            references.append(SourceReference(path, start, end))
     if len(set(references)) != len(references):
         raise DiagramError("diagram source references are duplicated")
     return tuple(sorted(references))
@@ -208,35 +219,47 @@ def _unique_ids(values: tuple[FlowNode, ...] | tuple[Participant, ...]) -> set[s
 def _flowchart(value: dict[str, object]) -> Flowchart:
     raw = _object(value, {"kind", "nodes", "edges"})
     nodes = []
-    for item in _array(raw["nodes"], 1, 12):
-        node = _object(item, {"id", "kind", "label", "references"})
-        kind = node["kind"]
-        if kind not in ("step", "decision"):
-            raise DiagramError("diagram node kind is invalid")
-        nodes.append(
-            FlowNode(
-                _identifier(node["id"]),
-                kind,
-                _text(node["label"]),
-                _references(node["references"]),
+    for item_index, item in enumerate(_field(raw, "nodes", lambda v: _array(v, 1, 12))):
+        with at_pointer(f"/nodes/{item_index}"):
+            node = _object(item, {"id", "kind", "label", "references"})
+            kind = node["kind"]
+            if kind not in ("step", "decision"):
+                raise DiagramError("diagram node kind is invalid", path="/kind")
+            nodes.append(
+                FlowNode(
+                    _field(node, "id", _identifier),
+                    kind,
+                    _field(node, "label", _text),
+                    _field(node, "references", _references),
+                )
             )
-        )
     normalized_nodes = tuple(sorted(nodes, key=lambda node: node.identifier))
-    identifiers = _unique_ids(normalized_nodes)
+    with at_pointer("/nodes"):
+        identifiers = _unique_ids(normalized_nodes)
     edges = []
-    for item in _array(raw["edges"], 0, 16):
-        edge = _object(item, {"source", "target", "condition", "references"})
-        source, target = _identifier(edge["source"]), _identifier(edge["target"])
-        if source not in identifiers or target not in identifiers:
-            raise DiagramError("diagram edge has an unknown endpoint")
-        condition = _text(edge["condition"], empty=True)
-        edges.append(
-            FlowEdge(
-                source, target, condition, _references(edge["references"], required=bool(condition))
+    for item_index, item in enumerate(_field(raw, "edges", lambda v: _array(v, 0, 16))):
+        with at_pointer(f"/edges/{item_index}"):
+            edge = _object(item, {"source", "target", "condition", "references"})
+            source, target = (
+                _field(edge, "source", _identifier),
+                _field(edge, "target", _identifier),
             )
-        )
+            if source not in identifiers or target not in identifiers:
+                raise DiagramError(
+                    "diagram edge has an unknown endpoint",
+                    path="/source" if source not in identifiers else "/target",
+                )
+            condition = _field(edge, "condition", lambda v: _text(v, empty=True))
+            edges.append(
+                FlowEdge(
+                    source,
+                    target,
+                    condition,
+                    _field(edge, "references", lambda v: _references(v, required=bool(condition))),
+                )
+            )
     if len(set(edges)) != len(edges):
-        raise DiagramError("diagram edges are duplicated")
+        raise DiagramError("diagram edges are duplicated", path="/edges")
     return Flowchart(
         normalized_nodes,
         tuple(
@@ -250,72 +273,86 @@ def _flowchart(value: dict[str, object]) -> Flowchart:
 def _sequence(value: dict[str, object]) -> SequenceDiagram:
     raw = _object(value, {"kind", "participants", "steps"})
     participants = []
-    for item in _array(raw["participants"], 1, 8):
-        participant = _object(item, {"id", "label", "references"})
-        participants.append(
-            Participant(
-                _identifier(participant["id"]),
-                _text(participant["label"]),
-                _references(participant["references"]),
+    for item_index, item in enumerate(_field(raw, "participants", lambda v: _array(v, 1, 8))):
+        with at_pointer(f"/participants/{item_index}"):
+            participant = _object(item, {"id", "label", "references"})
+            participants.append(
+                Participant(
+                    _field(participant, "id", _identifier),
+                    _field(participant, "label", _text),
+                    _field(participant, "references", _references),
+                )
             )
-        )
     normalized_participants = tuple(
         sorted(participants, key=lambda participant: participant.identifier)
     )
-    identifiers = _unique_ids(normalized_participants)
+    with at_pointer("/participants"):
+        identifiers = _unique_ids(normalized_participants)
     messages, alternatives = 0, 0
 
     def parse_steps(value: object, depth: int) -> tuple[SequenceStep, ...]:
         nonlocal messages, alternatives
         steps: list[SequenceStep] = []
-        for item in _array(value, 0, 20):
-            if not isinstance(item, dict):
-                raise DiagramError("diagram sequence step must be an object")
-            if item.get("kind") == "message":
-                message = _object(
-                    item, {"kind", "source", "target", "message_type", "label", "references"}
-                )
-                source, target = _identifier(message["source"]), _identifier(message["target"])
-                message_type = message["message_type"]
-                if source not in identifiers or target not in identifiers:
-                    raise DiagramError("diagram message has an unknown endpoint")
-                if message_type not in ("call", "return"):
-                    raise DiagramError("diagram message type is invalid")
-                messages += 1
-                if messages > 16:
-                    raise DiagramError("diagram exceeds its total message budget")
-                steps.append(
-                    SequenceMessage(
-                        source,
-                        target,
-                        message_type,
-                        _text(message["label"]),
-                        _references(message["references"]),
+        for item_index, item in enumerate(_array(value, 0, 20)):
+            with at_pointer(f"/{item_index}"):
+                if not isinstance(item, dict):
+                    raise DiagramError("diagram sequence step must be an object")
+                if item.get("kind") == "message":
+                    message = _object(
+                        item, {"kind", "source", "target", "message_type", "label", "references"}
                     )
-                )
-            elif item.get("kind") == "alt":
-                alternative = _object(item, {"kind", "branches"})
-                alternatives += 1
-                if alternatives > 4 or depth >= 2:
-                    raise DiagramError("diagram exceeds its total alternative or nesting budget")
-                branches = []
-                for branch_item in _array(alternative["branches"], 2, 2):
-                    branch = _object(branch_item, {"condition", "references", "steps"})
-                    branches.append(
-                        SequenceBranch(
-                            _text(branch["condition"]),
-                            _references(branch["references"]),
-                            parse_steps(branch["steps"], depth + 1),
+                    source, target = (
+                        _field(message, "source", _identifier),
+                        _field(message, "target", _identifier),
+                    )
+                    message_type = message["message_type"]
+                    if source not in identifiers or target not in identifiers:
+                        raise DiagramError(
+                            "diagram message has an unknown endpoint",
+                            path="/source" if source not in identifiers else "/target",
+                        )
+                    if message_type not in ("call", "return"):
+                        raise DiagramError("diagram message type is invalid", path="/message_type")
+                    messages += 1
+                    if messages > 16:
+                        raise DiagramError("diagram exceeds its total message budget")
+                    steps.append(
+                        SequenceMessage(
+                            source,
+                            target,
+                            message_type,
+                            _field(message, "label", _text),
+                            _field(message, "references", _references),
                         )
                     )
-                steps.append(SequenceAlt(tuple(branches)))
-            else:
-                raise DiagramError("diagram sequence step kind is invalid")
+                elif item.get("kind") == "alt":
+                    alternative = _object(item, {"kind", "branches"})
+                    alternatives += 1
+                    if alternatives > 4 or depth >= 2:
+                        raise DiagramError(
+                            "diagram exceeds its total alternative or nesting budget"
+                        )
+                    branches = []
+                    for item_index, branch_item in enumerate(
+                        _field(alternative, "branches", lambda v: _array(v, 2, 2))
+                    ):
+                        with at_pointer(f"/branches/{item_index}"):
+                            branch = _object(branch_item, {"condition", "references", "steps"})
+                            branches.append(
+                                SequenceBranch(
+                                    _field(branch, "condition", _text),
+                                    _field(branch, "references", _references),
+                                    _field(branch, "steps", lambda v: parse_steps(v, depth + 1)),
+                                )
+                            )
+                    steps.append(SequenceAlt(tuple(branches)))
+                else:
+                    raise DiagramError("diagram sequence step kind is invalid", path="/kind")
         return tuple(steps)
 
-    steps = parse_steps(raw["steps"], 0)
+    steps = _field(raw, "steps", lambda v: parse_steps(v, 0))
     if not messages:
-        raise DiagramError("diagram sequence has no messages")
+        raise DiagramError("diagram sequence has no messages", path="/steps")
     return SequenceDiagram(normalized_participants, steps)
 
 
@@ -338,7 +375,7 @@ def parse_submission(value: object, *, expected_range: ReviewRange) -> DiagramSu
 
     bounded_json(value)
     if not isinstance(value, dict) or value.get("state") not in ("generated", "not-applicable"):
-        raise DiagramError("diagram submission state is invalid")
+        raise DiagramError("diagram submission state is invalid", path="/state")
     generated = value["state"] == "generated"
     raw = _object(
         value,
@@ -351,18 +388,22 @@ def parse_submission(value: object, *, expected_range: ReviewRange) -> DiagramSu
     except OcrResultContractError as exc:
         raise DiagramError("diagram immutable range is invalid") from exc
     if review_range != expected_range:
-        raise DiagramError("diagram refers to a different immutable range")
+        raise DiagramError(
+            "diagram refers to a different immutable range",
+            path="/base_sha" if review_range.base != expected_range.base else "/head_sha",
+        )
     if not generated:
         return DiagramSubmission(review_range, None)
     diagram = raw["diagram"]
     if not isinstance(diagram, dict):
-        raise DiagramError("diagram variant must be an object")
-    if diagram.get("kind") == "flowchart":
-        parsed: Diagram = _flowchart(diagram)
-    elif diagram.get("kind") == "sequence":
-        parsed = _sequence(diagram)
-    else:
-        raise DiagramError("diagram variant is unsupported")
+        raise DiagramError("diagram variant must be an object", path="/diagram")
+    with at_pointer("/diagram"):
+        if diagram.get("kind") == "flowchart":
+            parsed: Diagram = _flowchart(diagram)
+        elif diagram.get("kind") == "sequence":
+            parsed = _sequence(diagram)
+        else:
+            raise DiagramError("diagram variant is unsupported", path="/kind")
     return DiagramSubmission(review_range, parsed)
 
 

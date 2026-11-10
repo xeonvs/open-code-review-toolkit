@@ -77,15 +77,33 @@ def test_conflicting_candidates_omit_in_both_arrival_orders(
     assert collector.submit(first()).reason == "conflict"
 
 
-def test_invalid_input_is_sticky_and_all_input_bytes_still_count(
+def test_invalid_input_is_repairable_and_all_input_bytes_still_count(
     collector: DiagramCollector,
 ) -> None:
     assert collector.submit({"state": "bad"}).reason == "invalid"
-    assert collector.submit(flow_submission()).reason == "invalid"
+    assert collector.submit(flow_submission()).reason == "none"
     for _attempt in range(3):
         snapshot = collector.submit("x" * 64000)
     assert snapshot.reason == "budget" and snapshot.input_bytes == MAX_SUBMISSION_BYTES + 1
     assert snapshot.candidate is None
+
+
+def test_invalid_attempt_preserves_valid_candidate_and_does_not_hide_conflict(collector):
+    first = collector.submit(flow_submission())
+    invalid = collector.submit({"state": "proposed"})
+    assert invalid.candidate == first.candidate and invalid.reason == "none"
+    assert invalid.last_error["path"] == "/state" and invalid.retryable
+    assert collector.read() == invalid
+    assert collector.submit(sequence_submission()).reason == "conflict"
+
+
+def test_last_allowed_attempt_can_repair_but_no_ninth_attempt_is_admitted(collector):
+    for _ in range(7):
+        assert collector.submit({}).retryable
+    final = collector.submit(flow_submission())
+    assert final.candidate is not None and final.last_error is None
+    assert not final.retryable
+    assert collector.submit(flow_submission()).reason == "budget"
 
 
 def test_unserializable_input_exhausts_the_bound_without_retaining_data(

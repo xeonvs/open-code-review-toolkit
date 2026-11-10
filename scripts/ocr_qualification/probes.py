@@ -158,6 +158,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     )
     contracts["language_rule_probe"] = selection._language_rule_probe(binary, version, directory)
     contracts["csharp_context_probe"] = selection._csharp_context_probe(binary, directory)
+    contracts["clojure_context_probe"] = selection._clojure_context_probe(binary, directory)
     contracts["completion_cap_probe"] = numeric._completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = numeric._reasoning_effort_probe(binary, directory)
     contracts["stream_override_probe"] = wire_controls.stream_override_probe(binary, directory)

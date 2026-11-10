@@ -22,6 +22,51 @@ LABEL = st.text(alphabet="abcxyz01239 .<>=[]{}|&;:#'\"😀é", min_size=1, max_s
 )
 
 
+@given(
+    st.sampled_from(("nodes", "edges", "participants", "steps", "branches", "references")),
+    st.sampled_from(("type", "under", "over")),
+    st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=16),
+)
+def test_array_rejection_identifies_the_owning_field_before_element_parsing(
+    field: str, mutation: str, material: str
+) -> None:
+    limits = {
+        "nodes": (1, 12),
+        "edges": (0, 16),
+        "participants": (1, 8),
+        "steps": (0, 20),
+        "branches": (2, 2),
+        "references": (1, 2),
+    }
+    payload = (
+        flow_submission() if field in {"nodes", "edges", "references"} else sequence_submission()
+    )
+    parent = payload["diagram"]
+    pointer = "/diagram"
+    if field == "branches":
+        parent["steps"] = [alternative([message()])]
+        parent = parent["steps"][0]
+        pointer += "/steps/0"
+    elif field == "references":
+        parent = parent["nodes"][0]
+        pointer += "/nodes/0"
+    minimum, maximum = limits[field]
+    untrusted = {"UNTRUSTED_REJECTED_MATERIAL": material}
+    parent[field] = (
+        [untrusted] * (maximum + 1)
+        if mutation == "over"
+        else [untrusted] * (minimum - 1)
+        if mutation == "under" and minimum
+        else untrusted
+    )
+    with pytest.raises(DiagramError) as caught:
+        parse_submission(payload, expected_range=REVIEW_RANGE)
+    diagnostic = caught.value.diagnostic()
+    assert diagnostic["code"] == "array"
+    assert diagnostic["path"] == pointer + "/" + field
+    assert "UNTRUSTED_REJECTED_MATERIAL" not in str(diagnostic)
+
+
 @given(st.integers(1, 12), st.integers(0, 16), LABEL)
 def test_flow_round_trip_preserves_all_labels_and_endpoints(
     node_count: int, edge_count: int, label: str

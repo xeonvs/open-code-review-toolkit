@@ -116,7 +116,7 @@ flowchart TD
     target_policy --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
     unprotected_rules --> acquire
     separate_policy --> acquire
-    acquire --> diagram_setup[Prepare optional run collector by mode<br/>and qualified OCR capability;<br/>failure omits only diagram]
+    acquire --> diagram_setup[Prepare optional run collector by mode<br/>and qualified OCR capability;<br/>closed feedback allows bounded corrections;<br/>fault/conflict/budget omits only diagram]
     diagram_setup --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error

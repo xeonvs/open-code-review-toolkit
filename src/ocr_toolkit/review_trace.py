@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import stat
@@ -14,7 +15,9 @@ from typing import Any, BinaryIO
 from ocr_toolkit.common.filesystem import same_file_identity
 from ocr_toolkit.review_range import ReviewRange
 
-TRACE_SCHEMA = "ocr.native-trace/v1"
+TRACE_SCHEMA = "ocr.native-trace/v2"
+MAX_REPORTED_METRIC = (1 << 63) - 1
+_USAGE_FIELDS = ("prompt_tokens", "completion_tokens", "cache_read_tokens", "cache_write_tokens")
 MAX_TRACE_BYTES = 20_000_000
 MAX_SOURCE_BYTES = 32_000_000
 MAX_RECORD_BYTES = 4_000_000
@@ -177,6 +180,14 @@ def project_record(value: dict[str, Any]) -> dict[str, object] | None:
             result.update(
                 content=value["content"], tool_calls=_calls(value.get("tool_calls"), response=True)
             )
+            if "usage" in value:
+                if not isinstance(value["usage"], dict):
+                    raise NativeTraceError("invalid native usage metadata")
+                result["usage"] = {
+                    key: _reported_number(value["usage"][key])
+                    for key in _USAGE_FIELDS
+                    if key in value["usage"]
+                }
         else:
             if (
                 any(
@@ -187,6 +198,8 @@ def project_record(value: dict[str, Any]) -> dict[str, object] | None:
             ):
                 raise NativeTraceError("invalid native tool result")
             result.update({key: value[key] for key in ("tool_name", "arguments", "result", "ok")})
+        if kind in {"llm_response", "llm_error", "tool_call"} and "duration_ms" in value:
+            result["duration_ms"] = _reported_number(value["duration_ms"])
         return result
     if kind == "session_end":
         paths = value.get("files_reviewed")
@@ -195,6 +208,10 @@ def project_record(value: dict[str, Any]) -> dict[str, object] | None:
         if type(value.get("llm_failures")) is not int or value["llm_failures"] < 0:
             raise NativeTraceError("invalid native failure count")
         result.update(files_reviewed=paths, llm_failures=value["llm_failures"])
+        if "duration_seconds" in value:
+            result["duration_seconds"] = _reported_number(
+                value["duration_seconds"], fractional=True
+            )
         return result
     if kind in {"review_item_done", "review_item_failed", "review_item_reused"}:
         for key in ("filePath", "oldPath", "newPath", "fingerprint", "error"):
@@ -204,6 +221,20 @@ def project_record(value: dict[str, Any]) -> dict[str, object] | None:
                 result[key] = value[key]
         return result
     return None
+
+
+def _reported_number(value: object, *, fractional: bool = False) -> int | float:
+    """Keep bounded native-reported metrics; absent metadata is never invented."""
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise NativeTraceError("invalid native numeric metadata")
+    if (
+        (not fractional and not isinstance(value, int))
+        or not 0 <= value <= MAX_REPORTED_METRIC
+        or not math.isfinite(value)
+    ):
+        raise NativeTraceError("invalid native numeric metadata")
+    return value
 
 
 class NativeTraceSource:

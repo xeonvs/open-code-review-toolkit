@@ -190,6 +190,10 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
 DEFAULT_RULE_CONTROL_PATHS = ("BUILDX", "nested/WORKSPACES")
 
 CURRENT_LANGUAGE_RULES = {
+    "src/core.clj": "**/*.{clj,cljs,cljc,edn}",
+    "src/nested/view.cljs": "**/*.{clj,cljs,cljc,edn}",
+    "src/shared.cljc": "**/*.{clj,cljs,cljc,edn}",
+    "deps.edn": "**/*.{clj,cljs,cljc,edn}",
     "app/src/Program.cs": "**/*.cs",
     "bazel/rules.bzl": "**/*.{bzl,bazel,star}",
     "bazel/defs.bazel": "**/*.{bzl,bazel,star}",
@@ -242,6 +246,12 @@ CURRENT_LANGUAGE_RULES = {
 
 
 CURRENT_DEFAULT_EXCLUDED_PATHS = (
+    "test/nested/core.clj",
+    "src/core_test.cljs",
+    "resources/public/js/compiled/app.js",
+    "resources/public/js/compiled/config.edn",
+    ".cpcache/cache.edn",
+    ".shadow-cljs/build.edn",
     "src/test/kotlin/scripts/Example.kts",
     "test/parser.ml",
     "src/test_helpers.py",

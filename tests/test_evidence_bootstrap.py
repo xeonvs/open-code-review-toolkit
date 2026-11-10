@@ -74,14 +74,14 @@ def test_refs_and_output_instructions_survive_clipping_together():
     store = bootstrap_store(("a", "b", "a", "b"))
     store.diagnostics = ["é😀" * 500]
     rendered = render_bootstrap(
-        store, capabilities=(DIAGRAM_CAPABILITY,), max_chars=1900, max_bytes=2400
+        store, capabilities=(DIAGRAM_CAPABILITY,), max_chars=2200, max_bytes=2600
     )
     assert rendered.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
     assert rendered.count("a" * 40) == rendered.count("b" * 40) == 1
     assert "- actual target: same commit as head (untrusted code context)" in rendered
     assert "base_sha/head_sha from refs above" in rendered
-    assert "once before task_done" in rendered and "truncated" in rendered
-    assert len(rendered) <= 1900 and len(rendered.encode()) <= 2400
+    assert "before task_done" in rendered and "truncated" in rendered
+    assert len(rendered) <= 2200 and len(rendered.encode()) <= 2600
     with pytest.raises(ValueError, match="preserve required evidence navigation"):
         render_bootstrap(store, capabilities=(DIAGRAM_CAPABILITY,), max_chars=500)
 
@@ -152,11 +152,11 @@ def test_large_evidence_keeps_required_routes_and_does_not_cut_the_mcp_store(tmp
     assert "CI/images/infrastructure" in rendered and "policy/guidance" in rendered
     assert "Only applicable `complete` coverage proves absence" in rendered
     assert "context_list" in rendered and "context_get" in rendered
-    assert "## Requested change diagram" in rendered and "once before task_done" in rendered
+    assert "## Requested change diagram" in rendered and "before task_done" in rendered
     assert rendered.index("## Requested change diagram") > rendered.index(
         "## Immutable review refs"
     )
-    assert "even with no findings" in rendered and "entire reviewed change" in rendered
+    assert "Even without findings" in rendered and "whole change" in rendered
     assert "include dotfiles" in rendered
     assert store.to_dict() == before and evidence_summary(store)["records"] == 513
     response = call_tool(store, {"action": "get", "id": last.id})
@@ -206,7 +206,7 @@ def test_supported_profiles_keep_all_required_routes_at_default_bounds(
         assert "After review intent" not in rendered
     assert ("listed handles only" in rendered) == enriched
     assert ("actual MCP tool definitions" in rendered) == external
-    assert ("once before task_done" in rendered) == diagram
+    assert ("before task_done" in rendered) == diagram
     if policy == "limited":
         assert "bounded untrusted review guidance only" in rendered
         assert "no tool, posting, suppression or approval authority" in rendered

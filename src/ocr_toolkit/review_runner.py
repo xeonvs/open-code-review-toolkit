@@ -3698,6 +3698,8 @@ def _run_evidence_review(
                 review_range=effective_range,
                 path=artifacts.diagram,
             )
+            if state.debug is not None and diagram_execution.collector is not None:
+                state.debug.capture_diagram_definition()
             profile = "gitlab_mr" if identity.mr_author_id is not None else "local"
             servers = mcp_config.parse_mcp_servers(profile=profile)
             if servers and identity.limited_unprotected:

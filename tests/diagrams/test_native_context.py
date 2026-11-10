@@ -173,7 +173,7 @@ def test_native_group_context_and_rounds(
             prompt = next(
                 message["content"] for message in messages if message.get("role") == "user"
             )
-            assert "even with no findings" in prompt and "entire reviewed change" in prompt
+            assert "Even without findings" in prompt and "whole change" in prompt
             assert "include dotfiles" in prompt
             own_block = prompt.split("<review_files>", 1)[1].split("</review_files>", 1)[0]
             own = set(re.findall(r'<file path="([^"\r\n]+)">', own_block))
@@ -360,6 +360,10 @@ def test_native_group_context_and_rounds(
     journal = json.loads((debug / "journal.json").read_text())
     assert journal["schema_version"] == review_debug.DEBUG_SCHEMA
     assert journal["artifacts"]["native-trace.jsonl"]["status"] == "passed", journal["artifacts"]
+    definition = json.loads((debug / "mcp-tools.json").read_text())
+    assert journal["artifacts"]["mcp-tools.json"]["status"] == "passed"
+    assert definition["origin"] == "toolkit-mcp-definition"
+    assert definition["provider_wire_observed"] is False
     trace = [json.loads(line) for line in (debug / "native-trace.jsonl").read_text().splitlines()]
     assert trace[0]["diffFrom"] == base and trace[0]["diffTo"] == head
     assert trace[-1]["type"] == "session_end"

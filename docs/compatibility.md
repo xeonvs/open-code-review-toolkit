@@ -431,6 +431,34 @@ Issue [#298](https://github.com/xeonvs/open-code-review-toolkit/issues/298) owns
 qualification and the final exact-tag hosted check. Published GitLab examples
 advance their toolkit/OCR/checksum pair together in the stable release PR.
 
+### OCR 1.13.7 — toolkit 0.14.7 qualification
+
+Verified official Linux amd64 and Darwin arm64 assets pass the same current
+contract suite. Clojure `.clj`, ClojureScript `.cljs`, shared `.cljc` and EDN
+`.edn` receive their built-in Rules. Real native main requests carry the Rules
+and read unchanged `deps.edn`; selection also verifies test and generated-output
+exclusions. The qualified inventory now contains 52 paths.
+
+The review-loop extraction preserves range/manifest, rounds, coverage, MCP,
+federation and gitlink consumers. Controlled consumers additionally prove corrected
+diagram submissions and the actual schema serialization on OpenAI Chat
+Completions, Responses and Anthropic. These prove protocol handoffs, not arbitrary
+gateway acceptance or model quality.
+
+Native `session show` can discover a saved session outside its repository;
+`--repo` restricts lookup, and missing, invalid or ambiguous IDs fail without
+changing saved bytes. Toolkit trace capture remains confined to its run-owned
+HOME. Existing native concurrency defaults to eight; controlled independent
+groups prove that default and explicit one/two bounds with complete coverage.
+Native auth resolution, refresh/store ownership and request controls retain their
+previous contract. No new toolkit authentication entry is required.
+
+The scan-only 200-line PLAN_TASK threshold does not change toolkit `review`.
+Telemetry span scoping, test HOME isolation, npm installation and upstream
+Action/site changes do not add toolkit execution paths. No second diagram model
+pass, custom scheduler or cache layer is introduced. Release #302 owns the
+consumer fixes; final configured-model acceptance remains the own-tool review.
+
 ## Promotion and rollback
 
 Preparation validates all generated destinations before writing. Existing evidence

@@ -62,14 +62,16 @@ def client(root: Path, collector: DiagramCollector | None) -> Client:
 @pytest.mark.parametrize(
     "condition,has_references", [("", False), ("", True), ("supported", False), ("supported", True)]
 )
-def test_advertised_conditional_reference_contract_matches_parser(condition, has_references):
+def test_advertised_structure_keeps_server_conditional_reference_authority(
+    condition, has_references
+):
     payload = flow_submission()
     edge = payload["diagram"]["edges"][0]
     edge["condition"] = condition
     if not has_references:
         edge["references"] = []
     valid = not condition or has_references
-    assert Draft202012Validator(diagram_tool_definition()["inputSchema"]).is_valid(payload) == valid
+    assert Draft202012Validator(diagram_tool_definition()["inputSchema"]).is_valid(payload)
     if valid:
         assert parse_submission(
             payload, expected_range=ReviewRange(payload["base_sha"], payload["head_sha"])

@@ -1,0 +1,439 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "fa7b63f25e7002aec38e6980b071d1b53e6681aeb9e144b7bfe84833de5e3de6",
+      "size": 58361600
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "ce2eab495483f9b119992b48253a4e2f6969c27c3b02514350d9e7aa0083b4e8",
+      "size": 55366066
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "8c1ff786161b6dc0e8dcb06107f18bda8b6181b39ce573400add4a39f90cf19d",
+      "size": 56606882
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "f18be0e467aa23a5d9966b38fc0f89144b932970a2082800eacd4062b9257ffa",
+      "size": 53280930
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "b637d002471056c57f50c947583188dbeafa043aeb5875ee16ab4355b1eb2d36",
+      "size": 58079232
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "7c65e39825a169a4c6a4ddf1e163a0888843d5b338b72ed77e892095e6c8042d",
+      "size": 53999616
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "bca0acc284cb4e0904022235429b3d473b1e4c04e4f962cf67353e27539953d4",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.13.6",
+  "contracts": {
+    "clojure_context_probe": {
+      "context_paths": [
+        "deps.edn"
+      ],
+      "execution": "read-only-native-tools",
+      "result": "passed",
+      "rules_in_main_request": true
+    },
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "csharp_context_probe": {
+      "context_paths": [
+        "Directory.Build.props",
+        "app/Project.csproj",
+        "global.json"
+      ],
+      "execution": "read-only-native-tools",
+      "result": "passed",
+      "rules_in_main_request": true
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "test/nested/core.clj",
+        "src/core_test.cljs",
+        "resources/public/js/compiled/app.js",
+        "resources/public/js/compiled/config.edn",
+        ".cpcache/cache.edn",
+        ".shadow-cljs/build.edn",
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+        "src/WidgetTest.fs",
+        "node_modules/example/index.ts",
+        "dist/generated.js"
+      ],
+      "default_rule_paths": [
+        "BUILDX",
+        "nested/WORKSPACES"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "excluded_paths": [
+        "rtl/include.svh",
+        "nested/BUILD.bak"
+      ],
+      "extensions": [
+        ".bazel",
+        ".bzl",
+        ".cjs",
+        ".clj",
+        ".cljc",
+        ".cljs",
+        ".cs",
+        ".cxx",
+        ".edn",
+        ".ejs",
+        ".erb",
+        ".fs",
+        ".fsi",
+        ".fsx",
+        ".glsl",
+        ".haml",
+        ".hlsl",
+        ".hxx",
+        ".j2",
+        ".jinja2",
+        ".jsonc",
+        ".kts",
+        ".liquid",
+        ".metal",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".njk",
+        ".nu",
+        ".ps1",
+        ".psd1",
+        ".psm1",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".scala",
+        ".slim",
+        ".star",
+        ".sv",
+        ".tofu",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl",
+        ".wgsl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "paths": [
+        "BUILD",
+        "WORKSPACE",
+        "app/src/Program.cs",
+        "bazel/config.star",
+        "bazel/defs.bazel",
+        "bazel/rules.bzl",
+        "config/settings.jsonc",
+        "deps.edn",
+        "infra/main.tofu",
+        "native/header.hxx",
+        "native/object.mm",
+        "native/source.cxx",
+        "nested/BUILD",
+        "nested/WORKSPACE",
+        "policies/authz.rego",
+        "rtl/entity.vhd",
+        "rtl/entity.vhdl",
+        "rtl/include.vh",
+        "rtl/module.sv",
+        "rtl/module.v",
+        "scripts/check.fsx",
+        "scripts/module.psd1",
+        "scripts/module.psm1",
+        "scripts/setup.kts",
+        "scripts/setup.nu",
+        "scripts/setup.ps1",
+        "shaders/main.glsl",
+        "shaders/main.hlsl",
+        "shaders/main.metal",
+        "shaders/main.wgsl",
+        "src/Main.scala",
+        "src/Program.fs",
+        "src/Program.fsi",
+        "src/component.re",
+        "src/component.rei",
+        "src/core.clj",
+        "src/module.cjs",
+        "src/module.mjs",
+        "src/nested/view.cljs",
+        "src/parser.ml",
+        "src/parser.mli",
+        "src/shared.cljc",
+        "types/interface.pyi",
+        "views/component.j2",
+        "views/page.ejs",
+        "views/page.erb",
+        "views/page.haml",
+        "views/page.jinja2",
+        "views/page.liquid",
+        "views/page.njk",
+        "views/page.pug",
+        "views/page.slim"
+      ],
+      "result": "passed",
+      "rule_documents": [
+        "clojure",
+        "csharp",
+        "starlark"
+      ],
+      "rule_source": "system_builtin",
+      "selected": 52
+    },
+    "numeric_cli_probe": {
+      "grace_rounds": {
+        "no_task_done": {
+          "completed": false,
+          "limit_warning": true
+        },
+        "task_done": {
+          "completed": true,
+          "limit_warning": true
+        }
+      },
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "lower_override": {
+            "effective": 75,
+            "input": 75,
+            "outcome": "accepted"
+          },
+          "minimum": {
+            "effective": 50,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 50,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 125,
+            "input": 125,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          },
+          "template_value": {
+            "effective": 100,
+            "input": 100,
+            "outcome": "accepted"
+          }
+        },
+        "manifest_limit_verified": true,
+        "maximum": null,
+        "owner": "ocr-cli-or-template-default",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "stream_override_probe": {
+      "explicit_false": "preserved",
+      "non_boolean": "omitted",
+      "protocols": [
+        "openai",
+        "openai-responses",
+        "anthropic"
+      ],
+      "provider_acceptance": "not-tested",
+      "result": "passed",
+      "unset": "omitted"
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-11-10T06:00:15Z",
+  "release_changes": "## 🚀 Features\n\n- feat(scan): gate PLAN_TASK on file size (#1252)\n- feat(session): inspect saved sessions by ID from any directory (#1884)\n- feat(rules): add Clojure and ClojureScript review rules (#965)\n\n## 🐛 Bug Fixes\n\n- fix: prevent postinstall 404 crash for unreleased v0.0.0 (#1820)\n- fix(telemetry): scope parse and enumerate span contexts to their blocks (#1713)\n- fix(test): add TestMain to isolate cmd/opencodereview from the real home (#1707)\n\n## 🔧 Refactoring\n\n- refactor(runtime): separate review tasks from the shared loop (#1887)\n\n## 📖 Documentation\n\n- docs(readme): state which modes need llm.auth_token (#1778)\n\n## Other Changes\n\n- test(opencode): escape the worktree path in the v2 fallback test (#1846)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.13.6...v1.13.7",
+  "release_notes_sha256": "b05ce96f4e379f83e0f5ad7992fb6a08cbdecd99cca47f10957d0aa79f3513af",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.13.7",
+  "tested_baseline_version": "1.13.6",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.13.7"
+}

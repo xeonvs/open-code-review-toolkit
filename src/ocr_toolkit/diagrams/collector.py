@@ -31,10 +31,11 @@ from ocr_toolkit.diagrams.contracts import (
     parse_submission,
     submission_payload,
 )
+from ocr_toolkit.diagrams.diagnostics import MAX_DIAGNOSTIC_BYTES, parse_diagnostic
 from ocr_toolkit.review_range import ReviewRange
 
-COLLECTOR_SCHEMA = "ocr.diagram-collector/v1"
-MAX_COLLECTOR_BYTES = MAX_DIAGRAM_BYTES + 1024
+COLLECTOR_SCHEMA = "ocr.diagram-collector/v2"
+MAX_COLLECTOR_BYTES = MAX_DIAGRAM_BYTES + MAX_DIAGNOSTIC_BYTES + 1024
 _COLLECTOR_KEYS = {
     "schema",
     "run_id",
@@ -44,6 +45,7 @@ _COLLECTOR_KEYS = {
     "input_bytes",
     "reason",
     "candidate",
+    "last_error",
 }
 
 
@@ -55,6 +57,17 @@ class CollectorSnapshot:
     input_bytes: int
     reason: DiagramReason
     candidate: DiagramSubmission | None
+    last_error: dict[str, object] | None = None
+
+    @property
+    def retryable(self) -> bool:
+        """Only model validation can be repaired within the remaining run budget."""
+
+        return (
+            self.reason in {"none", "invalid"}
+            and self.submissions < MAX_SUBMISSIONS
+            and self.input_bytes < MAX_SUBMISSION_BYTES
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +187,12 @@ class DiagramCollector:
         )
         if (parsed is not None) != (count > 0 and reason == "none"):
             raise DiagramError("diagram collector candidate state is inconsistent")
-        return CollectorSnapshot(count, size, cast(DiagramReason, reason), parsed)
+        error = parse_diagnostic(value["last_error"]) if value["last_error"] is not None else None
+        if (reason == "invalid" and error is None) or (
+            error is not None and (count == 0 or reason in {"conflict", "budget"})
+        ):
+            raise DiagramError("diagram collector diagnostic state is inconsistent")
+        return CollectorSnapshot(count, size, cast(DiagramReason, reason), parsed, error)
 
     def read(self) -> CollectorSnapshot:
         """Take a serialized hostile-read snapshot before any cleanup occurs."""
@@ -194,6 +212,7 @@ class DiagramCollector:
             "candidate": submission_payload(snapshot.candidate)
             if snapshot.candidate is not None
             else None,
+            "last_error": snapshot.last_error,
         }
         encoded = bounded_json(payload, limit=MAX_COLLECTOR_BYTES)
         temporary = f".{name}.{secrets.token_hex(8)}"
@@ -248,20 +267,23 @@ class DiagramCollector:
             total = min(previous.input_bytes + max(1, size), MAX_SUBMISSION_BYTES + 1)
             reason = previous.reason
             candidate = previous.candidate
+            error = None
             if count > MAX_SUBMISSIONS or total > MAX_SUBMISSION_BYTES:
                 reason = "budget"
-            elif reason == "none":
+            elif reason in {"none", "invalid"}:
                 try:
                     parsed = parse_submission(value, expected_range=self.review_range)
-                except DiagramError:
-                    reason = "invalid"
+                except DiagramError as exc:
+                    error = exc.diagnostic()
+                    reason = "none" if candidate is not None else "invalid"
                 else:
                     if candidate is not None and candidate != parsed:
                         reason = "conflict"
                     else:
                         candidate = parsed
+                        reason = "none"
             snapshot = CollectorSnapshot(
-                count, total, reason, candidate if reason == "none" else None
+                count, total, reason, candidate if reason == "none" else None, error
             )
             self._write(parent, name, snapshot)
             return snapshot

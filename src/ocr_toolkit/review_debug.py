@@ -21,7 +21,7 @@ from ocr_toolkit.reporting.model import FailureStage
 from ocr_toolkit.review_range import ReviewRange
 from ocr_toolkit.review_trace import MAX_TRACE_BYTES, NativeTraceSource
 
-DEBUG_SCHEMA = "ocr.toolkit-debug/v2"
+DEBUG_SCHEMA = "ocr.toolkit-debug/v3"
 MAX_DEBUG_JSON_BYTES = 20_000_000
 MAX_DEBUG_STDERR_BYTES = 2_000_000
 MAX_DEBUG_JOURNAL_BYTES = 1_000_000
@@ -36,6 +36,7 @@ ArtifactName = Literal[
     "bootstrap.md",
     "diagram.json",
     "native-trace.jsonl",
+    "mcp-tools.json",
 ]
 ARTIFACT_LIMITS: dict[ArtifactName, int] = {
     "raw-result.json": MAX_DEBUG_JSON_BYTES,
@@ -45,6 +46,7 @@ ARTIFACT_LIMITS: dict[ArtifactName, int] = {
     "bootstrap.md": 65_536,
     "diagram.json": 20_000,
     "native-trace.jsonl": MAX_TRACE_BYTES,
+    "mcp-tools.json": 16_384,
 }
 _SAFE_PATH_FIELDS = frozenset(
     {
@@ -188,6 +190,41 @@ class DebugBundle:
         except FileNotFoundError:
             self.artifacts[name] = {"status": "missing", "limit_bytes": limit}
         except (OSError, ValueError, RuntimeError):
+            self.artifacts[name] = {"status": "unavailable", "limit_bytes": limit}
+
+    def capture_diagram_definition(self) -> None:
+        """Record the toolkit advertisement definition, never provider-wire proof."""
+
+        name: ArtifactName = "mcp-tools.json"
+        limit = ARTIFACT_LIMITS[name]
+        try:
+            from ocr_toolkit.diagrams.contracts import bounded_json
+            from ocr_toolkit.diagrams.mcp import diagram_tool_definition
+
+            definition = diagram_tool_definition()
+            schema = definition["inputSchema"]
+            payload = {
+                "schema_version": "ocr.toolkit-mcp-definition/v1",
+                "origin": "toolkit-mcp-definition",
+                "provider_wire_observed": False,
+                "tools": [
+                    {
+                        "name": definition["name"],
+                        "inputSchema": schema,
+                        "schema_sha256": hashlib.sha256(bounded_json(schema)).hexdigest(),
+                    }
+                ],
+            }
+            content = bounded_json(payload, limit=limit)
+            self._write(name, content)
+            self.artifacts[name] = {
+                "status": "passed",
+                "limit_bytes": limit,
+                "captured_bytes": len(content),
+                "sha256_captured": hashlib.sha256(content).hexdigest(),
+            }
+        except Exception:
+            # Definition capture is optional diagnostics and confers no authority.
             self.artifacts[name] = {"status": "unavailable", "limit_bytes": limit}
 
     def _validate_directory(self) -> None:

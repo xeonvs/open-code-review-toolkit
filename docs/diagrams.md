@@ -76,12 +76,19 @@ repository coverage. Insufficient source context or an unavailable output tool
 leaves the optional output absent without changing the review outcome.
 
 When output is enabled, the mandatory evidence summary also exposes a closed
-`diagram_output.state`: `pending`, `received`, `omitted-invalid` or `unavailable`.
+`diagram_output.state`: `pending`, `retryable-invalid`, `received`,
+`omitted-invalid` or `unavailable`.
 Fresh review rounds can check that state before submitting. It contains no
 candidate text or source references, makes no admission/publication claim, and
 does not consume a submission. An optional status-read fault leaves mandatory
 evidence usable. Unexpected submissions still face the same conflict and budget
 rules; the collector never picks a winner among competing candidates.
+`received` confirms collection, before source and DLP admission. Invalid attempts
+return a closed error code, canonical field/index pointer, static explanation,
+allowed values, remaining submissions and `retryable`. The model may correct
+the canonical payload within the existing budgets; guessed aliases are rejected.
+Feedback never echoes rejected labels, unknown keys or exception text. Private
+storage/run faults are unavailable output, not model-correctable validation.
 
 Limits apply to the whole candidate:
 
@@ -97,9 +104,10 @@ Limits apply to the whole candidate:
 - Candidate: 16 KiB; each label/condition is one line, at most 80 code points and
   320 UTF-8 bytes; each source-bearing element has one or two references.
 - Run collector: at most eight submissions and 128 KiB of original wire input.
-  Identical normalized repeats are idempotent. Different candidates, invalid
-  submissions or exhausted budgets omit the whole diagram; fragments are never
-  merged and arrival order does not select a winner.
+  Every attempt counts. Invalid attempts can be corrected and do not discard a
+  previously valid candidate. Identical normalized valid repeats are idempotent.
+  Different valid candidates or exhausted budgets terminally omit the diagram;
+  fragments are never merged and arrival order does not select a winner.
 
 The runner snapshots the candidate before cleanup, then checks the final native
 range identity, endpoints, IDs, nesting, budgets, source paths/lines and whole

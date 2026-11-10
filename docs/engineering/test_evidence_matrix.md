@@ -10,6 +10,27 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.7 recoverable optional output and private metrics
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Invalid output is repairable without weakening admission | Actual qualified OCR -> stdio MCP -> collector -> immutable-source/DLP admission -> report | Both variants consume closed invalid feedback before resubmission; state properties cover valid/invalid order, repeats, conflict and budgets, alongside hostile private-state reads | Eight attempts/128 KiB wire input; different valid candidates remain terminal conflict; received is collection only |
+| Advertised schema and wire evidence have distinct provenance | Production MCP factory -> native OpenAI, Responses and Anthropic adapters -> controlled HTTP peers | Actual API captures equal the finite structural schema; real SDK tests retain server-only semantic constraints | Capture deliberately ends with a synthetic HTTP error; no arbitrary gateway acceptance claim |
+| Debug diagnostics do not become result authority | Run-owned native session -> bounded private trace/debug bundle | Numeric present/absent/zero and invalid metadata properties; private schema snapshot hash/origin; changed/oversized/truncated sources and optional failures | Definition evidence is explicitly not provider wire; metrics do not establish billing, causality or model completeness |
+| Native refactoring preserves consumed behavior | Verified official Linux/Darwin OCR -> current contracts and native consumers | Clojure Rules/EDN context, exclusions, frozen predecessor readback, actual concurrency and session lookup controls, gitlink/federation handoffs | Deterministic peers supplement, rather than replace, the final real own-tool review |
+
+Actual native ChatGPT/Astra high acceptance completed all 50 changed files with
+an admitted ten-node TB flowchart and two unchanged, DLP-admitted findings.
+Those findings are corrected by owning-field/collection diagnostic properties
+and pre-response request accounting in the controlled concurrency peer. The
+single guessed-path read was recovered in the same group through the real mode
+parser. The background-size recommendation did not truncate protected context;
+there were no budget, round or context-exhaustion warnings. All 64 model responses
+retain reported duration and usage; no billing or parallel-duration inference is
+made. The full runtime measurement plus focused qualification-fixture corrections
+passes every coverage floor at 90.13% overall; changed diagram/debug/trace owners
+measure 94–99%. Security diff review found no candidates across the changed scope.
+
 ## v0.14.6 safe prose and carrier evidence
 
 | Invariant | Real boundary | Verification | Limit |

@@ -36,7 +36,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     control_overflow = False
     context_reads: dict[str, tuple[str, ...]] = {}
     observed_context_reads: set[str] = set()
-    observed_csharp_rules = False
+    observed_rules = False
+    rule_marker = "#### Nullability and Reference Types"
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -185,8 +186,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             if any(settings.PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
                 type(self).recheck_instruction_requests += 1
             if type(self).context_reads:
-                type(self).observed_csharp_rules |= any(
-                    "#### Nullability and Reference Types" in content for content in contents
+                type(self).observed_rules |= any(
+                    type(self).rule_marker in content for content in contents
                 )
                 type(self).observed_context_reads.update(
                     context_read_observations(messages, type(self).context_reads)
@@ -317,6 +318,7 @@ def _stub_gateway(
     capture_reasoning: bool = False,
     capture_controls: bool = False,
     context_reads: dict[str, tuple[str, ...]] | None = None,
+    rule_marker: str = "#### Nullability and Reference Types",
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -347,7 +349,8 @@ def _stub_gateway(
     _StubHandler.control_overflow = False
     _StubHandler.context_reads = dict(context_reads or {})
     _StubHandler.observed_context_reads = set()
-    _StubHandler.observed_csharp_rules = False
+    _StubHandler.observed_rules = False
+    _StubHandler.rule_marker = rule_marker
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

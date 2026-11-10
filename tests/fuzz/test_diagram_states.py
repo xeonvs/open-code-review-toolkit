@@ -22,7 +22,7 @@ from tests.diagrams.support import REVIEW_RANGE, flow_submission
         st.sampled_from(("first", "equivalent", "other", "absent", "invalid", "large")), max_size=12
     )
 )
-def test_submission_sequences_obey_sticky_omission_and_cumulative_budgets(
+def test_submission_sequences_obey_valid_candidate_conflicts_and_cumulative_budgets(
     actions: list[str],
 ) -> None:
     first = flow_submission()
@@ -52,13 +52,14 @@ def test_submission_sequences_obey_sticky_omission_and_cumulative_budgets(
             total = min(total + size, MAX_SUBMISSION_BYTES + 1)
             if count > MAX_SUBMISSIONS or total > MAX_SUBMISSION_BYTES:
                 reason = "budget"
-            elif reason == "none":
+            elif reason in {"none", "invalid"}:
                 if action in ("invalid", "large"):
-                    reason = "invalid"
+                    reason = "none" if identity is not None else "invalid"
                 elif identity is not None and identity != identities[action]:
                     reason = "conflict"
                 else:
                     identity = identities[action]
+                    reason = "none"
             snapshot = collector.submit(candidate, input_bytes=size)
             assert (snapshot.submissions, snapshot.input_bytes, snapshot.reason) == (
                 count,

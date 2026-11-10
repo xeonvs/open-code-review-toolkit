@@ -26,6 +26,8 @@ from tests.test_evidence_repository import git
     (
         "flow",
         "sequence",
+        "repair-flow",
+        "repair-sequence",
         "absent",
         "not-applicable",
         "invalid",
@@ -71,7 +73,8 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
     if case == "startup-failure":
         artifacts.diagram.mkdir(mode=0o700)
     candidate = bind(
-        sequence_submission() if case == "sequence" else flow_submission(), review_range
+        sequence_submission() if case in {"sequence", "repair-sequence"} else flow_submission(),
+        review_range,
     )
 
     def repath(value):
@@ -91,6 +94,8 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
     )
     if case == "invalid":
         candidate["base_sha"] = "0" * 40
+    if case.startswith("repair-"):
+        submissions = [{"state": "proposed"}, candidate]
     if case == "not-applicable":
         submissions = [{"state": "not-applicable", "base_sha": base, "head_sha": head}]
     if case == "conflict":
@@ -122,6 +127,15 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
             if index == 0:
                 name, arguments = "ocr_toolkit_evidence", {"action": "summary"}
             elif index <= len(submissions):
+                if case.startswith("repair-") and index == 2:
+                    # The correction follows actual feedback through OCR's MCP adapter.
+                    feedback = json.loads(cls.output_responses[-1]["content"])
+                    if "content" in feedback:
+                        feedback = json.loads(feedback["content"][0]["text"])
+                    assert feedback["state"] == "invalid"
+                    assert feedback["retryable"] is True
+                    assert feedback["error"]["path"] == "/state"
+                    assert feedback["submissions_left"] == 7
                 if case == "call-failure":
                     artifacts.diagram.unlink()
                     artifacts.diagram.mkdir(mode=0o700)
@@ -244,7 +258,7 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
     assert base in markdown and head in markdown
     expected = (
         "generated"
-        if case in ("flow", "sequence")
+        if case in ("flow", "sequence", "repair-flow", "repair-sequence")
         else "disabled"
         if case == "off"
         else "not-generated"

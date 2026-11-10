@@ -44,7 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("configure", help="Write the OCR runtime configuration.")
     subparsers.add_parser("mcp-config", help="Write OCR MCP server configuration.")
     review_parser = subparsers.add_parser(
-        "review", help="Run OCR with private artifacts and safe failure diagnostics."
+        "review",
+        help="Run OCR with private artifacts and safe failure diagnostics.",
+        epilog=(
+            "Diagrams: OCR_REVIEW_DIAGRAM_MODE=local requests a standalone private diagram; "
+            "unset/on, off and spoiler do not request one with --local. "
+            "GitLab on/spoiler request expanded/collapsed output; off disables it."
+        ),
     )
     review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")

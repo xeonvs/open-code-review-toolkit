@@ -126,25 +126,12 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
 
 
 def _csharp_context_probe(binary: Path, directory: Path) -> dict[str, object]:
-    """Read unchanged C# project context through actual native file tools."""
-
-    root = directory / "csharp-context-probe"
-    root.mkdir()
-    git_env = execution._isolated_probe_environment(root / "git-home")
+    """Qualify C# project context without executing its build system."""
     context = {
         "app/Project.csproj": "<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>",
         "Directory.Build.props": "<Project><PropertyGroup><LangVersion>14.0</LangVersion></PropertyGroup></Project>",
         "global.json": '{"sdk":{"version":"10.0.100"}}',
     }
-    repo, base, head = execution._synthetic_repo(
-        root,
-        git_env,
-        source_path="app/Program.cs",
-        baseline="public class Program { public static int Value() => 1; }\n",
-        changed="public class Program { public static int Value() => 2; }\n",
-        context_files=context,
-    )
-    env = execution._isolated_probe_environment(root / "review-home")
     expected_context = {
         "app/Project.csproj": (
             "<TargetFramework>net10.0</TargetFramework>",
@@ -153,7 +140,60 @@ def _csharp_context_probe(binary: Path, directory: Path) -> dict[str, object]:
         "Directory.Build.props": ("<LangVersion>14.0</LangVersion>",),
         "global.json": ("10.0.100",),
     }
-    with peer._stub_gateway(context_reads=expected_context) as gateway_url:
+    return _context_rules_probe(
+        binary,
+        directory,
+        name="csharp",
+        context=context,
+        expected_context=expected_context,
+        source_path="app/Program.cs",
+        baseline="public class Program { public static int Value() => 1; }\n",
+        changed="public class Program { public static int Value() => 2; }\n",
+        rule_marker="#### Nullability and Reference Types",
+    )
+
+
+def _clojure_context_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Qualify Clojure Rules in the main request and native EDN context reads."""
+    return _context_rules_probe(
+        binary,
+        directory,
+        name="clojure",
+        context={"deps.edn": '{:paths ["src"]}\n'},
+        expected_context={"deps.edn": (":paths", '"src"')},
+        source_path="src/core.clj",
+        baseline="(ns core)\n(def answer 1)\n",
+        changed="(ns core)\n(def answer 2)\n",
+        rule_marker="#### EDN Data, Configuration, and Untrusted Input",
+    )
+
+
+def _context_rules_probe(
+    binary: Path,
+    directory: Path,
+    *,
+    name: str,
+    context: dict[str, str],
+    expected_context: dict[str, tuple[str, ...]],
+    source_path: str,
+    baseline: str,
+    changed: str,
+    rule_marker: str,
+) -> dict[str, object]:
+    """Cross the real native reader and observe exact qualified rule text."""
+    root = directory / f"{name}-context-probe"
+    root.mkdir()
+    git_env = execution._isolated_probe_environment(root / "git-home")
+    repo, base, head = execution._synthetic_repo(
+        root,
+        git_env,
+        source_path=source_path,
+        baseline=baseline,
+        changed=changed,
+        context_files=context,
+    )
+    env = execution._isolated_probe_environment(root / "review-home")
+    with peer._stub_gateway(context_reads=expected_context, rule_marker=rule_marker) as gateway_url:
         env.update(
             {
                 "OCR_LLM_URL": gateway_url,
@@ -184,25 +224,27 @@ def _csharp_context_probe(binary: Path, directory: Path) -> dict[str, object]:
             env=env,
         )
         observed = set(peer._StubHandler.observed_context_reads)
-        rules_seen = peer._StubHandler.observed_csharp_rules
+        rules_seen = peer._StubHandler.observed_rules
     try:
         result = json.loads(output)
     except json.JSONDecodeError as exc:
-        raise core.CompatibilityError("C# context review did not emit JSON") from exc
+        raise core.CompatibilityError(f"{name} context review did not emit JSON") from exc
     if observed != set(context):
-        core._fail(f"native C# context reads were incomplete: {sorted(set(context) - observed)!r}")
+        core._fail(
+            f"native {name} context reads were incomplete: {sorted(set(context) - observed)!r}"
+        )
     if not rules_seen:
-        core._fail("native C# main request omitted the qualified Rules")
+        core._fail(f"native {name} main request omitted the qualified Rules")
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
         outcome = parse_result_outcome(result)
     except OcrResultContractError as exc:
         raise core.CompatibilityError(
-            "native C# context review returned an invalid outcome"
+            f"native {name} context review returned an invalid outcome"
         ) from exc
     if outcome.kind != "clean" or outcome.selected_count != 1 or outcome.completed_count != 1:
-        core._fail("native C# context review did not complete its exact selected file")
+        core._fail(f"native {name} context review did not complete its exact selected file")
     return {
         "result": "passed",
         "rules_in_main_request": True,
@@ -610,6 +652,10 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
             ):
                 core._fail("candidate omitted the C# rule document")
             rule_documents.add("csharp")
+        elif path.endswith((".clj", ".cljs", ".cljc", ".edn")):
+            if "#### EDN Data, Configuration, and Untrusted Input" not in output:
+                core._fail("candidate omitted the Clojure rule document")
+            rule_documents.add("clojure")
         elif path in {"BUILD", "WORKSPACE", "nested/BUILD", "nested/WORKSPACE"} or path.endswith(
             (".bzl", ".bazel", ".star")
         ):

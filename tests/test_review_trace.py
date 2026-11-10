@@ -20,6 +20,99 @@ SESSION = "00000000-0000-4000-8000-000000000001"
 SENTINEL = "synthetic-private-replay-sentinel"
 
 
+@pytest.mark.parametrize("index", [2, 3, 4])
+@pytest.mark.parametrize("value", [0, 1250, (1 << 63) - 1])
+def test_native_duration_is_preserved_as_reported(index, value):
+    row = records(Path("/synthetic/repository"))[index]
+    row["duration_ms"] = value
+    projected = review_trace.project_record(row)
+    assert projected["duration_ms"] == value
+    assert "request_no" not in projected if index != 4 else projected["request_no"] == 2
+
+
+def test_usage_keeps_only_available_known_fields_and_no_replay():
+    row = records(Path("/synthetic/repository"))[2]
+    assert "usage" not in review_trace.project_record(row)
+    row["usage"] = {
+        "prompt_tokens": 1000,
+        "completion_tokens": 40,
+        "cache_read_tokens": 800,
+        "native_payload": SENTINEL,
+    }
+    projected = review_trace.project_record(row)
+    assert projected["usage"] == {
+        "prompt_tokens": 1000,
+        "completion_tokens": 40,
+        "cache_read_tokens": 800,
+    }
+    assert "cache_write_tokens" not in projected["usage"]
+    assert SENTINEL not in json.dumps(projected)
+
+
+@pytest.mark.parametrize("value", [True, -1, 1.25, float("nan"), float("inf"), 1 << 63, {}, "1250"])
+@pytest.mark.parametrize("field", ["duration_ms", "usage"])
+def test_invalid_metric_is_not_reinterpreted_or_reflected(value, field):
+    row = records(Path("/synthetic/repository"))[2]
+    row[field] = {"prompt_tokens": value} if field == "usage" else value
+    with pytest.raises(NativeTraceError, match="numeric metadata"):
+        review_trace.project_record(row)
+
+
+def test_metric_failure_marks_capture_degraded_without_rewriting_other_records(native):
+    home, repository, path, rows = native
+    rows[2]["usage"] = {"prompt_tokens": True}
+    write_rows(path, rows)
+    with closing(NativeTraceSource(home, repository, RANGE)) as source:
+        capture = source.capture()
+    assert capture.facts["status"] == "degraded"
+    assert capture.facts["records_omitted"] == 1
+    assert b'"type":"tool_call"' in capture.content
+
+
+@pytest.mark.parametrize("value", [0, 1.125])
+def test_session_duration_preserves_native_units(value):
+    row = records(Path("/synthetic/repository"))[6]
+    row["duration_seconds"] = value
+    assert review_trace.project_record(row)["duration_seconds"] == value
+
+
+def test_private_schema_snapshot_is_definition_evidence_not_wire_proof(tmp_path):
+    import hashlib
+
+    from ocr_toolkit.diagrams.contracts import bounded_json
+
+    bundle = DebugBundle(tmp_path / "debug", other_outputs=())
+    try:
+        bundle.capture_diagram_definition()
+        payload = json.loads((tmp_path / "debug/mcp-tools.json").read_bytes())
+        assert payload["origin"] == "toolkit-mcp-definition"
+        assert payload["provider_wire_observed"] is False
+        definition = payload["tools"][0]
+        assert (
+            definition["schema_sha256"]
+            == hashlib.sha256(bounded_json(definition["inputSchema"])).hexdigest()
+        )
+        assert bundle.artifacts["mcp-tools.json"]["status"] == "passed"
+    finally:
+        bundle.close()
+
+
+def test_optional_schema_capture_failure_has_no_review_authority(tmp_path, monkeypatch):
+    from ocr_toolkit.diagrams import mcp
+
+    def fail():
+        raise RuntimeError(SENTINEL)
+
+    monkeypatch.setattr(mcp, "diagram_tool_definition", fail)
+    bundle = DebugBundle(tmp_path / "debug", other_outputs=())
+    try:
+        bundle.capture_diagram_definition()
+        assert bundle.artifacts["mcp-tools.json"]["status"] == "unavailable"
+        assert not (tmp_path / "debug/mcp-tools.json").exists()
+    finally:
+        bundle.close()
+
+
 def records(repository: Path) -> list[dict[str, Any]]:
     """Use OCR 1.13.3's distinct response/message call and completion shapes."""
 
