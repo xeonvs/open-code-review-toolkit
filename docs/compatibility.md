@@ -456,8 +456,10 @@ previous contract. No new toolkit authentication entry is required.
 The scan-only 200-line PLAN_TASK threshold does not change toolkit `review`.
 Telemetry span scoping, test HOME isolation, npm installation and upstream
 Action/site changes do not add toolkit execution paths. No second diagram model
-pass, custom scheduler or cache layer is introduced. Release #302 owns the
-consumer fixes; final configured-model acceptance remains the own-tool review.
+pass, custom scheduler or cache layer is introduced. Qualification tracker
+[#304](https://github.com/xeonvs/open-code-review-toolkit/issues/304) retains the
+reviewed evidence; #302 owns the consumer fixes. Configured-model acceptance is
+recorded in the own-tool review and accepted diagram of PR #303.
 
 ## Promotion and rollback
 
