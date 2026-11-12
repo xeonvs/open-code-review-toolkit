@@ -1,3 +1,20 @@
+## 0.14.8 - 2026-11-12
+
+### 🚀 Features
+
+- Use immutable base/head reads through native `file_read`, `file_find` and `code_search` with qualified OCR 1.13.8, preserving side-relative renamed/deleted paths and dirty worktrees. ([#308](https://github.com/xeonvs/open-code-review-toolkit/issues/308))
+
+### 🐛 Bug Fixes
+
+- Use one bounded, configurable User-Agent for GitLab API requests, including review publication. ([#306](https://github.com/xeonvs/open-code-review-toolkit/issues/306))
+- Normalize LLM endpoints by the selected protocol, default pathless OpenAI roots to `/v1` with a notice, and require complete API settings during preflight even when metadata validation is disabled. Preserve explicit endpoint paths and gate inference URL queries against the qualified native client's capabilities instead of silently dropping parameters. ([#307](https://github.com/xeonvs/open-code-review-toolkit/issues/307))
+- Make the manual GitLab readiness job independently install the same checksum-pinned OCR and toolkit as review; clarify protected-variable access, endpoint contracts, preflight limits and current tool-call budgets. ([#309](https://github.com/xeonvs/open-code-review-toolkit/issues/309))
+
+### 🛠 Maintenance
+
+- Recommend checksum-verified Open Code Review 1.13.8 and preserve the preceding qualification epoch as frozen readback. ([#308](https://github.com/xeonvs/open-code-review-toolkit/issues/308))
+
+
 ## 0.14.7 - 2026-11-10
 
 ### 🚀 Features

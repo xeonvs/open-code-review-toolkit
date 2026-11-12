@@ -15,4 +15,5 @@ Each new repository plan archived through the engineering-workflow lifecycle is 
 - [2026-11-06-internal-engineering-cycle-corrections.md](2026-11-06-internal-engineering-cycle-corrections.md)
 - [2026-11-06-toolkit-0-14-6-ocr-1-13-6-dlp-precision-and-efficient-delivery.md](2026-11-06-toolkit-0-14-6-ocr-1-13-6-dlp-precision-and-efficient-delivery.md)
 - [2026-11-10-toolkit-0-14-7-ocr-1-13-7-recoverable-diagrams-and-private-diagnostics.md](2026-11-10-toolkit-0-14-7-ocr-1-13-7-recoverable-diagrams-and-private-diagnostics.md)
+- [2026-11-12-toolkit-0-14-8-ocr-1-13-8-provider-http-and-first-integration.md](2026-11-12-toolkit-0-14-8-ocr-1-13-8-provider-http-and-first-integration.md)
 <!-- engineering-workflow:index:end -->
