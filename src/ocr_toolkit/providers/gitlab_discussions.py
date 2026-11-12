@@ -12,6 +12,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ocr_toolkit.common.provider_http import (
+    DEFAULT_FORGE_API_USER_AGENT,
+    FORGE_API_USER_AGENT_VARIABLE,
+    resolve_forge_api_user_agent,
+)
 from ocr_toolkit.context.contracts import DiscussionPolicy, RemediationThreadPolicy
 from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.providers.gitlab import GitLabProviderError, _api_root, _numeric_identifier
@@ -87,7 +92,13 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _read_page(url: str, token: str, *, deadline: float) -> tuple[object, str]:
+def _read_page(
+    url: str, token: str, *, deadline: float, user_agent: str = DEFAULT_FORGE_API_USER_AGENT
+) -> tuple[object, str]:
+    try:
+        user_agent = resolve_forge_api_user_agent({FORGE_API_USER_AGENT_VARIABLE: user_agent})
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     if not token or "\r" in token or "\n" in token or len(token) > 16_384:
         raise GitLabProviderError("GITLAB_API_TOKEN is missing or malformed")
     remaining = deadline - time.monotonic()
@@ -98,7 +109,7 @@ def _read_page(url: str, token: str, *, deadline: float) -> tuple[object, str]:
         headers={
             "Accept": "application/json",
             "PRIVATE-TOKEN": token,
-            "User-Agent": "open-code-review-toolkit-discussions/1",
+            "User-Agent": user_agent,
         },
         method="GET",
     )
@@ -132,11 +143,15 @@ def _read_raw_snapshot(
     deadline: float,
 ) -> RawGitLabSnapshot:
     token = environment.get("GITLAB_API_TOKEN", "").strip()
+    try:
+        user_agent = resolve_forge_api_user_agent(environment)
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     api_root = _api_root(environment)
     try:
         identity = fetch_current_user_identity(
             api_root,
-            lambda url: _read_page(url, token, deadline=deadline)[0],
+            lambda url: _read_page(url, token, deadline=deadline, user_agent=user_agent)[0],
         )
     except GitLabIdentityError as exc:
         raise GitLabProviderError("authenticated GitLab identity is unavailable") from exc
@@ -150,6 +165,7 @@ def _read_raw_snapshot(
             f"?per_page=100&page={page}",
             token,
             deadline=deadline,
+            user_agent=user_agent,
         )
         if not isinstance(payload, list) or len(payload) > 100:
             raise GitLabProviderError("GitLab discussion page shape is invalid")

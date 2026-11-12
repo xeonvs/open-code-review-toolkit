@@ -473,6 +473,11 @@ projects supply neither executable code nor exclusion policy to the audit.
 
 ## Preserved controls
 
+- All forge API reads and writes use the same bounded operator-controlled
+  `OCR_FORGE_API_USER_AGENT`; it never changes credentials, endpoint authority,
+  redirect policy, freshness or publication gates. LLM/federation/download
+  clients retain their independently owned headers. A WAF or `/user` failure
+  remains a failure, even when another client signature would pass.
 - Repository reads use immutable objects, fixed roots and bounds, reject unsafe
   symlinks/submodules, and never execute repository content.
 - Unknown, malformed, unavailable, or mismatched provider data fails closed

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import sys
@@ -13,6 +14,11 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from ocr_toolkit.common.provider_http import (
+    DEFAULT_FORGE_API_USER_AGENT,
+    FORGE_API_USER_AGENT_VARIABLE,
+    resolve_forge_api_user_agent,
+)
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.posting.payloads import (
     build_marked_note_body,
@@ -49,6 +55,7 @@ class GitLabConfig:
     auth_header: str
     current_user_id: int | None
     current_username: str | None
+    forge_api_user_agent: str = DEFAULT_FORGE_API_USER_AGENT
 
     @property
     def api_base(self) -> str:
@@ -209,12 +216,19 @@ def api_request_url(
     auth_header: str,
     data: dict[str, Any] | None = None,
     method: str = "GET",
+    *,
+    user_agent: str | None = None,
 ) -> Any | None:
     """Call a GitLab API URL and return parsed JSON, `{}` for empty success, or None."""
 
+    if user_agent is None:
+        user_agent = resolve_forge_api_user_agent(os.environ)
+    else:
+        user_agent = resolve_forge_api_user_agent({FORGE_API_USER_AGENT_VARIABLE: user_agent})
     headers = {
         auth_header: api_token,
         "Content-Type": "application/json",
+        "User-Agent": user_agent,
     }
 
     body = json.dumps(data).encode("utf-8") if data is not None else None
@@ -311,15 +325,21 @@ def api_write_url_detailed(
     *,
     create_kind: str | None = None,
     write_id: str | None = None,
+    user_agent: str | None = None,
 ) -> GitLabWriteResult:
     """Call one write once and classify create ambiguity without retrying."""
 
     if create_kind not in {None, "draft", "discussion"}:
         raise ValueError("unsupported GitLab create response kind")
 
+    if user_agent is None:
+        user_agent = resolve_forge_api_user_agent(os.environ)
+    else:
+        user_agent = resolve_forge_api_user_agent({FORGE_API_USER_AGENT_VARIABLE: user_agent})
     headers = {
         auth_header: api_token,
         "Content-Type": "application/json",
+        "User-Agent": user_agent,
     }
     body = json.dumps(data).encode("utf-8")
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -413,14 +433,16 @@ def print_user_id_failure_banner(reason: str) -> None:
 
 
 def fetch_posting_identity(
-    server_url: str, api_token: str, auth_header: str
+    server_url: str, api_token: str, auth_header: str, *, user_agent: str | None = None
 ) -> tuple[int | None, str | None]:
     """Return the validated live GitLab id and username, or a closed failure."""
 
     try:
         identity = fetch_current_user_identity(
             f"{server_url}/api/v4",
-            lambda url: api_request_url(url, api_token, auth_header, method="GET"),
+            lambda url: api_request_url(
+                url, api_token, auth_header, method="GET", user_agent=user_agent
+            ),
         )
     except GitLabIdentityError as exc:
         print_user_id_failure_banner(str(exc))
@@ -472,8 +494,16 @@ def load_gitlab_config() -> GitLabConfig | None:
         print("CI_SERVER_URL must be an absolute HTTPS URL.", file=sys.stderr)
         return None
 
+    try:
+        user_agent = resolve_forge_api_user_agent(os.environ)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
     auth_header = "PRIVATE-TOKEN"
-    current_user_id, current_username = fetch_posting_identity(server_url, api_token, auth_header)
+    current_user_id, current_username = fetch_posting_identity(
+        server_url, api_token, auth_header, user_agent=user_agent
+    )
 
     return GitLabConfig(
         server_url=server_url,
@@ -483,6 +513,7 @@ def load_gitlab_config() -> GitLabConfig | None:
         auth_header=auth_header,
         current_user_id=current_user_id,
         current_username=current_username,
+        forge_api_user_agent=user_agent,
     )
 
 
@@ -500,6 +531,7 @@ def api_request(
         auth_header=config.auth_header,
         data=data,
         method=method,
+        user_agent=config.forge_api_user_agent,
     )
 
 
@@ -672,6 +704,7 @@ def update_plain_note(config: GitLabConfig, note_id: int, body: str) -> GitLabWr
         auth_header=config.auth_header,
         data={"body": build_marked_note_body(body)},
         method="PUT",
+        user_agent=config.forge_api_user_agent,
     )
 
 
@@ -683,6 +716,7 @@ def approve_merge_request(config: GitLabConfig, sha: str) -> GitLabWriteResult:
         api_token=config.api_token,
         auth_header=config.auth_header,
         data={"sha": sha},
+        user_agent=config.forge_api_user_agent,
     )
 
 
@@ -776,6 +810,7 @@ def post_inline_note_detailed(
         },
         create_kind="discussion",
         write_id=write_id,
+        user_agent=config.forge_api_user_agent,
     )
 
 
@@ -809,6 +844,7 @@ def post_inline_draft_note_detailed(
         },
         create_kind="draft",
         write_id=write_id,
+        user_agent=config.forge_api_user_agent,
     )
 
 

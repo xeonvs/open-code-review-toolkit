@@ -14,6 +14,9 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from ocr_toolkit.common.provider_http import (
+    resolve_forge_api_user_agent,
+)
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.local_chatgpt import (
     LocalChatGPTError,
@@ -214,6 +217,10 @@ def _request_json(url: str, headers: dict[str, str]) -> Any:
 def validate_gitlab_access() -> None:
     """Verify the configured bot token can read this project and MR."""
 
+    try:
+        user_agent = resolve_forge_api_user_agent(os.environ)
+    except ValueError as exc:
+        raise PreflightError(str(exc)) from exc
     token = _env("GITLAB_API_TOKEN")
     project_id = _env("CI_PROJECT_ID")
     mr_iid = _env("CI_MERGE_REQUEST_IID")
@@ -224,7 +231,7 @@ def validate_gitlab_access() -> None:
 
     api_root = _gitlab_api_root()
     project_id_encoded = urllib.parse.quote_plus(project_id)
-    headers = {"PRIVATE-TOKEN": token}
+    headers = {"PRIVATE-TOKEN": token, "User-Agent": user_agent}
 
     print("Validating GitLab token access to project and merge request")
     _request_json(f"{api_root}/user", headers)

@@ -18,6 +18,7 @@ from typing import Any
 
 from ocr_toolkit import config_writer, mcp_config, preflight, provider_config
 from ocr_toolkit import configure as ocr_configure
+from ocr_toolkit.common.provider_http import DEFAULT_FORGE_API_USER_AGENT
 from tests.support import (
     cleared_env,
     patched_attr,
@@ -1023,7 +1024,11 @@ class PreflightTests(unittest.TestCase):
             ],
         )
         self.assertTrue(
-            all(headers == {"PRIVATE-TOKEN": "gitlab-secret"} for _url, headers in calls)
+            all(
+                headers
+                == {"PRIVATE-TOKEN": "gitlab-secret", "User-Agent": DEFAULT_FORGE_API_USER_AGENT}
+                for _url, headers in calls
+            )
         )
 
     def test_validate_gitlab_access_requires_token_and_merge_request_identity(self) -> None:
