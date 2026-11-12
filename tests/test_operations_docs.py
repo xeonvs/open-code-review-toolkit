@@ -972,13 +972,14 @@ def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegati
     development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
 
     assert "default at `0` so OCR uses its embedded template limit of `100`" in configuration
-    assert "explicit `50` remain below the template default" in configuration
+    assert "explicit `50`, `75`, `100` and `125`" in configuration
+    assert "remain effectively `100`" not in configuration
     assert "raw stderr is not added to\nfindings, result warnings" in configuration
     assert "receipts, DLP inputs, telemetry" in configuration
     assert "`OCR_MAX_TOOLS=0`" in operations
-    assert "normalized to `50`" in operations
-    assert "explicit `50` remain effectively `100`" in operations
-    assert "only values above `100` raise the cap" in operations
+    assert "normalizes to `50`" in operations
+    assert "explicit `50`, `75`, `100` and `125`" in operations
+    assert "remain effectively `100`" not in operations
     assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
     assert "help text\n  alone is not compatibility evidence" in development
 

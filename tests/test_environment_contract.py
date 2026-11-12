@@ -7,6 +7,7 @@ import os
 import re
 
 import pytest
+import yaml
 
 from ocr_toolkit import configure, mcp_config, preflight
 from ocr_toolkit.common.language import resolve_review_language
@@ -59,6 +60,7 @@ RUNTIME_DEFAULTS = {
 
 GITLAB_DEFAULTS = {
     "GITLAB_API_TOKEN": "None",
+    "OCR_FORGE_API_USER_AGENT": "open-code-review-toolkit-provider/1",
     "GITLAB_CI": "None",
     "CI_API_V4_URL": "Derived as `${CI_SERVER_URL}/api/v4`",
     "CI_SERVER_URL": "`https://gitlab.com` in posting only",
@@ -326,3 +328,36 @@ def test_example_local_defaults_match_the_pipeline() -> None:
     )
     assert 'export OCR_TOOLKIT_WHEEL_SHA256="$(awk ' in workflow
     assert '--max-tools "${OCR_MAX_TOOLS:-0}"' in workflow
+
+
+def test_example_manual_self_test_inherits_install_without_model_call() -> None:
+    """Compose the relevant GitLab extends fields, not just their text presence."""
+
+    workflow = yaml.safe_load(
+        (PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    install = workflow[".ocr_install"]
+    assert set(install) == {"before_script"}
+    install_commands = install["before_script"]
+    assert any("sha256sum --check --strict" in command for command in install_commands)
+    assert any(
+        'pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"' in command
+        for command in install_commands
+    )
+    assert install_commands[-1] == "pip check"
+
+    for job_name in ("open_code_review", "open_code_review_self_test"):
+        job = workflow[job_name]
+        assert job["extends"] == ".ocr_install"
+        assert "before_script" not in job
+        composed = {**install, **job}
+        assert composed["before_script"] == install_commands
+        assert composed["script"][:2] == ["ocr-ci preflight", "ocr-ci configure"]
+
+    self_test = workflow["open_code_review_self_test"]
+    assert self_test["rules"][0]["when"] == "manual"
+    assert self_test["script"] == ["ocr-ci preflight", "ocr-ci configure"]
+    assert all("env -u" not in command for command in self_test["script"])
+    assert all("ocr llm test" not in command for command in self_test["script"])

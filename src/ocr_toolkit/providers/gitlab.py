@@ -12,6 +12,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ocr_toolkit.common.provider_http import (
+    DEFAULT_FORGE_API_USER_AGENT,
+    FORGE_API_USER_AGENT_VARIABLE,
+    resolve_forge_api_user_agent,
+)
 from ocr_toolkit.evidence.invocation import MAX_CI_IDENTIFIER_CHARS, InvocationIdentifier
 from ocr_toolkit.evidence.review_context import (
     MergeRequestContext,
@@ -182,9 +187,15 @@ def _api_root(environment: Mapping[str, str]) -> str:
     return raw
 
 
-def _read_json(url: str, token: str, *, deadline: float) -> object:
+def _read_json(
+    url: str, token: str, *, deadline: float, user_agent: str = DEFAULT_FORGE_API_USER_AGENT
+) -> object:
     """Read one complete bounded provider response without redirects or retries."""
 
+    try:
+        user_agent = resolve_forge_api_user_agent({FORGE_API_USER_AGENT_VARIABLE: user_agent})
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     if not token or "\r" in token or "\n" in token or len(token) > 16_384:
         raise GitLabProviderError("GITLAB_API_TOKEN is missing or malformed")
     remaining = deadline - time.monotonic()
@@ -195,7 +206,7 @@ def _read_json(url: str, token: str, *, deadline: float) -> object:
         headers={
             "Accept": "application/json",
             "PRIVATE-TOKEN": token,
-            "User-Agent": "open-code-review-toolkit-provider/1",
+            "User-Agent": user_agent,
         },
         method="GET",
     )
@@ -360,6 +371,7 @@ def _current_diff_identity(
     token: str,
     deadline: float,
     source_sha: str,
+    user_agent: str = DEFAULT_FORGE_API_USER_AGENT,
 ) -> tuple[str, str, str, int]:
     """Bind current MR diff refs to its current authenticated version."""
 
@@ -384,6 +396,7 @@ def _current_diff_identity(
         f"{api_root}/projects/{project}/merge_requests/{merge_request_iid}/versions?per_page=1",
         token,
         deadline=deadline,
+        user_agent=user_agent,
     )
     if not isinstance(versions, list) or not versions:
         raise GitLabProviderError(
@@ -407,7 +420,13 @@ def _current_diff_identity(
 
 
 def _branch_snapshot(
-    *, api_root: str, project: str, branch_name: str, token: str, deadline: float
+    *,
+    api_root: str,
+    project: str,
+    branch_name: str,
+    token: str,
+    deadline: float,
+    user_agent: str = DEFAULT_FORGE_API_USER_AGENT,
 ) -> tuple[bool, str]:
     """Read a named branch's protected state and immutable head over HTTPS."""
 
@@ -416,6 +435,7 @@ def _branch_snapshot(
         f"{api_root}/projects/{project}/repository/branches/{encoded_branch}",
         token,
         deadline=deadline,
+        user_agent=user_agent,
     )
     if not isinstance(branch, dict):
         raise GitLabProviderError("GitLab branch metadata must be an object")
@@ -438,6 +458,10 @@ def acquire_review_snapshot(
     project_id = _numeric_identifier(environment, "CI_PROJECT_ID")
     merge_request_iid = _numeric_identifier(environment, "CI_MERGE_REQUEST_IID")
     token = environment.get("GITLAB_API_TOKEN", "").strip()
+    try:
+        user_agent = resolve_forge_api_user_agent(environment)
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     api_root = _api_root(environment)
     project = urllib.parse.quote(project_id, safe="")
     deadline = time.monotonic() + PROVIDER_TIMEOUT_SECONDS
@@ -445,6 +469,7 @@ def acquire_review_snapshot(
         f"{api_root}/projects/{project}/merge_requests/{merge_request_iid}",
         token,
         deadline=deadline,
+        user_agent=user_agent,
     )
     if not isinstance(mr, dict):
         raise GitLabProviderError("GitLab merge-request metadata must be an object")
@@ -482,6 +507,7 @@ def acquire_review_snapshot(
         token=token,
         deadline=deadline,
         source_sha=source_sha,
+        user_agent=user_agent,
     )
     protected, target_sha = _branch_snapshot(
         api_root=api_root,
@@ -489,6 +515,7 @@ def acquire_review_snapshot(
         branch_name=target_branch,
         token=token,
         deadline=deadline,
+        user_agent=user_agent,
     )
     if not protected and protection_mode != "unprotected":
         if protection_mode == "required":
@@ -497,6 +524,7 @@ def acquire_review_snapshot(
             f"{api_root}/projects/{project}",
             token,
             deadline=deadline,
+            user_agent=user_agent,
         )
         if not isinstance(project_metadata, dict):
             raise GitLabProviderError("GitLab project metadata must be an object")
@@ -509,6 +537,7 @@ def acquire_review_snapshot(
             branch_name=policy_branch,
             token=token,
             deadline=deadline,
+            user_agent=user_agent,
         )
         if not policy_protected:
             raise GitLabProviderError("GitLab default branch is not protected policy authority")

@@ -15,15 +15,16 @@ from tests.support import PROJECT_ROOT
 from tests.test_ocr_compat import current_contracts, load_script
 
 
-def test_1135_frozen_readback_does_not_follow_new_live_inputs(monkeypatch):
+@pytest.mark.parametrize("version", ("1.13.5", "1.13.7"))
+def test_frozen_readback_does_not_follow_new_live_inputs(monkeypatch, version):
     module = load_script()
-    evidence = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.13.5.json")
+    evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
     original = deepcopy(evidence)
     monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {"new/Program.cs": "**/*.cs"})
     monkeypatch.setattr(module.settings, "CURRENT_NUMERIC_CLI_CONTRACT", {})
     monkeypatch.setattr(module.settings, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
 
-    module.contracts._validate_evidence_contracts("1.13.5", evidence)
+    module.contracts._validate_evidence_contracts(version, evidence)
     assert evidence == original
 
 
@@ -45,10 +46,11 @@ def test_metadata_cli_does_not_import_runtime_packages(tmp_path, arguments):
     assert "metadata command imported the runtime" not in completed.stderr
 
 
-def test_1135_fresh_execution_is_refused_before_a_probe():
+@pytest.mark.parametrize("version", ("1.13.5", "1.13.6", "1.13.7"))
+def test_frozen_fresh_execution_is_refused_before_a_probe(version):
     module = load_script()
     with pytest.raises(module.core.CompatibilityError, match="frozen readback-only"):
-        module.contracts._require_live_qualification_version("1.13.5")
+        module.contracts._require_live_qualification_version(version)
 
 
 def test_current_live_selection_retains_csharp_and_nested_starlark():
@@ -68,6 +70,14 @@ def test_1136_missing_consumed_proof_cannot_be_promoted(field):
     observed.pop(field)
     with pytest.raises(module.core.CompatibilityError, match=field):
         module.contracts._validate_contracts_for_version("1.13.6", observed)
+
+
+def test_current_epoch_requires_comparison_side_proof():
+    module = load_script()
+    observed = current_contracts(module, RECOMMENDED_OCR_VERSION)
+    observed.pop("comparison_sides_probe")
+    with pytest.raises(module.core.CompatibilityError, match="comparison_sides_probe"):
+        module.contracts._validate_contracts_for_version(RECOMMENDED_OCR_VERSION, observed)
 
 
 def test_extensionless_selection_has_paths_without_invented_extensions():

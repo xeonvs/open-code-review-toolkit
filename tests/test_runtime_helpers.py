@@ -18,6 +18,7 @@ from typing import Any
 
 from ocr_toolkit import config_writer, mcp_config, preflight, provider_config
 from ocr_toolkit import configure as ocr_configure
+from ocr_toolkit.common.provider_http import DEFAULT_FORGE_API_USER_AGENT
 from tests.support import (
     cleared_env,
     patched_attr,
@@ -219,11 +220,11 @@ class RuntimeConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(provider_config.ProviderConfigError, "OCR_LLM_MODELS_URL"):
             queried.require_models_url()
 
-    def test_provider_config_uses_explicit_models_url_for_queried_inference(self) -> None:
+    def test_provider_config_preserves_explicit_metadata_query(self) -> None:
         config = provider_config.provider_config_from_environment(
             {
                 "OCR_LLM_PROTOCOL": "openai",
-                "OCR_LLM_URL": "https://gateway.example/v1?tenant=review",
+                "OCR_LLM_URL": "https://gateway.example/v1",
                 "OCR_LLM_MODELS_URL": "https://metadata.example/catalog?tenant=review",
             }
         )
@@ -835,7 +836,8 @@ class PreflightTests(unittest.TestCase):
                 preflight._request_json("https://gateway.example/models?private_token=secret", {})
 
         self.assertNotIn("secret", str(ctx.exception))
-        self.assertIn("private_token=***", str(ctx.exception))
+        self.assertNotIn("private_token", str(ctx.exception))
+        self.assertIn("https://gateway.example/models", str(ctx.exception))
 
     def test_preflight_redirect_handler_blocks_redirects(self) -> None:
         handler = preflight._NoRedirectHandler()
@@ -1023,7 +1025,11 @@ class PreflightTests(unittest.TestCase):
             ],
         )
         self.assertTrue(
-            all(headers == {"PRIVATE-TOKEN": "gitlab-secret"} for _url, headers in calls)
+            all(
+                headers
+                == {"PRIVATE-TOKEN": "gitlab-secret", "User-Agent": DEFAULT_FORGE_API_USER_AGENT}
+                for _url, headers in calls
+            )
         )
 
     def test_validate_gitlab_access_requires_token_and_merge_request_identity(self) -> None:

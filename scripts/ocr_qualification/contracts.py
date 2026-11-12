@@ -124,6 +124,18 @@ def _validate_current_contracts(value: object, version: str) -> None:
             "context_paths": ["deps.edn"],
             "execution": "read-only-native-tools",
         },
+        "comparison_sides_probe": {
+            "result": "passed",
+            "tools": ["file_read", "file_find", "code_search"],
+            "default_side": "new",
+            "old_ref": "resolved-base",
+            "new_ref": "resolved-head",
+            "invalid_sides_rejected": True,
+            "renamed_paths": "side-relative",
+            "deleted_paths": "old-only",
+            "worktree": "preserved",
+            "target_tip": "not-used",
+        },
         "comment_arguments_probe": {
             "result": "passed",
             "intact_cases": ["array", "serialized", "repaired"],

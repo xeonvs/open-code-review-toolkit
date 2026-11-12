@@ -8,7 +8,7 @@ import http.server
 import json
 import re
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from . import core, settings
@@ -38,6 +38,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     observed_context_reads: set[str] = set()
     observed_rules = False
     rule_marker = "#### Nullability and Reference Types"
+    tool_script: Callable[[dict[str, Any]], tuple[dict[str, Any], str]] | None = None
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -185,7 +186,14 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             contents = type(self)._message_contents(messages)
             if any(settings.PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
                 type(self).recheck_instruction_requests += 1
-            if type(self).context_reads:
+            if type(self).tool_script is not None:
+                try:
+                    function, call_id = type(self).tool_script(request)
+                except core.CompatibilityError as exc:
+                    self.send_error(400, str(exc))
+                    return
+                stage = "main"
+            elif type(self).context_reads:
                 type(self).observed_rules |= any(
                     type(self).rule_marker in content for content in contents
                 )
@@ -319,6 +327,7 @@ def _stub_gateway(
     capture_controls: bool = False,
     context_reads: dict[str, tuple[str, ...]] | None = None,
     rule_marker: str = "#### Nullability and Reference Types",
+    tool_script: Callable[[dict[str, Any]], tuple[dict[str, Any], str]] | None = None,
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -351,6 +360,7 @@ def _stub_gateway(
     _StubHandler.observed_context_reads = set()
     _StubHandler.observed_rules = False
     _StubHandler.rule_marker = rule_marker
+    _StubHandler.tool_script = tool_script
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -360,6 +370,7 @@ def _stub_gateway(
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+        _StubHandler.tool_script = None
 
 
 def context_read_observations(

@@ -21,6 +21,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from io import BufferedWriter
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ocr_toolkit import configure, local_chatgpt, mcp_config, preflight
 from ocr_toolkit.common.redaction import redact_sensitive
@@ -127,7 +128,7 @@ from ocr_toolkit.evidence.source_reader import SourceReadSession
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
-from ocr_toolkit.native_capabilities import supports_native_capability
+from ocr_toolkit.native_capabilities import require_native_inference_url, supports_native_capability
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -552,6 +553,15 @@ def _write_isolated_runtime_config(
     """Rebuild only validated runtime settings inside the fresh OCR home."""
 
     updates = configure.build_config_updates(**({"local": True} if local else {}))
+    url = updates.get("llm.url")
+    if isinstance(url, str) and urlsplit(url).query:
+        try:
+            version = preflight.validate_ocr_binary(
+                executable=_resolve_ocr_binary(), announce=False
+            )
+            require_native_inference_url(version, url)
+        except (preflight.PreflightError, ValueError) as exc:
+            raise ReviewRunnerError(str(exc)) from exc
     update_ocr_config(updates)
     if debug is not None:
         native = updates.get("providers.chatgpt")

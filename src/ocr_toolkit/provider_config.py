@@ -51,6 +51,7 @@ class ProviderConfig:
     model: str | None
     token: str | None = field(repr=False)
     request_controls: ProviderRequestControls = field(repr=False)
+    defaulted_api_version: bool = False
 
     def require_inference_url(self) -> str:
         """Return the normalized OCR API root or reject missing review configuration."""
@@ -65,6 +66,13 @@ class ProviderConfig:
         if self.model is None:
             raise ProviderConfigError("OCR_LLM_MODEL is required")
         return self.model
+
+    def require_inference_endpoint(self) -> str:
+        """Project the native request endpoint from the already canonical API root."""
+
+        root = urlsplit(self.require_inference_url())
+        path = root.path.rstrip("/") + TERMINAL_ENDPOINTS[self.request_controls.protocol]
+        return urlunsplit(root._replace(path=path))
 
     def require_token(self) -> str:
         """Return the configured provider credential without rendering it."""
@@ -199,12 +207,13 @@ def _parse_https_url(value: str, name: str) -> SplitResult:
 
 def _canonical_provider_urls(
     llm_url: str, models_url: str, protocol: str
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, str | None, str | None, bool]:
     """Return normalized inference, API-root, and auxiliary provider URLs."""
 
     inference: str | None = None
     api_root: str | None = None
     derived_models: str | None = None
+    defaulted_api_version = False
     if llm_url:
         parsed = _parse_https_url(llm_url, "OCR_LLM_URL")
         path = parsed.path
@@ -219,6 +228,9 @@ def _canonical_provider_urls(
                 "OCR_LLM_URL terminal endpoint conflicts with OCR_LLM_PROTOCOL; "
                 f"use {protocol!r} endpoint semantics or provide the API root"
             )
+        if matched_protocol is None and not path and protocol in {"openai", "openai-responses"}:
+            path = "/v1"
+            defaulted_api_version = True
         root_parts = SplitResult(parsed.scheme, parsed.netloc, path, "", "")
         api_root = urlunsplit(root_parts)
         inference = urlunsplit(root_parts._replace(query=parsed.query))
@@ -228,7 +240,29 @@ def _canonical_provider_urls(
     explicit_models: str | None = None
     if models_url:
         explicit_models = urlunsplit(_parse_https_url(models_url, "OCR_LLM_MODELS_URL"))
-    return inference, api_root, explicit_models or derived_models
+    return inference, api_root, explicit_models or derived_models, defaulted_api_version
+
+
+def provider_endpoint_summary(provider: ProviderConfig) -> str:
+    """Describe the selected request path without credential-bearing query values."""
+
+    endpoint = urlsplit(provider.require_inference_endpoint())
+    safe_endpoint = urlunsplit(endpoint._replace(query=""))
+    return (
+        f"OCR LLM endpoint: protocol={provider.request_controls.protocol} "
+        f"base={provider.api_root_url} inference={safe_endpoint}"
+    )
+
+
+def provider_url_notice(provider: ProviderConfig) -> str | None:
+    """Return one optional normalization notice; emission belongs to the caller."""
+
+    if not provider.defaulted_api_version:
+        return None
+    return (
+        f"OCR_LLM_URL has no API path; using {provider.api_root_url} for "
+        f"{provider.request_controls.protocol}. Set OCR_LLM_URL to this API root explicitly."
+    )
 
 
 def _apply_reasoning_effort(extra_body: dict[str, Any], *, protocol: str, value: str) -> None:
@@ -314,7 +348,7 @@ def provider_config_from_environment(
 
     values: Mapping[str, str] = dict(os.environ) if environment is None else dict(environment)
     request_controls = request_controls_from_environment(values)
-    inference_url, api_root_url, models_url = _canonical_provider_urls(
+    inference_url, api_root_url, models_url, defaulted_api_version = _canonical_provider_urls(
         _env(values, "OCR_LLM_URL"),
         _env(values, "OCR_LLM_MODELS_URL"),
         request_controls.protocol,
@@ -326,4 +360,5 @@ def provider_config_from_environment(
         model=_env(values, "OCR_LLM_MODEL") or None,
         token=_env(values, "OCR_LLM_TOKEN") or None,
         request_controls=request_controls,
+        defaulted_api_version=defaulted_api_version,
     )

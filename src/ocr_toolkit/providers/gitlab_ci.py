@@ -11,6 +11,11 @@ import urllib.request
 from collections.abc import Mapping
 from typing import Any
 
+from ocr_toolkit.common.provider_http import (
+    DEFAULT_FORGE_API_USER_AGENT,
+    FORGE_API_USER_AGENT_VARIABLE,
+    resolve_forge_api_user_agent,
+)
 from ocr_toolkit.context.ci_outcomes import CIOutcome, CIOutcomeSnapshot
 from ocr_toolkit.context.contracts import CIOutcomePolicy
 from ocr_toolkit.providers.gitlab import GitLabProviderError, _api_root, _numeric_identifier
@@ -37,9 +42,15 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _read_page(url: str, token: str, *, deadline: float) -> tuple[object, bool]:
+def _read_page(
+    url: str, token: str, *, deadline: float, user_agent: str = DEFAULT_FORGE_API_USER_AGENT
+) -> tuple[object, bool]:
     """Read one bounded JSON page and report whether another page exists."""
 
+    try:
+        user_agent = resolve_forge_api_user_agent({FORGE_API_USER_AGENT_VARIABLE: user_agent})
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     if not token or "\r" in token or "\n" in token or len(token) > 16_384:
         raise GitLabProviderError("GITLAB_API_TOKEN is missing or malformed")
     remaining = deadline - time.monotonic()
@@ -50,7 +61,7 @@ def _read_page(url: str, token: str, *, deadline: float) -> tuple[object, bool]:
         headers={
             "Accept": "application/json",
             "PRIVATE-TOKEN": token,
-            "User-Agent": "open-code-review-toolkit-ci-outcomes/1",
+            "User-Agent": user_agent,
         },
         method="GET",
     )
@@ -107,6 +118,10 @@ def _raw_snapshot(
     """Normalize one bounded provider read without retaining raw identities."""
 
     token = environment.get("GITLAB_API_TOKEN", "").strip()
+    try:
+        user_agent = resolve_forge_api_user_agent(environment)
+    except ValueError as exc:
+        raise GitLabProviderError(str(exc)) from exc
     api_root = _api_root(environment)
     project = urllib.parse.quote(project_id, safe="")
     query = urllib.parse.urlencode(
@@ -119,7 +134,10 @@ def _raw_snapshot(
         }
     )
     pipelines, pipeline_more = _read_page(
-        f"{api_root}/projects/{project}/pipelines?{query}", token, deadline=deadline
+        f"{api_root}/projects/{project}/pipelines?{query}",
+        token,
+        deadline=deadline,
+        user_agent=user_agent,
     )
     if not isinstance(pipelines, list) or len(pipelines) > MAX_PIPELINES:
         raise GitLabProviderError("GitLab CI pipeline list is invalid")
@@ -144,6 +162,7 @@ def _raw_snapshot(
             f"?include_retried=true&per_page={MAX_JOBS_PER_PIPELINE}&page=1",
             token,
             deadline=deadline,
+            user_agent=user_agent,
         )
         if not isinstance(jobs, list) or len(jobs) > MAX_JOBS_PER_PIPELINE:
             raise GitLabProviderError("GitLab CI job list is invalid")

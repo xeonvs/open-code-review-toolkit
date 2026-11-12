@@ -454,11 +454,50 @@ PATCH_6 = {
 }
 
 
+_LANGUAGE_7 = copy.deepcopy(PATCH_6["language_rule_probe"])
+_LANGUAGE_7.update(
+    {
+        "default_excluded_paths": [
+            "test/nested/core.clj",
+            "src/core_test.cljs",
+            "resources/public/js/compiled/app.js",
+            "resources/public/js/compiled/config.edn",
+            ".cpcache/cache.edn",
+            ".shadow-cljs/build.edn",
+            *PATCH_6["language_rule_probe"]["default_excluded_paths"],
+        ],
+        "extensions": sorted(
+            [*PATCH_6["language_rule_probe"]["extensions"], ".clj", ".cljc", ".cljs", ".edn"]
+        ),
+        "paths": sorted(
+            [
+                *PATCH_6["language_rule_probe"]["paths"],
+                "deps.edn",
+                "src/core.clj",
+                "src/nested/view.cljs",
+                "src/shared.cljc",
+            ]
+        ),
+        "rule_documents": ["clojure", "csharp", "starlark"],
+        "selected": 52,
+    }
+)
+PATCH_7 = {
+    "language_rule_probe": _LANGUAGE_7,
+    "clojure_context_probe": {
+        "result": "passed",
+        "rules_in_main_request": True,
+        "context_paths": ["deps.edn"],
+        "execution": "read-only-native-tools",
+    },
+}
+
+
 def validate_contracts(
     version: tuple[int, int, int], value: Any, fail: Callable[[str], NoReturn]
 ) -> None:
-    """Apply exactly the consumed pre-override contract without reinterpreting it."""
-    if not (1, 13, 0) <= version < (1, 13, 7):
+    """Apply exactly the frozen consumed epoch without live interpretation."""
+    if not (1, 13, 0) <= version < (1, 13, 8):
         fail("evidence does not belong to the frozen 1.13 epoch")
     if not isinstance(value, dict):
         fail("historical qualification contracts are missing")
@@ -476,8 +515,10 @@ def validate_contracts(
     expected = copy.deepcopy(EXPECTED)
     if version >= (1, 13, 5):
         expected.update(copy.deepcopy(PATCH_5))
-    if version == (1, 13, 6):
+    if version >= (1, 13, 6):
         expected.update(copy.deepcopy(PATCH_6))
+    if version == (1, 13, 7):
+        expected.update(copy.deepcopy(PATCH_7))
     if version < (1, 13, 2):
         expected["language_rule_probe"] = EARLY_LANGUAGE
     if version == (1, 13, 0):

@@ -10,6 +10,16 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.8 provider routing and native comparison
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Forge reads and writes use one request identity | Production preflight/acquisition/posting clients -> controlled HTTPS GitLab peer | Default/override on all methods, early malformed-header rejection and unchanged `/user` 403 publication gate | A descriptive header cannot guarantee WAF acceptance; unrelated services keep their headers |
+| Normalized paths reach the native client | Environment -> shared provider parser -> config writer -> official Linux OCR -> TLS peer | Pathless OpenAI/Responses/Anthropic, explicit terminals and custom prefixes agree on actual request target | The peer returns HTTP 400 after capture; no gateway/model quality claim |
+| Valid syntax does not invent native support | Pure URL interpretation -> exact native capability -> preflight/review | Original query components remain intact; unknown query capability stops before model execution and does not echo values | Actual Responses query loss is tracked upstream; metadata is independently toolkit-owned |
+| Comparison tools read the selected immutable side | Official Linux/Darwin OCR -> native tools -> deterministic model peer | Exact calls/results, old/new/default, rename/delete, rejected invalid sides, different target and dirty checkout | Mechanically correct source reads do not establish model conclusions |
+| Manual readiness job is independently usable | Shared GitLab installation template -> both composed jobs | YAML composition verifies pinned install inheritance, retained credential and preflight/configure commands | Static composition does not claim a live GitLab deployment or model request |
+
 ## v0.14.7 recoverable optional output and private metrics
 
 | Invariant | Real boundary | Verification | Limit |

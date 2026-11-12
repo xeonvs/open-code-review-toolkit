@@ -258,7 +258,7 @@ def test_cli_receiptless_result_distinguishes_standalone_from_ci(
     monkeypatch.setenv("OCR_STRICT_POSTING", "false")
     if ci_marker is not None:
         monkeypatch.setenv(ci_marker, "" if ci_marker == "CI_MERGE_REQUEST_EVENT_TYPE" else "true")
-    monkeypatch.setattr(gitlab, "fetch_posting_identity", lambda *_args: (7, "ocr_bot"))
+    monkeypatch.setattr(gitlab, "fetch_posting_identity", lambda *_args, user_agent: (7, "ocr_bot"))
     writes: list[str] = []
     monkeypatch.setattr(
         workflow,

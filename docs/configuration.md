@@ -22,7 +22,7 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
 | `OCR_LLM_AUTH_MODE` | Operator / configure, preflight and review | No | `api-key` | Closed selector: `api-key` preserves custom API providers in local and GitLab execution; `chatgpt` selects native OCR authentication only with explicit local execution. Only absence selects the default; an explicitly blank value is invalid. |
-| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for API review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. Rejected in ChatGPT mode. |
+| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for API review | None | Absolute credential-free HTTPS API root or matching terminal endpoint; shared normalization. Review requires qualified native query support, currently a query-free URL. Rejected in ChatGPT mode. |
 | **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for API review | None | LLM credential; never written into generated context or receipts. Rejected in ChatGPT mode. |
 | **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for API review; optional for ChatGPT | None | Exact model identifier passed to OCR and optional API model validation. In ChatGPT mode, unset lets OCR select its native default. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
@@ -36,8 +36,8 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_REVIEW_EFFORT` | Operator / `ocr-ci configure` | No | `medium` | Closed OCR quality preset: `low`, `medium`, or `high`; maps to one, two, or three review rounds. |
 | `OCR_REVIEW_DIAGRAM_MODE` | Operator / review and posting | No | `on` | Unset selects the default. Exact `on`, `off`, `spoiler`, or `local`; blank/unknown fails before acquisition. GitLab requests expanded/collapsed output with `on`/`spoiler`; standalone requests only `local`. See [optional diagrams](diagrams.md). |
 | `OCR_REVIEW_PROGRESS` | Operator / `ocr-ci review` | No | Empty / `false` | Case-insensitive `true` enables toolkit-only phase messages and a 30-second heartbeat on an interactive terminal or explicitly nonblocking embedding stream, capped at 120 messages per run. Conventional CI stderr pipes are deliberately unsupported. |
-| `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
-| `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
+| `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip metadata validation. API-mode preflight still requires URL, token, and model; skipping metadata does not prove inference works. |
+| `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Optional explicit absolute credential-free HTTPS metadata URL when validation is enabled; this separate toolkit-owned metadata URL may contain a query. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
 | `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration; OCR spans may include path-derived group keys, model-produced labels, and local grouping decisions. |
 | `OCR_TELEMETRY_CONTENT_LOGGING` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR content logging; keep disabled for private review data. |
@@ -75,7 +75,39 @@ readiness; OCR owns actual grant, account, expiry and quota validation.
 
 ### Provider endpoint and completion-cap contract
 
-`OCR_LLM_PROTOCOL` is authoritative; the URL never selects a protocol. `OCR_LLM_URL` accepts an API root or the matching terminal endpoint: `/chat/completions` for `openai`, `/responses` for `openai-responses`, and `/v1/messages` for `anthropic`. Configure and preflight use the same normalized API root, reject a terminal endpoint belonging to another protocol, and reject credentials or fragments embedded in either provider URL. A query is preserved for inference. Because copying it to an auxiliary endpoint is ambiguous, model validation with a queried inference URL requires an explicit `OCR_LLM_MODELS_URL`.
+`OCR_LLM_PROTOCOL` is authoritative; the URL never selects a protocol. The shared
+parser accepts an API root or the matching terminal endpoint and preserves valid
+URL components. Credentials, fragments and terminals belonging to another
+protocol are rejected.
+
+| Protocol | Terminal appended to the API root | Pathless input |
+| --- | --- | --- |
+| `openai` | `/chat/completions` | Add `/v1` with a notice |
+| `openai-responses` | `/responses` | Add `/v1` with a notice |
+| `anthropic` | `/v1/messages` | Keep the root |
+
+Matching terminals are recognized before defaults: an explicit bare
+`/chat/completions` or `/responses` stays at that endpoint. An explicit custom
+prefix is preserved. Configure and preflight use this same normalization.
+
+The currently qualified OCR clients do not have qualified inference-query
+support. Preflight and review reject queried `OCR_LLM_URL` values before model
+requests, without displaying the query. This is a native capability restriction,
+not invalid URL syntax: the parser and configure retain valid query components,
+but writing configuration alone does not establish native support. An actual
+Responses request lost its query; [upstream issue #1916](https://github.com/alibaba/open-code-review/issues/1916)
+tracks parsed-URL construction and SDK query transfer across all three protocols.
+Use a query-free provider route or provider-supported request headers until a
+future exact binary is qualified. No new configuration option is needed to lift
+that restriction after qualification.
+
+`OCR_LLM_MODELS_URL` is a separate toolkit-owned metadata endpoint and may carry
+its own query. Inference queries are never copied into a derived metadata URL;
+an explicit metadata URL is required when derivation is ambiguous. The selected
+protocol, auth header and extra headers also apply to metadata validation.
+API preflight requires URL, token and model before HTTP, even with metadata
+validation disabled. `/models` success does not prove inference works; the
+toolkit sends no automatic model test.
 
 `OCR_LLM_REASONING_EFFORT` is independent of the existing OCR review effort and
 token budgets. Unset or empty leaves the request overlay unchanged. A nonempty
@@ -141,6 +173,7 @@ GitLab supplies the `CI_*` values in merge-request pipelines. The operator suppl
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
 | **`GITLAB_API_TOKEN`** | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
+| `OCR_FORGE_API_USER_AGENT` | Operator / GitLab API clients | No | `open-code-review-toolkit-provider/1` | One shared forge API User-Agent for preflight, snapshots, discussions, CI outcomes, and posting reads/writes. An override must be nonblank printable ASCII, 1–256 bytes; invalid values stop before GitLab requests. This does not affect LLM, federation, or download traffic. |
 | `GITLAB_CI` | GitLab predefined | No for local runs | None | Its presence marks GitLab CI posting, which requires an authenticated receipt before writing findings. Execution markers such as the pipeline ID or checked-out SHA have the same effect; target project/MR IDs alone still permit compatible standalone direct posting. The operator does not add this variable. |
 | **`CI_API_V4_URL`** | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
 | **`CI_SERVER_URL`** | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
@@ -167,7 +200,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
-| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | OCR uses template default `100`; `1-49` reports normalization to `50` but remains effectively `100`, and only a value above `100` raises the cap. |
+| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | Omitted or `0` uses the template default `100`; `1-49` normalizes to `50`; explicit `50` or `75` remains effective. This is a per-subtask tool-call cap. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
 
 Toolkit and OCR example pins advance together during release preparation. Use
@@ -271,10 +304,9 @@ finish and OCR accounts the provider-reported input plus output tokens.
 
 `OCR_MAX_TOOLS` is independent of all three token controls. Leave the example
 default at `0` so OCR uses its embedded template limit of `100` per subtask.
-OCR reports values `1-49` as normalized to the minimum `50`, but both
-that target and explicit `50` remain below the template default and therefore
-remain effectively `100`. Use `101` or greater only when deliberately raising
-the loop cap. A recognized normalization
+OCR normalizes `1-49` to the minimum `50`; explicit `50`, `75`, `100` and `125`
+are applied as requested. Choose a positive value deliberately, since it may
+lower or raise the default loop cap. A recognized normalization
 is emitted only as a toolkit-authored CI notice; its raw stderr is not added to
 findings, result warnings, receipts, DLP inputs, telemetry, or
 automatic-approval signals.

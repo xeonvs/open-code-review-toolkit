@@ -62,6 +62,7 @@ For an authorized real local OCR review, follow the [local review preparation an
 asset acquisition, the deterministic peer, numeric/selection/comment probes,
 candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
 shared qualification inputs; `core.py` owns bounded document/version primitives.
+`comparison.py` owns immutable old/new/default native code-tool observations;
 `wire_controls.py` owns API request-control captures, `selection.py` owns language
 and unchanged-project-context probes, and `peer.py` binds their bounded synthetic
 exchanges, including exact tool-call identities for context-read evidence.
@@ -140,15 +141,20 @@ Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
-Evidence through OCR 1.13.6 is now frozen. Its 1.13.0–1.13.6 contract lives in
+Evidence through OCR 1.13.7 is now frozen. Its 1.13.0–1.13.7 contract lives in
 the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
-numeric defaults and language inventories. Fresh execution starts at 1.13.7.
+numeric defaults and language inventories. Fresh execution starts at 1.13.8.
 The live max-tools probe separately measures omitted and zero defaults, explicit
 50/75/100/125 overrides and 49 normalization, then checks the native manifest's
 effective limit against actual counted rounds. The same probe implementation
 runs for all new candidates. Current template/JSONC/Scala selection and Rules
 requirements, C#/Starlark/Clojure Rules, unchanged C# and EDN context reads and
 explicit false streaming belong to the live contract; old evidence is never regenerated.
+The comparison-side probe additionally binds actual `file_read`, `file_find` and
+`code_search` calls/results to immutable base/head objects. Renamed/deleted paths,
+invalid side values, a different checked-out target and dirty files cannot borrow
+another side's content. Successful same-tool controls separate independent negative
+cases so OCR's repeated-failure guard cannot replace the rejection being tested.
 Extensionless build paths are recorded separately from actual extension suffixes.
 Similar ordinary names retain default Rules instead of acquiring Starlark Rules.
 Metadata/help/status paths remain usable with stdlib Python; import installed

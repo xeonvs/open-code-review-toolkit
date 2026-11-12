@@ -75,6 +75,37 @@ The main trust transitions are:
    authority. Generated promotion outputs reject conflicting existing content
    before any pin is changed; exclusive creation protects new destinations.
 
+### Operator and execution assumptions
+
+The operator selects model/metadata endpoints, credentials, the installed OCR
+executable and optional upstream identities. Repository text cannot select those
+resources. URL syntax, protocol normalization and native routing capability are
+separate checks: a syntactically valid queried inference URL needs exact native
+query-preservation qualification before review. The toolkit's independent
+metadata client may use an explicit queried URL and sends the configured model
+credential/headers to that operator-selected endpoint.
+
+The trusted OCR child inherits the operator environment except
+`OCR_RAW_LOGGING`. Its fresh private HOME isolates session/configuration files;
+it does not clear environment variables or sandbox the executable. Gateway
+credentials stay out of OCR configuration and arguments, but corresponding
+operator variables can remain in the inherited environment. Trust the installed
+OCR process with that environment. Native ChatGPT deliberately shares its
+validated persistent auth directory for refresh and locking.
+
+HTTP controls belong to each client. Preflight, snapshot, discussion and CI
+acquisition reads reject redirects. Posting permits only same-origin HTTPS
+GET/HEAD redirects; mutations reject redirects and are attempted once.
+Federation additionally disables cookies and ambient proxy trust. The external
+native model client has its own qualified protocol/transport contract; a forge
+User-Agent setting changes none of those boundaries.
+
+Live branch protection, eligible approvers, protected-secret availability,
+publishing environments and OIDC policy remain deployment prerequisites. Source
+review establishes the toolkit's checks, not that those external settings are
+currently enabled. External services still own object authorization. See the
+[GitLab prerequisites](gitlab.md) and [release contract](release.md).
+
 Changed Git submodule pointers are a separate repository-coverage boundary.
 For an exact capability-qualified OCR version, the toolkit compares complete before/after Git
 trees, the explicit unfiltered diff, and the ordinary-file projection before
@@ -473,6 +504,11 @@ projects supply neither executable code nor exclusion policy to the audit.
 
 ## Preserved controls
 
+- All forge API reads and writes use the same bounded operator-controlled
+  `OCR_FORGE_API_USER_AGENT`; it never changes credentials, endpoint authority,
+  redirect policy, freshness or publication gates. LLM/federation/download
+  clients retain their independently owned headers. A WAF or `/user` failure
+  remains a failure, even when another client signature would pass.
 - Repository reads use immutable objects, fixed roots and bounds, reject unsafe
   symlinks/submodules, and never execute repository content.
 - Unknown, malformed, unavailable, or mismatched provider data fails closed
