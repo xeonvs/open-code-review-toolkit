@@ -13,6 +13,7 @@ from ocr_toolkit.local_chatgpt import LocalChatGPTError, auth_mode, provider_ent
 from ocr_toolkit.provider_config import (
     ProviderConfigError,
     provider_config_from_environment,
+    provider_url_notice,
 )
 
 
@@ -74,6 +75,9 @@ def build_config_updates(*, local: bool = False) -> dict[str, Any]:
                 updates["llm.extra_headers"] = request_controls.extra_headers
             if request_controls.extra_body is not None:
                 updates["llm.extra_body"] = request_controls.extra_body
+            notice = provider_url_notice(provider)
+            if notice:
+                print(f"WARNING: {redact_sensitive(notice)}", file=sys.stderr)
     except (ProviderConfigError, LocalChatGPTError) as exc:
         raise OCRRuntimeConfigError(str(exc)) from exc
 

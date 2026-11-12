@@ -25,10 +25,14 @@ from ocr_toolkit.local_chatgpt import (
     provider_entry,
     require_supported_version,
 )
+from ocr_toolkit.native_capabilities import require_native_inference_url
 from ocr_toolkit.provider_config import (
     HEADER_NAME_RE,
+    ProviderConfig,
     ProviderConfigError,
     provider_config_from_environment,
+    provider_endpoint_summary,
+    provider_url_notice,
 )
 from ocr_toolkit.providers.gitlab import (
     TARGET_PROTECTION_MODE_VARIABLE,
@@ -114,7 +118,12 @@ def _set_response_timeout(response: Any, timeout: float) -> None:
 def _safe_url(url: str) -> str:
     """Return a URL safe for CI diagnostics."""
 
-    return redact_sensitive(url)
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return "<invalid URL>"
+    safe = parsed._replace(netloc=parsed.netloc.rsplit("@", 1)[-1], query="", fragment="")
+    return redact_sensitive(urllib.parse.urlunsplit(safe))
 
 
 def _env(name: str, default: str = "") -> str:
@@ -356,11 +365,28 @@ def _validate_allowed_model(model_id: str) -> bool:
     return True
 
 
-def validate_llm_model() -> None:
-    """Verify the selected model exists in OpenAI-compatible metadata."""
+def validate_llm_configuration() -> ProviderConfig:
+    """Require all API review inputs before any provider or GitLab HTTP request."""
 
     try:
         provider = provider_config_from_environment()
+        provider.require_inference_url()
+        provider.require_token()
+        provider.require_model()
+    except ProviderConfigError as exc:
+        raise PreflightError(str(exc)) from exc
+    notice = provider_url_notice(provider)
+    if notice:
+        print(f"WARNING: {redact_sensitive(notice)}", file=sys.stderr)
+    print(redact_sensitive(provider_endpoint_summary(provider)))
+    return provider
+
+
+def validate_llm_model(provider: ProviderConfig | None = None) -> None:
+    """Verify the selected model exists in OpenAI-compatible metadata."""
+
+    try:
+        provider = provider or provider_config_from_environment()
         model_id = provider.require_model()
     except ProviderConfigError as exc:
         raise PreflightError(str(exc)) from exc
@@ -431,7 +457,13 @@ def main(*, local: bool = False) -> int:
                 raise PreflightError(str(exc)) from exc
         if mode == "chatgpt":
             provider_entry(os.environ)
+        provider = validate_llm_configuration() if mode == "api-key" else None
         version = validate_ocr_binary()
+        if provider is not None:
+            try:
+                require_native_inference_url(version, provider.require_inference_url())
+            except ValueError as exc:
+                raise PreflightError(str(exc)) from exc
         if mode == "chatgpt":
             require_supported_version(version)
             native_store(os.environ)
@@ -444,7 +476,7 @@ def main(*, local: bool = False) -> int:
         if not local:
             validate_gitlab_review_settings()
             validate_gitlab_access()
-        validate_llm_model()
+        validate_llm_model(provider)
     except (PreflightError, LocalChatGPTError) as exc:
         print(f"OCR preflight failed: {redact_sensitive(str(exc))}", file=sys.stderr)
         return 1

@@ -16,8 +16,16 @@ pytestmark = pytest.mark.usefixtures("isolated_review_workspace")
 
 def test_local_preflight_does_not_validate_gitlab(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
+    monkeypatch.setenv("OCR_LLM_URL", "https://llm.example.invalid/v1")
+    monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-token")
+    monkeypatch.setenv("OCR_LLM_MODEL", "synthetic-model")
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: seen.append("ocr"))
-    monkeypatch.setattr(preflight, "validate_llm_model", lambda: seen.append("llm"))
+
+    def validate_model(provider):
+        assert provider.require_model() == "synthetic-model"
+        seen.append("llm")
+
+    monkeypatch.setattr(preflight, "validate_llm_model", validate_model)
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: pytest.fail("GitLab called"))
     monkeypatch.setattr(
         preflight, "validate_gitlab_review_settings", lambda: pytest.fail("GitLab mode touched")

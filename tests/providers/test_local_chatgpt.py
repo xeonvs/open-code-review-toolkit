@@ -229,7 +229,13 @@ def test_default_custom_api_survives_existing_native_provider_selection(
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: seen.append("ocr"))
     monkeypatch.setattr(preflight, "validate_gitlab_review_settings", lambda: seen.append("mr"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: seen.append("gitlab"))
-    monkeypatch.setattr(preflight, "validate_llm_model", lambda: seen.append("api"))
+
+    def validate_api(provider):
+        assert provider.request_controls.protocol == protocol
+        assert provider.require_model() == "synthetic-api-model"
+        seen.append("api")
+
+    monkeypatch.setattr(preflight, "validate_llm_model", validate_api)
     assert preflight.main(local=local) == 0
     assert seen == (["ocr", "api"] if local else ["ocr", "mr", "gitlab", "api"])
 

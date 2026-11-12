@@ -294,7 +294,12 @@ the exact native capability gate rejects unsupported review execution before HTT
 On macOS the native Go client uses Keychain rather than the fixture's SSL_CERT_FILE;
 private-CA native TLS tests therefore run on Linux, without changing host trust.
 Example/documentation focused checks pass (85 tests, then 61 after query guidance).
-Final cross-slice review, coverage, installed and model acceptance remain pending.
+Qualification and forge headers are recorded in signed local logical commits.
+The extended structured provider properties pass with 1000 examples per property.
+The combined provider/native-auth/local focused set passes 274 tests/42 subtests;
+branch-aware coverage is 92% preflight, 96% provider configuration and 100% for
+the new header/native-capability helpers. Documentation guards and final cross-
+slice review, installed/model acceptance and protected delivery remain pending.
 
 ### Risks And Recovery
 
