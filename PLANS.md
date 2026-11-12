@@ -49,8 +49,8 @@ standalone manual self-test installation, current max-tools guidance and tests.
 | REQ-006 | Protocol-aware implicit /v1 only for pathless OpenAI inputs; explicit paths preserved | WQ-04 | done |
 | REQ-007 | Complete preflight inputs and bounded safe URL diagnostics without extra inference requests | WQ-04 | done |
 | REQ-008 | Correct first-integration docs, independent example jobs and current max-tools guidance | WQ-05 | done |
-| REQ-009 | Real-boundary, property and installed tests; coverage floors | WQ-03, WQ-04, WQ-05, WQ-06 | pending |
-| REQ-010 | Aggregate review, one Security scan, own-tool review with admitted diagram and final quality | WQ-06 | pending |
+| REQ-009 | Real-boundary, property and installed tests; coverage floors | WQ-03, WQ-04, WQ-05, WQ-06 | done |
+| REQ-010 | Aggregate review, one Security scan, own-tool review with admitted diagram and final quality | WQ-06 | done |
 | REQ-011 | Protected feature merge and development TestPyPI verification | WQ-07 | pending |
 | REQ-012 | Signed release PR, metadata/authorization/pins and checked archive/reset handoff | WQ-08 | pending |
 | REQ-013 | Stable registry/receipt/tag/issue/site/main verification | WQ-09 | pending |
@@ -165,7 +165,7 @@ credentials, raw debug traces or internal conversation identifiers in public wor
 | WQ-03 | Shared forge User-Agent default/override, early validation and real transport regressions | REQ-005, REQ-009 | done |
 | WQ-04 | Shared protocol URL normalization, complete preflight, native query capability, diagnostics and real handoffs | REQ-006, REQ-007, REQ-009, REQ-015 | done |
 | WQ-05 | Canonical onboarding docs, shared example install/manual self-test, public contracts and notes | REQ-008, REQ-009 | done |
-| WQ-06 | Aggregate review, one Security scan, admitted own-review diagram, fixes, final quality/installed/secret/dependency gates | REQ-004, REQ-009, REQ-010 | pending |
+| WQ-06 | Aggregate review, one Security scan, admitted own-review diagram, fixes, final quality/installed/secret/dependency gates | REQ-004, REQ-009, REQ-010 | done |
 | WQ-07 | Final feature push with diagram, hosted qualification reconciliation, protected CI/merge and development registry proof | REQ-003, REQ-011 | pending |
 | WQ-08 | Signed Release v0.14.8 PR, authorization/epoch/notes/pins, checked plan archive and CI/merge | REQ-001, REQ-012 | pending |
 | WQ-09 | Stable external receipts/installs/tag/issues/site/main, paired local OCR update and cleanup | REQ-013, REQ-014 | pending |
@@ -270,36 +270,61 @@ inference claims. No additional configuration knobs or setup wizard.
 
 ### Latest Validation Results
 
-Planning baseline: Linux qualification compatible/human-review-required and
-Darwin contract probes passed for verified OCR 1.13.8. Required new comparison-side
-and toolkit optional handoffs remain pending.
-Initial lifecycle/instruction checks, semantic plan review, staged/tree/history
-secret gates and dependency audit passed. The signed initial plan was pushed
-and draft PR #309 created. Exact-tag workflow run 43215747102 passed all three
-jobs and created eligible canonical issue #308 as github-actions[bot]. This is
-the pre-change suite baseline; new-contract qualification remains pending.
-The new complete Linux/Darwin suites pass all twenty contract groups. The initial
-negative-selector probe hit OCR's three-consecutive-error guard; independent
-successful same-tool controls now preserve the intended rejection oracle.
-Comparison verifier tests and the full qualification-focused set pass: 359 tests,
-10 opt-in skips. Real native consumers pass 114 tests; their one stale future-
-version negative control is corrected and passes in the focused set. The local
-manifest/evidence and exact optional handoff entries advance to 1.13.8.
-User-Agent and provider/preflight focused checks pass (132 tests/42 subtests),
-including real HTTPS caller paths. The new header helper measures 100% branch
-coverage. Seven actual Linux native TLS endpoint routes agree with normalization;
-the additional queried Responses route demonstrably lost its query. #1916 records
-that counterexample and the general upstream solution. Pure parsing retains query;
-the exact native capability gate rejects unsupported review execution before HTTP.
-On macOS the native Go client uses Keychain rather than the fixture's SSL_CERT_FILE;
-private-CA native TLS tests therefore run on Linux, without changing host trust.
-Example/documentation focused checks pass (85 tests, then 61 after query guidance).
-Qualification and forge headers are recorded in signed local logical commits.
-The extended structured provider properties pass with 1000 examples per property.
-The combined provider/native-auth/local focused set passes 274 tests/42 subtests;
-branch-aware coverage is 92% preflight, 96% provider configuration and 100% for
-the new header/native-capability helpers. Documentation guards and final cross-
-slice review, installed/model acceptance and protected delivery remain pending.
+- Draft PR #309 contains the signed plan at 94b14c6. Signed local logical
+  commits contain qualification, forge headers, URL/preflight, integration
+  documentation and reviewed corrections; implementation has not been pushed.
+- Exact-tag hosted baseline 43215747102 passed and created eligible Actions-owned
+  issue #308. It predates the changed probe suite; current-contract hosted proof
+  remains required at final feature delivery.
+- Verified official Linux/Darwin binaries pass all twenty current contract
+  groups. Frozen 1.13.7 readback preserves original bytes. Qualification-focused
+  tests pass: 359 tests/10 opt-in skips. The consumer set passes 114 checks;
+  its stale future-version negative control is corrected and passes separately.
+- Actual HTTPS checks cover default/override GET/POST/PUT/DELETE headers,
+  configuration propagation and the fail-closed `/user` 403 gate. New header
+  and native-capability helpers measure 100% branch-aware coverage.
+- Seven real Linux native TLS routes agree with environment/config normalization.
+  Actual Responses query loss is recorded in upstream #1916. Pure parsing keeps
+  valid URI components; exact native capability gates unsupported review routing.
+  Metadata queries are separately verified through the toolkit HTTPS client.
+  Native private-CA TLS fixtures run on Linux because macOS Go uses Keychain.
+- Provider/native-auth/local focused checks pass: 274 tests/42 subtests, 92%
+  preflight and 96% provider-config coverage. Structured provider properties pass
+  with 1000 examples per property, including repeated/empty/encoded query values.
+  Query-safe diagnostic regressions pass in the 98-test/42-subtest focused set.
+- Documentation/example contracts pass 85 tests. The security-model refinement
+  and accurate posting redirect docstring pass 54 affected contract checks.
+  Changelog classification separates new comparison capability, pin maintenance
+  and the independently installed manual-readiness bug fix.
+- Aggregate self-review and the single Security diff scan of fa64183..6c2f9ce are
+  complete. The sealed scan covers all eighteen changed source/evidence items
+  plus supporting contracts, with no plausible candidates or deferred source.
+  Independent architecture review backs the canonical model's environment,
+  client-redirect, URL/native-capability and external-policy clarifications.
+- The first real own-tool review of fa64183..6c2f9ce completed all 35 selected
+  files with gpt-6.1-sol/xhigh, high effort and unlimited aggregate tokens. All
+  three raw findings survived DLP. Corrected two stale test-double interfaces and
+  strengthened the comparison oracle so base/head/target/index/worktree paths
+  differ; inverse checks reject mixed-side enumeration. The 113-test focused set
+  passes with official Darwin OCR, and 31 comparison checks pass with Linux OCR.
+- The model-generated diagram was admitted and retained for the feature PR.
+  No budget, tool-round or context-exhaustion warning occurred. Three optional
+  planning requests timed out; upstream explicitly continues the main review
+  without that plan, and every selected file completed. A failed guessed CLI
+  read followed successful reads of the actual owner, leaving no owner gap.
+  Debug trace retention reached its documented byte limit (307/315 tool calls
+  retained); result, diagram, bootstrap and MCP inventory are complete. This
+  diagnostic limit did not truncate the model's review context. The bootstrap's
+  soft 2086/2000-character recommendation also caused no truncation. Unchanged
+  oversized lock evidence remains explicitly omitted, not absent.
+- Focused real-boundary fixes and scoped semantic review close all three
+  findings; no uncovered runtime boundary requires a second full model review.
+- The final full quality gate passes on the reviewed runtime: 5048 tests,
+  357 subtests and 69 opt-in skips; 90% overall branch-aware coverage, 92%
+  preflight, 96% provider configuration, 92% GitLab CI and 99% result contract.
+  Clean wheel/sdist installations exercise the actual CLI and MCP outside the
+  checkout. Public-tree/history secret scans and locked dependency audits pass.
+  Current-contract hosted qualification, protected delivery and cleanup remain.
 
 ### Risks And Recovery
 
@@ -319,12 +344,11 @@ slice review, installed/model acceptance and protected delivery remain pending.
 
 ### Resume Point
 
-Finish the documentation logical commit, then perform aggregate changed-range
-self-review and the single Security diff scan before the own-tool review in WQ-06.
-Qualification, headers and URL/capability handoffs are signed local commits;
-focused checks and extended properties pass. No Security or configured-model
-review has run for this cycle. Hosted new-contract proof, final quality/installed
-checks, feature/release delivery and local update/cleanup remain required.
+Push the fully checked feature with its exact admitted diagram, run exact-tag
+hosted qualification on the current probe suite and reconcile its proof. Complete
+protected feature/development delivery, then ordinary release delivery. No repeated
+aggregate Security scan, full model review or runtime gate is justified by this
+status-only update. Local paired update and cleanup remain required.
 
 ### Plan Fidelity Check
 

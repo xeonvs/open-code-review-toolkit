@@ -2,6 +2,7 @@
 
 import json
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -12,7 +13,9 @@ from ocr_qualification.comparison import (
     TOOLS,
     ComparisonConversation,
     ToolCase,
+    _comparison_repository,
     comparison_cases,
+    comparison_sides_probe,
     validate_side_schema,
     validate_tool_result,
 )
@@ -178,3 +181,50 @@ def test_negative_matrix_isolates_the_native_per_tool_failure_streak():
             control = cases[index + 1]
             assert control.name == case.name and not control.error
             assert control.arguments.get("side", "new") == "new"
+
+
+@pytest.mark.parametrize(
+    "wrong_name", ("renamed-target.txt", "renamed-worktree.txt", "renamed-untracked.txt")
+)
+def test_old_find_cannot_admit_checkout_paths_alongside_the_base_result(wrong_name):
+    case = next(
+        case
+        for case in comparison_cases("a" * 40)
+        if case.name == "file_find" and case.arguments == {"query_name": "renamed-", "side": "old"}
+    )
+    actual = "\n".join((*case.contains, wrong_name))
+    with pytest.raises(CompatibilityError, match="wrong immutable side"):
+        validate_tool_result(history(case, content=actual), case, "comparison-0")
+
+
+def test_find_fixture_distinguishes_base_head_target_index_and_worktree(tmp_path):
+    module = load_script()
+    repo, base, head, environment = _comparison_repository(tmp_path)
+
+    def names(*args):
+        return set(module.execution._run(["git", *args], cwd=repo, env=environment).splitlines())
+
+    base_names = names("ls-tree", "-r", "--name-only", base)
+    head_names = names("ls-tree", "-r", "--name-only", head)
+    target_names = names("ls-tree", "-r", "--name-only", "HEAD")
+    index_names = names("ls-files")
+    worktree_names = {entry.name for entry in repo.iterdir() if entry.is_file()}
+    assert base_names & {"renamed-old.txt", "deleted-only.txt"} == {
+        "renamed-old.txt",
+        "deleted-only.txt",
+    }
+    assert "renamed-new.txt" in head_names
+    assert "renamed-target.txt" in target_names
+    assert "renamed-worktree.txt" in index_names
+    assert {"renamed-worktree.txt", "renamed-untracked.txt"} <= worktree_names
+    assert "renamed-old.txt" not in head_names | target_names | index_names | worktree_names
+    assert "deleted-only.txt" not in head_names | target_names | index_names | worktree_names
+
+
+def test_native_comparison_observes_immutable_sides(tmp_path, qualified_native_ocr):
+    binary, version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
+    module = load_script()
+    if module.core._version(version) < module.contracts.history.HISTORICAL_CUTOFF:
+        pytest.skip("comparison-side probe belongs to the live qualification epoch")
+    observed = comparison_sides_probe(Path(binary), tmp_path)
+    assert observed["result"] == "passed"

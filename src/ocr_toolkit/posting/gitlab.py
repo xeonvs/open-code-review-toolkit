@@ -169,7 +169,7 @@ class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _open_gitlab_request(request: urllib.request.Request) -> Any:
-    """Open one GitLab request with redirect handling disabled."""
+    """Allow same-origin HTTPS read redirects and refuse mutation redirects."""
 
     return urllib.request.build_opener(_SameOriginRedirectHandler()).open(
         request, timeout=DEFAULT_HTTP_TIMEOUT_SECONDS

@@ -158,6 +158,7 @@ def comparison_cases(base: str) -> list[ToolCase]:
         )
         renamed = "renamed-old.txt" if old else "renamed-new.txt"
         other = "renamed-new.txt" if old else "renamed-old.txt"
+        other_names = (other, "renamed-target.txt", "renamed-worktree.txt", "renamed-untracked.txt")
         cases.extend(
             [
                 ToolCase(
@@ -170,13 +171,13 @@ def comparison_cases(base: str) -> list[ToolCase]:
                     "file_find",
                     {"query_name": "renamed-", **selector},
                     (*prefix, renamed),
-                    (*excluded_prefix, other),
+                    (*excluded_prefix, *other_names),
                 ),
                 ToolCase(
                     "code_search",
                     {"search_text": "RENAMED_PAYLOAD", **selector},
                     (*prefix, renamed),
-                    (*excluded_prefix, other),
+                    (*excluded_prefix, *other_names),
                 ),
                 ToolCase(
                     "file_read",
@@ -245,7 +246,13 @@ def comparison_cases(base: str) -> list[ToolCase]:
             "file_find",
             {"query_name": "renamed-"},
             ("renamed-new.txt",),
-            ("renamed-old.txt", "SIDE: old"),
+            (
+                "renamed-old.txt",
+                "renamed-target.txt",
+                "renamed-worktree.txt",
+                "renamed-untracked.txt",
+                "SIDE: old",
+            ),
         ),
         "code_search": ToolCase(
             "code_search",
@@ -262,10 +269,8 @@ def comparison_cases(base: str) -> list[ToolCase]:
     return isolated
 
 
-def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
-    """Read B/H while checkout and worktree deliberately name other content."""
-    root = directory / "comparison-sides-probe"
-    root.mkdir()
+def _comparison_repository(root: Path) -> tuple[Path, str, str, dict[str, str]]:
+    """Give B, H, target, index and worktree independently observable names."""
     git_env = execution._isolated_probe_environment(root / "git-home")
     repo, base, _head = execution._synthetic_repo(
         root,
@@ -283,13 +288,27 @@ def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
     execution._run(["git", "commit", "--amend", "--no-edit"], cwd=repo, env=git_env)
     head = execution._run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
     execution._run(["git", "checkout", "-b", "target", base], cwd=repo, env=git_env)
+    execution._run(["git", "mv", "renamed-old.txt", "renamed-target.txt"], cwd=repo, env=git_env)
+    execution._run(["git", "rm", "deleted-only.txt"], cwd=repo, env=git_env)
     (repo / "shared.txt").write_text(MARKERS[2] + "\n", encoding="utf-8")
     execution._run(["git", "add", "shared.txt"], cwd=repo, env=git_env)
     execution._run(["git", "commit", "-m", "unreviewed target"], cwd=repo, env=git_env)
+    execution._run(
+        ["git", "mv", "renamed-target.txt", "renamed-worktree.txt"], cwd=repo, env=git_env
+    )
     (repo / "shared.txt").write_text(MARKERS[3] + "\n", encoding="utf-8")
     (repo / "staged.txt").write_text("STAGED_PAYLOAD\n", encoding="utf-8")
     execution._run(["git", "add", "staged.txt"], cwd=repo, env=git_env)
     (repo / "untracked.txt").write_text("UNTRACKED_PAYLOAD\n", encoding="utf-8")
+    (repo / "renamed-untracked.txt").write_text("RENAMED_PAYLOAD\n", encoding="utf-8")
+    return repo, base, head, git_env
+
+
+def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Read B/H while checkout and worktree deliberately name other content."""
+    root = directory / "comparison-sides-probe"
+    root.mkdir()
+    repo, base, head, git_env = _comparison_repository(root)
     preserved = tuple(
         repo / name
         for name in (
@@ -297,13 +316,22 @@ def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
             ".git/index",
             "example.py",
             "shared.txt",
-            "renamed-old.txt",
-            "deleted-only.txt",
+            "renamed-worktree.txt",
+            "renamed-untracked.txt",
             "staged.txt",
             "untracked.txt",
         )
     )
     before = tuple(path.read_bytes() for path in preserved)
+    status_args = [
+        "git",
+        "--no-optional-locks",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+    ]
+    before_status = execution._run(status_args, cwd=repo, env=git_env)
     script = ComparisonConversation(comparison_cases(base))
     env = execution._isolated_probe_environment(root / "review-home")
     with peer._stub_gateway(tool_script=script) as url:
@@ -336,7 +364,11 @@ def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
             cwd=repo,
             env=env,
         )
-    if not script.complete or tuple(path.read_bytes() for path in preserved) != before:
+    if (
+        not script.complete
+        or tuple(path.read_bytes() for path in preserved) != before
+        or execution._run(status_args, cwd=repo, env=git_env) != before_status
+    ):
         core._fail("comparison probe was incomplete or changed the checkout")
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 

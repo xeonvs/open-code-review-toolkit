@@ -51,7 +51,7 @@ def _reader(
 ) -> Callable[..., tuple[object, bool]]:
     """Return only controlled provider pages for a unit boundary test."""
 
-    def read(url: str, _token: str, *, deadline: float) -> tuple[object, bool]:
+    def read(url: str, _token: str, *, deadline: float, user_agent: str) -> tuple[object, bool]:
         assert deadline > 0
         if "/jobs?" not in url:
             return pipelines, False
@@ -275,7 +275,9 @@ def test_gitlab_ci_marks_pagination_and_stale_results_partial(
         ]
     }
 
-    def paginated_reader(url: str, _token: str, *, deadline: float) -> tuple[object, bool]:
+    def paginated_reader(
+        url: str, _token: str, *, deadline: float, user_agent: str
+    ) -> tuple[object, bool]:
         assert deadline > 0
         if "/jobs?" not in url:
             return pipelines, True
