@@ -18,6 +18,16 @@ The complete variable inventory, owner, requirement, exact default, and behavior
 
 The public pipeline stores the OCR binary checksum as the non-secret `OCR_SHA256` pin. Store actual credentials as masked, protected CI variables; do not place their values in YAML, command arguments, repository evidence, or the generated bootstrap. GitLab job tokens are not accepted for posting.
 
+For the first merge-request pipeline, confirm that protected variables are actually available to its source and target branch under the project's GitLab rules. Keep credentials protected; do not unprotect a token to make a fork or unprotected-branch job run. The bot token needs live `/user`, project, MR, discussion, note, and optional approval access for the selected mode. A 401/403 can mean token scope or role, a protected-variable eligibility gap, or a GitLab/WAF policy rejection; check the job's bounded error and server-side policy before changing permissions. Use a trusted CA path for the GitLab and LLM HTTPS endpoints. `OCR_FORGE_API_USER_AGENT` defaults to `open-code-review-toolkit-provider/1` for every GitLab API read and write; an optional nonblank printable ASCII override of at most 256 bytes is validated before requests. It does not change the LLM or download client identity.
+
+GitLab's protected-resource MR mode requires protected source and target branches
+in the same project, a triggering user with push/merge access to the target, and
+the project's **Allow merge request pipelines to access protected variables and
+runners** setting. Fork MRs cannot access those protected resources. A manual
+self-test does not bypass eligibility; neither does the toolkit's target-policy
+mode. Arrange an eligible trusted pipeline before enabling this recipe. See
+[GitLab's protected-resource requirements](https://docs.gitlab.com/ci/pipelines/merge_request_pipelines/#control-access-to-protected-variables-and-runners).
+
 The pipeline leaves `OCR_GITLAB_TARGET_PROTECTION_MODE` unset so its pinned toolkit wheel supplies the default. In toolkit 0.13.0, that default is `auto`. If the actual target is protected, it remains its own policy authority. If it is unprotected, the toolkit reviews only this MR's actual delta under the same project's captured protected default-branch policy. Set exact `required` to keep the former strict behavior, or exact `unprotected` to choose the earlier limited profile. Explicit empty, malformed, mixed-case, or unknown values fail closed. Neither unprotected-target path can add an automatic approval, even when `OCR_AUTO_APPROVE=true`; an earlier bot approval may remain until GitLab's own reset or invalidation policy removes it.
 
 Projects inheriting the unset value need no CI/CD variable or policy-field
@@ -25,7 +35,7 @@ change. A shared CI template that explicitly sets `required` keeps rejecting
 unprotected targets until its owner changes that one central setting to `auto`;
 the toolkit does not override explicit operator intent.
 
-`OCR_REVIEW_LANGUAGE` defaults to `English`; `Russian` is one example of an explicit review language. The example pins its qualified OCR release and sets `OCR_REVIEW_EFFORT=medium`, allowing two review rounds; `low` and `high` explicitly select one or three. OCR may stop early when a round adds no finding. OCR scales its 15-minute per-subtask base to 15/30/45 minutes for low/medium/high, so the example allows 45 minutes at the GitLab job boundary. `OCR_MAX_TOOLS=0` selects the embedded template default `100`. Values `1-49` report normalization to `50` but remain effectively `100`; explicit `50` also cannot lower the template, and only a value above `100` raises the cap. `OCR_MAX_TOKENS_BUDGET` defaults to `0`, meaning unlimited; a positive budget may stop dispatch and produce an explicitly partial, automatic-approval-ineligible review. `OCR_LLM_MAX_COMPLETION_TOKENS` defaults to unset and separately controls only the provider request's completion/output cap. Select an explicit value only from the deployment's provider/model contract; the toolkit does not recommend or hardcode a provider-specific cap.
+`OCR_REVIEW_LANGUAGE` defaults to `English`; `Russian` is one example of an explicit review language. The example pins its qualified OCR release and sets `OCR_REVIEW_EFFORT=medium`, allowing two review rounds; `low` and `high` explicitly select one or three. OCR may stop early when a round adds no finding. OCR scales its 15-minute per-subtask base to 15/30/45 minutes for low/medium/high, so the example allows 45 minutes at the GitLab job boundary. Omitted `OCR_MAX_TOOLS` or `0` selects the embedded template default `100`; values `1-49` normalize to `50`, while explicit `50` and `75` retain those caps. `OCR_MAX_TOKENS_BUDGET` defaults to `0`, meaning unlimited; a positive budget may stop dispatch and produce an explicitly partial, automatic-approval-ineligible review. `OCR_LLM_MAX_COMPLETION_TOKENS` defaults to unset and separately controls only the provider request's completion/output cap. Select an explicit value only from the deployment's provider/model contract; the toolkit does not recommend or hardcode a provider-specific cap.
 
 OCR semantically groups related changed files before review and filters candidates per group. Its private grouping and other-files prompts use status-first `STATUS   path (+N/-M)` entries; the toolkit does not parse that inventory in production. Grouping, filtering, and multiple rounds can increase provider requests, latency, and token cost, while the manifest and aggregate budget continue to report completeness. Grouping, grace-round, provider-native reasoning/thinking, and tool-choice request state are retained only inside OCR's isolated private session. Group labels, paths, reasoning, signed/encrypted native payloads, and request controls remain untrusted: the toolkit does not publish or use them for severity, fingerprints, lifecycle commands, receipts, DLP counts, telemetry, tool/token summaries, or approval. OCR's separately configured telemetry may export high-cardinality repository-derived values, so keep `OCR_TELEMETRY_ENABLED=false` unless the exporter and retention policy are approved.
 
@@ -97,13 +107,37 @@ Use a dedicated bot account that is not the merge-request author. Give its proje
 
 Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, gateway state, and OCR sessions private to the runner and out of public artifacts. The local-only `ocr-ci review --preserve-private-artifacts` diagnostic is rejected by the validated GitLab merge-request profile and must not be added to a CI job.
 
-Before treating the advisory job as a required gate, run `ocr llm test` with the same generated OCR configuration and protected credential path. `ocr-ci preflight` always checks that the required toolkit inputs exist and can optionally validate model metadata through `/models`, but that metadata read is not a full review request and cannot guarantee that a gateway credential, protocol, deployment, spending policy, or requested output cap will accept the later conversation. The toolkit never derives `OCR_LLM_MAX_COMPLETION_TOKENS` from `/models.max_completion_tokens`. Keep `allow_failure` only when a missing review is intentionally advisory; a green pipeline with an allowed-to-fail OCR job is not evidence that OCR produced a usable review.
+Before treating the advisory job as a required gate, run `ocr llm test` manually with the same generated OCR configuration and protected credential path. The manual self-test in the example independently installs OCR and the toolkit, runs preflight and configure, and deliberately makes no model call; use it to diagnose readiness first. `ocr-ci preflight` always requires URL, token, and model before network access and can optionally validate model metadata through `/models`. Disabling that metadata read does not remove the required inputs; a metadata read is not a full review request. Neither a green preflight nor `/models` success proves that a gateway credential, protocol, deployment, spending policy, or requested output cap will accept an inference conversation. The toolkit never derives `OCR_LLM_MAX_COMPLETION_TOKENS` from `/models.max_completion_tokens`. Keep `allow_failure` only when a missing review is intentionally advisory; a green pipeline with an allowed-to-fail OCR job is not evidence that OCR produced a usable review.
+
+Use a query-free provider root or matching terminal endpoint for the currently
+qualified OCR clients. Preflight and review reject an inference query before
+model execution because native preservation is not qualified; configure can
+write a valid queried URL but does not prove that capability. The
+[endpoint contract](configuration.md#provider-endpoint-and-completion-cap-contract)
+and [upstream issue #1916](https://github.com/alibaba/open-code-review/issues/1916)
+describe the restriction. Provider-supported request headers may be an alternative
+when the deployment's contract permits them. The independent `OCR_LLM_MODELS_URL`
+can include a metadata query. Check actual inference with the explicit private
+model test instead of inferring it from metadata success.
 
 The toolkit authenticates the token owner with live `GET /user`. No configured bot ID or username is trusted. The returned ID owns note/fingerprint checks; the validated username owns exact mention-command parsing.
 
 ## Operating model
 
-`ocr-ci preflight` validates OCR compatibility, GitLab access, registry v2, upstream inventory, and optional model metadata. `ocr-ci configure` writes the isolated OCR configuration. `ocr-ci review` accepts a detached MR pipeline only: GitLab's predefined `CI_MERGE_REQUEST_EVENT_TYPE` must be `detached`, and its checked-out `CI_COMMIT_SHA` must match the authenticated current source H. The example uses `CI_MERGE_REQUEST_DIFF_BASE_SHA` for `--from` and `CI_COMMIT_SHA` for `--to`. In a detached pipeline the MR-specific source SHA can be empty. Merged-results, merge-train, missing, or contradictory event/commit identities stop before model execution; no project variable or merge-strategy change is required.
+`ocr-ci preflight` checks API prerequisites, exact OCR compatibility and native
+routing capability, detached GitLab identity/settings, authenticated API reads
+and optional model metadata. `ocr-ci configure` writes configuration under its
+current HOME; review builds its own fresh isolated configuration. The actual
+review owns evidence/federation registry and inventory preflight; the standalone
+preflight command does not query those MCP servers.
+
+`ocr-ci review` accepts a detached MR pipeline only: GitLab's predefined
+`CI_MERGE_REQUEST_EVENT_TYPE` must be `detached`, and its checked-out
+`CI_COMMIT_SHA` must match the authenticated current source H. The example uses
+`CI_MERGE_REQUEST_DIFF_BASE_SHA` for `--from` and `CI_COMMIT_SHA` for `--to`.
+In a detached pipeline the MR-specific source SHA can be empty. Merged-results,
+merge-train, missing or contradictory event/commit identities stop before model
+execution; no project variable or merge-strategy change is required.
 
 An intentionally absent toolkit receipt retains a compatible standalone
 direct-posting path outside GitLab CI, without automatic approval or a v13

@@ -137,7 +137,9 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
     assert "open_code_review:" in review_job
     assert "when: manual" not in review_job.split("open_code_review:", 1)[1]
     assert "when: manual" in self_test
-    assert "env -u OCR_LLM_TOKEN ocr-ci preflight" in self_test
+    # test_environment_contract owns exact install inheritance and script composition.
+    assert "env -u OCR_LLM_TOKEN" not in workflow
+    assert "ocr llm test" not in workflow
 
 
 def test_gitlab_docs_match_the_current_review_surface() -> None:
@@ -239,7 +241,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert '--to "${CI_COMMIT_SHA}"' in workflow
     assert "Pin the exact recommended Open Code Review release" in security
     assert "when: manual" in workflow
-    assert "env -u OCR_LLM_TOKEN" in workflow
+    assert "env -u OCR_LLM_TOKEN" not in workflow
 
 
 def test_public_bounded_context_recipes_match_runtime_schemas(

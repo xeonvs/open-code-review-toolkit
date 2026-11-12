@@ -42,20 +42,20 @@ standalone manual self-test installation, current max-tools guidance and tests.
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
 | REQ-001 | Full plan fidelity, signed draft PR and sustained delivery goal | WQ-01, WQ-08 | done |
-| REQ-002 | Exact OCR assets, 1.13.7 frozen readback and 1.13.8 comparison-side contract | WQ-02 | in_progress |
+| REQ-002 | Exact OCR assets, 1.13.7 frozen readback and 1.13.8 comparison-side contract | WQ-02 | done |
 | REQ-003 | Hosted exact-tag qualification and canonical Actions-owned issue | WQ-02, WQ-07 | in_progress |
-| REQ-004 | Qualified MCP/federation/grouping/diagram/gitlink consumers and manifest-based native inventory | WQ-02, WQ-06 | pending |
-| REQ-005 | One shared default and validated OCR_FORGE_API_USER_AGENT for all forge API methods | WQ-03 | in_progress |
-| REQ-006 | Protocol-aware implicit /v1 only for pathless OpenAI inputs; explicit paths preserved | WQ-04 | in_progress |
-| REQ-007 | Complete preflight inputs and bounded safe URL diagnostics without extra inference requests | WQ-04 | in_progress |
-| REQ-008 | Correct first-integration docs, independent example jobs and current max-tools guidance | WQ-05 | pending |
+| REQ-004 | Qualified MCP/federation/grouping/diagram/gitlink consumers and manifest-based native inventory | WQ-02, WQ-06 | done |
+| REQ-005 | One shared default and validated OCR_FORGE_API_USER_AGENT for all forge API methods | WQ-03 | done |
+| REQ-006 | Protocol-aware implicit /v1 only for pathless OpenAI inputs; explicit paths preserved | WQ-04 | done |
+| REQ-007 | Complete preflight inputs and bounded safe URL diagnostics without extra inference requests | WQ-04 | done |
+| REQ-008 | Correct first-integration docs, independent example jobs and current max-tools guidance | WQ-05 | done |
 | REQ-009 | Real-boundary, property and installed tests; coverage floors | WQ-03, WQ-04, WQ-05, WQ-06 | pending |
 | REQ-010 | Aggregate review, one Security scan, own-tool review with admitted diagram and final quality | WQ-06 | pending |
 | REQ-011 | Protected feature merge and development TestPyPI verification | WQ-07 | pending |
 | REQ-012 | Signed release PR, metadata/authorization/pins and checked archive/reset handoff | WQ-08 | pending |
 | REQ-013 | Stable registry/receipt/tag/issue/site/main verification | WQ-09 | pending |
 | REQ-014 | Paired local OCR/toolkit update, obsolete binary removal and task cleanup | WQ-09 | pending |
-| REQ-015 | Preserve valid URI semantics separately from qualified native query capability; upstream general correction proposal | WQ-04 | in_progress |
+| REQ-015 | Preserve valid URI semantics separately from qualified native query capability; upstream general correction proposal | WQ-04 | done |
 
 ### Explicit Non-Goals
 
@@ -162,9 +162,9 @@ credentials, raw debug traces or internal conversation identifiers in public wor
 | --- | --- | --- | --- |
 | WQ-01 | Full plan checks, signed initial plan push and draft PR #309 completed | REQ-001 | done |
 | WQ-02 | Hosted baseline #308 passed; freeze 1.13.7; comparison-side/wire/native proof; promote qualified 1.13.8 | REQ-002, REQ-003, REQ-004 | in_progress |
-| WQ-03 | Shared forge User-Agent default/override, early validation and real transport regressions | REQ-005, REQ-009 | in_progress |
-| WQ-04 | Shared protocol URL normalization, complete preflight, native query capability, diagnostics and real handoffs | REQ-006, REQ-007, REQ-009, REQ-015 | in_progress |
-| WQ-05 | Canonical onboarding docs, shared example install/manual self-test, public contracts and notes | REQ-008, REQ-009 | in_progress |
+| WQ-03 | Shared forge User-Agent default/override, early validation and real transport regressions | REQ-005, REQ-009 | done |
+| WQ-04 | Shared protocol URL normalization, complete preflight, native query capability, diagnostics and real handoffs | REQ-006, REQ-007, REQ-009, REQ-015 | done |
+| WQ-05 | Canonical onboarding docs, shared example install/manual self-test, public contracts and notes | REQ-008, REQ-009 | done |
 | WQ-06 | Aggregate review, one Security scan, admitted own-review diagram, fixes, final quality/installed/secret/dependency gates | REQ-004, REQ-009, REQ-010 | pending |
 | WQ-07 | Final feature push with diagram, hosted qualification reconciliation, protected CI/merge and development registry proof | REQ-003, REQ-011 | pending |
 | WQ-08 | Signed Release v0.14.8 PR, authorization/epoch/notes/pins, checked plan archive and CI/merge | REQ-001, REQ-012 | pending |
@@ -319,11 +319,12 @@ slice review, installed/model acceptance and protected delivery remain pending.
 
 ### Resume Point
 
-Finish semantic review and logical local commits for qualification, headers and
-URL/capability handoffs. Extend structured query properties, verify affected
-coverage, reconcile docs/example and all header references, then proceed to WQ-06.
-No Security or configured-model review has run for this cycle. Hosted new-contract
-proof, feature/release delivery and final local update/cleanup remain required.
+Finish the documentation logical commit, then perform aggregate changed-range
+self-review and the single Security diff scan before the own-tool review in WQ-06.
+Qualification, headers and URL/capability handoffs are signed local commits;
+focused checks and extended properties pass. No Security or configured-model
+review has run for this cycle. Hosted new-contract proof, final quality/installed
+checks, feature/release delivery and local update/cleanup remain required.
 
 ### Plan Fidelity Check
 

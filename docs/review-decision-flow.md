@@ -81,6 +81,16 @@ Local execution preserves the configured API provider by default. Optional
 checks structural readiness, while OCR owns grant/expiry validation on use.
 Neither preflight nor review initiates login or falls back to another provider.
 
+API preflight first requires a valid protocol, URL, token and model. After exact
+binary qualification, it checks native routing capabilities before GitLab or
+metadata HTTP. The shared URL parser preserves valid URL components; a native
+client without qualified query preservation cannot review a queried inference
+URL. Review enforces that same capability before writing its isolated API config.
+Pathless OpenAI roots receive the documented `/v1` default; this notice is not a
+review warning or evidence of model reachability. Optional `/models` validation
+does not send an inference request; [configuration](configuration.md#provider-endpoint-and-completion-cap-contract)
+owns the full endpoint contract.
+
 ```mermaid
 flowchart TD
     start[CI or local review request] --> auth{Explicit local ChatGPT mode?}
