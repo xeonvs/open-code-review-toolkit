@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.7",
-  "recommended_version": "1.13.7",
+  "monitoring_floor": "1.13.8",
+  "recommended_version": "1.13.8",
   "releases": [
     {
       "assets": [
@@ -2989,6 +2989,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.7",
       "status": "tested",
       "version": "1.13.7"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "a32c00865323762927468d52a1ee2714f041bd017ece1cc0c38eddd10ece0329",
+          "size": 58390720
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "21ea25d40a744b909906f316361049d174b761c111607394c7dcca4741151f64",
+          "size": 55399538
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "32187a8afa11b9c37fe549a0c879152e716496445a7eb67baa917d0103f22146",
+          "size": 56635554
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "f0417702dc1e69438f73c9fd2e5739c221d324a5e4d50cf9d6d839f05b1b7998",
+          "size": 53280930
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "b9665b4cc1a3dfa46927a385a991463972a6e2cf54fce1d80a4f02de8b4ae442",
+          "size": 58107904
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "b525828a843fffabc02673fa7bcd7ffd552d85a42dce5d02ffe1ff23be96e382",
+          "size": 54024704
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "3f1ee84fab91143db0adcd8a8acb52f369f4b98e72c13fc67bad3d2bcddc93fe",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.8.json",
+      "evidence_sha256": "4d6bd56249bc16a6c838052ef4a1f079e41124a3c622fcc0defa6fe07d2b4838",
+      "human_conclusion": "Reviewed adjacent upstream source and official Linux amd64/Darwin arm64 assets. Both platforms pass the current contract suite, including actual old/new/default file_read, file_find and code_search results bound to immutable comparison endpoints, side-relative rename/delete paths, rejected invalid side values and preserved dirty checkout state. Actual toolkit consumers preserve diagrams, grouping, federation, partial gitlinks and concurrency. Removed --tools is not consumed; comparison-side reading is additive. Native auth/provider ownership is unchanged. Copilot/plugin, ACP, viewer, MiniMax suggestions and upstream Action/site changes require no toolkit execution adaptation. Actual Responses query loss is tracked in upstream #1916; native inference-query support is not qualified. Configured-model acceptance remains a separate pre-delivery gate.",
+      "published_at": "2026-11-12T05:44:04Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.8",
+      "status": "tested",
+      "version": "1.13.8"
     }
   ],
   "runtime_support": {

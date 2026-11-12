@@ -461,6 +461,36 @@ pass, custom scheduler or cache layer is introduced. Qualification tracker
 reviewed evidence; #302 owns the consumer fixes. Configured-model acceptance is
 recorded in the own-tool review and accepted diagram of PR #303.
 
+### OCR 1.13.8 — toolkit 0.14.8 qualification
+
+Verified official Linux amd64 and Darwin arm64 assets pass the current contract
+suite. New `side=old|new` selectors on `file_read`, `file_find` and `code_search`
+read immutable base/head objects, default to head, and retain side-relative
+renamed/deleted paths. Actual call/result identities, invalid selectors, a
+different checked-out target, staged/unstaged/untracked files and unchanged
+checkout state are checked. The 1.13.7 readback epoch is frozen without rewriting
+published evidence; fresh probes start at 1.13.8.
+
+Actual toolkit consumers preserve both diagram variants, grouping, federation,
+partial gitlinks and native concurrency. The removed `--tools` option is not
+consumed. Copilot/plugin, ACP, viewer, MiniMax suggestions and upstream Action/site
+changes do not add toolkit execution paths or change model defaults. Native auth
+resolution and store/refresh ownership are unchanged in the adjacent source diff.
+
+Protocol-aware toolkit normalization and the real Linux native TLS client agree
+on query-free roots, explicit terminal paths and custom prefixes. An actual
+Responses request silently lost its query; query preservation is therefore not
+a qualified native capability. Valid query syntax remains the parser's concern,
+while preflight/review stop unsupported native routing before inference. The
+[upstream correction proposal](https://github.com/alibaba/open-code-review/issues/1916)
+covers parsed URL components and SDK query options without gateway-specific keys.
+Toolkit-owned metadata queries remain supported. Configured-model acceptance is
+a separate release gate; deterministic peers establish protocol behavior only.
+
+Hosted exact-tag baseline run 43215747102 created canonical qualification tracker
+[#308](https://github.com/xeonvs/open-code-review-toolkit/issues/308). Final
+current-contract hosted qualification is reconciled with feature delivery.
+
 ## Promotion and rollback
 
 Preparation validates all generated destinations before writing. Existing evidence

@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from . import comments as comment_checks
+from . import comparison, core, execution, numeric, peer, selection, settings, wire_controls
 from . import contracts as contract_rules
-from . import core, execution, numeric, peer, selection, settings, wire_controls
 
 
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
@@ -159,6 +159,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts["language_rule_probe"] = selection._language_rule_probe(binary, version, directory)
     contracts["csharp_context_probe"] = selection._csharp_context_probe(binary, directory)
     contracts["clojure_context_probe"] = selection._clojure_context_probe(binary, directory)
+    contracts["comparison_sides_probe"] = comparison.comparison_sides_probe(binary, directory)
     contracts["completion_cap_probe"] = numeric._completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = numeric._reasoning_effort_probe(binary, directory)
     contracts["stream_override_probe"] = wire_controls.stream_override_probe(binary, directory)

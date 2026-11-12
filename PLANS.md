@@ -46,8 +46,8 @@ standalone manual self-test installation, current max-tools guidance and tests.
 | REQ-003 | Hosted exact-tag qualification and canonical Actions-owned issue | WQ-02, WQ-07 | in_progress |
 | REQ-004 | Qualified MCP/federation/grouping/diagram/gitlink consumers and manifest-based native inventory | WQ-02, WQ-06 | pending |
 | REQ-005 | One shared default and validated OCR_FORGE_API_USER_AGENT for all forge API methods | WQ-03 | in_progress |
-| REQ-006 | Protocol-aware implicit /v1 only for pathless OpenAI inputs; explicit paths preserved | WQ-04 | pending |
-| REQ-007 | Complete preflight inputs and bounded safe URL diagnostics without extra inference requests | WQ-04 | pending |
+| REQ-006 | Protocol-aware implicit /v1 only for pathless OpenAI inputs; explicit paths preserved | WQ-04 | in_progress |
+| REQ-007 | Complete preflight inputs and bounded safe URL diagnostics without extra inference requests | WQ-04 | in_progress |
 | REQ-008 | Correct first-integration docs, independent example jobs and current max-tools guidance | WQ-05 | pending |
 | REQ-009 | Real-boundary, property and installed tests; coverage floors | WQ-03, WQ-04, WQ-05, WQ-06 | pending |
 | REQ-010 | Aggregate review, one Security scan, own-tool review with admitted diagram and final quality | WQ-06 | pending |
@@ -55,6 +55,7 @@ standalone manual self-test installation, current max-tools guidance and tests.
 | REQ-012 | Signed release PR, metadata/authorization/pins and checked archive/reset handoff | WQ-08 | pending |
 | REQ-013 | Stable registry/receipt/tag/issue/site/main verification | WQ-09 | pending |
 | REQ-014 | Paired local OCR/toolkit update, obsolete binary removal and task cleanup | WQ-09 | pending |
+| REQ-015 | Preserve valid URI semantics separately from qualified native query capability; upstream general correction proposal | WQ-04 | in_progress |
 
 ### Explicit Non-Goals
 
@@ -97,6 +98,7 @@ credentials, raw debug traces or internal conversation identifiers in public wor
 - https://github.com/xeonvs/open-code-review-toolkit/issues/308 (canonical Actions-owned qualification)
 - https://github.com/xeonvs/open-code-review-toolkit/pull/309 (initial signed plan draft)
 - https://github.com/alibaba/open-code-review/releases/tag/v1.13.8
+- https://github.com/alibaba/open-code-review/issues/1916 (actual query loss and general correction proposal)
 - Upstream source commit 4236c871fe8130aa840a2a1c0922f469e87e0416.
 - Official asset metadata and sha256sum.txt; current support manifest and
   read-only planning-stage qualification outputs.
@@ -126,6 +128,12 @@ credentials, raw debug traces or internal conversation identifiers in public wor
   User-Agent tails; retain unrelated services' independently owned headers.
 - Refresh the draft's plan through a signed amend and guarded force-with-lease
   push. Keep unfinished runtime changes local until the final feature update.
+- Actual Responses wire capture exposed lost inference query parameters. The
+  owner authorized a pre-model refusal and upstream issue, then requested a
+  general solution. Keep valid query syntax intact in the pure parser; exact
+  native capability validation owns temporary review refusal. Upstream correction
+  uses parsed URL components and existing SDK query operations, without gateway
+  keys, proxies or new settings. Separately owned metadata queries remain valid.
 
 ### Completed Baseline State
 
@@ -155,8 +163,8 @@ credentials, raw debug traces or internal conversation identifiers in public wor
 | WQ-01 | Full plan checks, signed initial plan push and draft PR #309 completed | REQ-001 | done |
 | WQ-02 | Hosted baseline #308 passed; freeze 1.13.7; comparison-side/wire/native proof; promote qualified 1.13.8 | REQ-002, REQ-003, REQ-004 | in_progress |
 | WQ-03 | Shared forge User-Agent default/override, early validation and real transport regressions | REQ-005, REQ-009 | in_progress |
-| WQ-04 | Shared protocol URL normalization, complete preflight, diagnostics and producer/consumer tests | REQ-006, REQ-007, REQ-009 | pending |
-| WQ-05 | Canonical onboarding docs, shared example install/manual self-test, public contracts and notes | REQ-008, REQ-009 | pending |
+| WQ-04 | Shared protocol URL normalization, complete preflight, native query capability, diagnostics and real handoffs | REQ-006, REQ-007, REQ-009, REQ-015 | in_progress |
+| WQ-05 | Canonical onboarding docs, shared example install/manual self-test, public contracts and notes | REQ-008, REQ-009 | in_progress |
 | WQ-06 | Aggregate review, one Security scan, admitted own-review diagram, fixes, final quality/installed/secret/dependency gates | REQ-004, REQ-009, REQ-010 | pending |
 | WQ-07 | Final feature push with diagram, hosted qualification reconciliation, protected CI/merge and development registry proof | REQ-003, REQ-011 | pending |
 | WQ-08 | Signed Release v0.14.8 PR, authorization/epoch/notes/pins, checked plan archive and CI/merge | REQ-001, REQ-012 | pending |
@@ -180,8 +188,12 @@ The shared provider-config owner applies defaults only to raw API inputs. Proces
 matching terminal endpoints first. For openai/openai-responses, a pathless root
 uses /v1; explicit prefix paths and explicit root terminal endpoints stay intact.
 Anthropic retains its existing root plus /v1/messages semantics. Unknown/mismatched
-protocols remain errors. Preserve inference query and existing explicit /models
-override rules. Consumers use canonical config without applying defaults again.
+protocols remain errors. Preserve inference query as valid configuration data and
+existing explicit /models override rules. Consumers use canonical config without
+applying defaults again. Before inference, require exact native query capability;
+current clients lack it. This is not a permanent URL-syntax ban. Configure alone
+is not execution proof. Upstream #1916 proposes one parsed-URL owner plus existing
+SDK query operations, including repeated/encoded values and actual request tests.
 
 Return normalization notice data from the pure owner. Preflight/configure/review
 orchestration emits one safe notice per command when a default was applied; show
@@ -266,11 +278,23 @@ secret gates and dependency audit passed. The signed initial plan was pushed
 and draft PR #309 created. Exact-tag workflow run 43215747102 passed all three
 jobs and created eligible canonical issue #308 as github-actions[bot]. This is
 the pre-change suite baseline; new-contract qualification remains pending.
-The frozen manifest validates and 25 comparison-verifier tests pass. The first
-native comparison probe reached negative-selector cases but did not complete;
-inspect that handoff before another run. User-Agent focused tests passed (364
-tests/205 subtests, then 19 final TLS/policy tests); new-helper branch coverage is
-100%, with root integration/docs and final aggregate checks still pending.
+The new complete Linux/Darwin suites pass all twenty contract groups. The initial
+negative-selector probe hit OCR's three-consecutive-error guard; independent
+successful same-tool controls now preserve the intended rejection oracle.
+Comparison verifier tests and the full qualification-focused set pass: 359 tests,
+10 opt-in skips. Real native consumers pass 114 tests; their one stale future-
+version negative control is corrected and passes in the focused set. The local
+manifest/evidence and exact optional handoff entries advance to 1.13.8.
+User-Agent and provider/preflight focused checks pass (132 tests/42 subtests),
+including real HTTPS caller paths. The new header helper measures 100% branch
+coverage. Seven actual Linux native TLS endpoint routes agree with normalization;
+the additional queried Responses route demonstrably lost its query. #1916 records
+that counterexample and the general upstream solution. Pure parsing retains query;
+the exact native capability gate rejects unsupported review execution before HTTP.
+On macOS the native Go client uses Keychain rather than the fixture's SSL_CERT_FILE;
+private-CA native TLS tests therefore run on Linux, without changing host trust.
+Example/documentation focused checks pass (85 tests, then 61 after query guidance).
+Final cross-slice review, coverage, installed and model acceptance remain pending.
 
 ### Risks And Recovery
 
@@ -290,10 +314,11 @@ tests/205 subtests, then 19 final TLS/policy tests); new-helper branch coverage 
 
 ### Resume Point
 
-WQ-02: inspect the new native comparison probe's negative-selector handoff,
-correct the demonstrated cause and complete actual candidate checks before
-promotion. WQ-03 code/tests are handed back for root review/integration; preflight
-file ownership has returned to root. Documentation and final acceptance remain.
+Finish semantic review and logical local commits for qualification, headers and
+URL/capability handoffs. Extend structured query properties, verify affected
+coverage, reconcile docs/example and all header references, then proceed to WQ-06.
+No Security or configured-model review has run for this cycle. Hosted new-contract
+proof, feature/release delivery and final local update/cleanup remain required.
 
 ### Plan Fidelity Check
 
