@@ -184,7 +184,7 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-03 | Bounded .NET declarations/central links, project-scoped ASP.NET, shared container grammar and Git/store/stdio MCP handoffs accepted | REQ-004, REQ-005, REQ-006, REQ-013 | done |
 | WQ-04 | Numeric span/date corrections and initial authenticated paired audits accepted; final resource/repeat comparison remains at WQ-07 | REQ-007, REQ-008, REQ-013 | done |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | in_progress |
-| WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | pending |
+| WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | in_progress |
 | WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | pending |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
 | WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins and lifecycle archive/reset; protected merge | REQ-016 | pending |
@@ -380,6 +380,21 @@ Upstream latest is v1.13.10. The local executable now matches its official Darwi
 SHA-256; the former installed executable and temporary candidate copies were
 removed. Historical evidence through 1.13.8 is frozen without rewriting bytes.
 
+WQ-06 unified diagnostics implementation: the separate retention interface,
+native-HOME preservation and duplicate DLP sidecar producer are removed. Local
+debug captures bounded repository/context/Rules/action inputs before unconditional
+cleanup; successful results always take ordinary finalization. Unsafe or failed
+atomic finalization discards its unadmitted handoff, while hostile old private
+markers remain rejected. The scoped runner/CLI/debug/rejection suite passed 280
+checks, and three additional closed budget-fact cases passed after correcting the
+synthetic authentication fixture. The controlled real-CLI matrix passed normal,
+debug, progress, filtered/failure/forged-output and both diagram paths against the
+working-tree entrypoint. ChatGPT auth checks passed 53 cases, including debug
+cleanup without copying native auth/configuration. Debug coverage is 94% with
+branches across 360 scoped checks. Clean wheel/sdist installation remains at the
+final gate; these are not installed-artifact claims. Remaining operator/planning
+documents are a separate WQ-06 slice.
+
 ### Risks And Recovery
 
 Dateparser 1.5.0 was qualified as a possible supplement on a synthetic 34-value
@@ -414,6 +429,10 @@ passed scoped checks, initial paired audits and focused correction replay; retai
 its final full repeat/resource comparison at WQ-07 after runtime work is complete.
 WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
 purpose-focused descriptions are committed as a7004e2.
+The numeric slice is committed as 0d16bab and OCR qualification as a759d51.
+Unified diagnostic code/test changes passed scoped CLI/auth boundaries and are
+ready for semantic review and commit. Then finish concurrency/label guidance and
+roadmap/backlog cleanup before the final installed and aggregate gates.
 Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.
 

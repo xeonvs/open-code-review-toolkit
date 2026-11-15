@@ -339,10 +339,12 @@ with (store / 'session.lock').open('a') as lock:
     assert local_chatgpt.native_store({"HOME": str(native_home)}) == store
 
 
+@pytest.mark.parametrize("debug", [False, True])
 def test_local_review_process_receives_native_binding_and_cleans_only_private_home(
     native_home: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    debug: bool,
 ) -> None:
     """Cross real caller/files/processes with OCR replaced beyond those boundaries."""
 
@@ -443,6 +445,7 @@ raise SystemExit(2)
         tmp_path / "stderr.log",
         ["--commit", "HEAD"],
         local=True,
+        **({"debug_dir": tmp_path / "debug"} if debug else {}),
     )
     assert result == 2
     observation = json.loads(marker.read_text())
@@ -451,3 +454,13 @@ raise SystemExit(2)
     assert (store / "host.json").read_bytes() == host_before
     assert json.loads((store / "accounts.json").read_text())["synthetic_generation"] == 3
     assert os.environ["HOME"] == str(native_home)
+    if debug:
+        directory = tmp_path / "debug"
+        journal = json.loads((directory / "journal.json").read_text())
+        assert journal["phases"]["cleanup"]["status"] == "passed"
+        assert journal["artifacts"]["evidence.json"]["status"] == "passed"
+        assert not (directory / "safe-result.json").exists()
+        assert not {"accounts.json", "host.json", "config.json"} & {
+            item.name for item in directory.rglob("*")
+        }
+        assert all(not item.is_symlink() for item in directory.iterdir())

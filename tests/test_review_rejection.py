@@ -35,14 +35,12 @@ def composition() -> MCPComposition:
         ({"total": 1, "by_tool": {"read_file": 1}}, None),
     ],
 )
-@pytest.mark.parametrize("retain", [False, True])
-def test_rejected_result_preserves_only_authorized_private_diagnostics(
+def test_rejected_result_discards_unadmitted_output(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     status: str,
     telemetry: dict[str, object] | None,
     expected: int | None,
-    retain: bool,
 ) -> None:
     """Enter real atomic finalization and hostile readback before posting rejection."""
     result = tmp_path / "result.json"
@@ -58,7 +56,6 @@ def test_rejected_result_preserves_only_authorized_private_diagnostics(
             replace(DEFAULT_IDENTITY, mr_author_id=None),
             None,
             forbidden=(),
-            private_diagnostics=retain,
             report_consumer=reports.append,
         )
     assert caught.value.reason == "evidence-use-unconfirmed"
@@ -69,16 +66,7 @@ def test_rejected_result_preserves_only_authorized_private_diagnostics(
     assert "private operator content" not in output
     assert str(tmp_path) not in output
     assert ("reported calls: unavailable" if expected is None else "reported calls: 0") in output
-    assert result.exists() is retain
-    if retain:
-        assert result.stat().st_mode & 0o777 == 0o600
-        retained = ocr_result.load_ocr_result(result)
-        assert (
-            retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"]
-            == "evidence-use-unconfirmed"
-        )
-        assert ocr_result.TOOLKIT_RESULT_KEY not in retained
-        assert retained["result"]["message"] == "private operator content"
+    assert not result.exists()
 
 
 @pytest.mark.parametrize(
@@ -100,40 +88,6 @@ def test_malformed_telemetry_remains_separate(tmp_path: Path, telemetry: object)
             result, composition(), DEFAULT_IDENTITY, None, forbidden=()
         )
     assert not isinstance(caught.value, review_runner.ReviewRejected)
-    assert not result.exists()
-
-
-def test_retention_failure_preserves_original_rejection(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A failed atomic replacement must neither mask rejection nor leave adoptable raw data."""
-    result = tmp_path / "result.json"
-    result.write_text(json.dumps({"status": "success", "tool_calls": {"total": 0, "by_tool": {}}}))
-    transform = review_runner.transform_ocr_result
-    attempts = 0
-
-    def fail_retention(path: Path, callback: object) -> object:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 2:
-            raise ocr_result.OcrResultMissing("private failure details")
-        return transform(path, callback)
-
-    monkeypatch.setattr(review_runner, "transform_ocr_result", fail_retention)
-    with pytest.raises(review_runner.ReviewRejected, match="evidence-use-unconfirmed"):
-        review_runner._finalize_ocr_result(
-            result,
-            composition(),
-            DEFAULT_IDENTITY,
-            None,
-            forbidden=(),
-            private_diagnostics=True,
-        )
-    output = capsys.readouterr().err
-    assert "retention failed" in output
-    assert "private failure details" not in output
     assert not result.exists()
 
 
@@ -195,94 +149,27 @@ def test_positive_calls_without_summary_keep_distinct_rejection(tmp_path: Path) 
             DEFAULT_IDENTITY,
             None,
             forbidden=(),
-            private_diagnostics=True,
         )
     assert caught.value.reason == "evidence-action-attribution-invalid"
     assert caught.value.calls == 1
-    assert (
-        ocr_result.load_ocr_result(result)[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"]
-        == caught.value.reason
-    )
-
-
-def test_no_work_private_retention_still_has_no_publication_authority(tmp_path: Path) -> None:
-    """Legitimate skipped work is accepted for diagnosis without a provider receipt."""
-    result = tmp_path / "result.json"
-    result.write_text(
-        json.dumps(
-            {
-                "status": "skipped",
-                "message": "No supported files changed.",
-                "comments": [],
-                "tool_calls": {"total": 0, "by_tool": {}},
-            }
-        )
-    )
-    reports = []
-    review_runner._finalize_ocr_result(
-        result,
-        composition(),
-        DEFAULT_IDENTITY,
-        None,
-        forbidden=(),
-        private_diagnostics=True,
-        report_consumer=reports.append,
-    )
-    assert not reports
-    retained = ocr_result.load_ocr_result(result)
-    assert retained["status"] == "skipped"
-    assert retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "private-retention"
-    assert ocr_result.TOOLKIT_RESULT_KEY not in retained
-
-
-def test_valid_summary_receipt_allows_private_review_without_admitting_report(
-    tmp_path: Path,
-) -> None:
-    """Real private action attribution satisfies validation but grants no publication authority."""
-    from ocr_toolkit.evidence.actions import read_action_receipt, record_action
-
-    receipt = tmp_path / "actions.json"
-    record_action(receipt, "summary")
-    record_action(receipt, "summary", completed=True)
-    result = tmp_path / "result.json"
-    result.write_text(
-        json.dumps(
-            {
-                "status": "success",
-                "comments": [],
-                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
-            }
-        )
-    )
-    reports = []
-    review_runner._finalize_ocr_result(
-        result,
-        composition(),
-        DEFAULT_IDENTITY,
-        None,
-        read_action_receipt(receipt),
-        forbidden=(),
-        private_diagnostics=True,
-        report_consumer=reports.append,
-    )
-    retained = ocr_result.load_ocr_result(result)
-    assert retained["status"] == "success"
-    assert retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "private-retention"
-    assert ocr_result.TOOLKIT_RESULT_KEY not in retained
-    assert not reports
-
-
-@pytest.mark.parametrize("raw", ["{broken", "[]", '{"message":"' + "x" * 200 + '"}'])
-def test_failed_execution_retention_removes_unbounded_or_malformed_result(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    raw: str,
-) -> None:
-    """Unsafe retained execution data cannot become an unmarked posting handoff."""
-    result = tmp_path / "result.json"
-    result.write_text(raw)
-    monkeypatch.setenv("OCR_MAX_RESULT_BYTES", "128")
-    assert not review_runner._retain_private_diagnostic_result(result, reason="execution-failed")
     assert not result.exists()
-    assert "retention failed; original failure preserved" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("error_type", [OSError, RuntimeError])
+def test_atomic_finalization_failure_cannot_leave_adoptable_raw_output(
+    tmp_path, monkeypatch, error_type
+):
+    """Discard unadmitted output and preserve the original atomic/callback failure."""
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps({"status": "success", "message": "private operator content"}))
+
+    def fail_transform(*_args, **_kwargs):
+        """Model an actual finalization owner failing before safe replacement."""
+        raise error_type("synthetic finalization failure")
+
+    monkeypatch.setattr(review_runner, "transform_ocr_result", fail_transform)
+    with pytest.raises(error_type, match="synthetic finalization failure"):
+        review_runner._finalize_ocr_result(
+            result, composition(), DEFAULT_IDENTITY, None, forbidden=()
+        )
+    assert not result.exists()

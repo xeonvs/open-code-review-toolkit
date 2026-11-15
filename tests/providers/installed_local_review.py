@@ -458,6 +458,8 @@ def main(root: Path, cli: Path) -> int:
             assert journal["phases"]["reporting"]["status"] == "passed"
             assert (debug_directory / "summary.md").read_text() == completed.stdout
             assert (debug_directory / "bootstrap.md").is_file()
+            assert journal["artifacts"]["evidence.json"]["status"] == "passed"
+            assert json.loads((debug_directory / "evidence.json").read_text())
             # This synthetic native peer does not create session history. Its
             # missing diagnostic trace must preserve normal/debug parity.
             assert journal["artifacts"]["native-trace.jsonl"]["status"] == "missing"
@@ -486,11 +488,17 @@ def main(root: Path, cli: Path) -> int:
                 "diagram.json",
                 "native-trace.jsonl",
                 "journal.json",
+                "evidence.json",
+                "context.json",
+                "policy-rules.json",
+                "evidence-actions.json",
             }
             assert debug_directory.stat().st_mode & 0o777 == 0o700
             assert all(item.stat().st_mode & 0o777 == 0o600 for item in debug_directory.iterdir())
         assert not (repository / ".review-context" / "evidence.json").exists()
         assert not (repository / ".review-context" / "evidence-actions.json").exists()
+        assert not (repository / ".review-context" / "context.json").exists()
+        assert not (repository / ".review-context" / "policy-rules.json").exists()
         print(f"installed-local-review: complete {scenario}", file=sys.stderr, flush=True)
     print(
         json.dumps(

@@ -500,7 +500,7 @@ Schema, byte/item/time/origin, identity, evidence, cleanup and posting-transacti
 gates remain active. Disabling DLP can expose sensitive data to an upstream MCP,
 the model, local Markdown, or GitLab. Re-enabling it cannot retract prior egress
 or publication. Operators should diagnose locally with
-`--preserve-private-artifacts` before using this escape hatch and must keep those
+`--debug-dir PATH` before using this escape hatch and must keep those
 owner-only artifacts off shared storage.
 
 Publication accounting keeps OCR coverage, DLP projection and provider posting

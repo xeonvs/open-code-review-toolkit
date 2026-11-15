@@ -292,20 +292,19 @@ def test_local_context_refusal_precedes_private_debug_artifacts(
     assert "Stopped at: `configuration`" in output.out
 
 
-@pytest.mark.parametrize("local", [False, True])
-def test_debug_rejects_nonlocal_or_legacy_retention_before_io(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, local: bool
+def test_debug_rejects_nonlocal_execution_before_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Reject diagnostic retention in forge execution before creating its directory."""
     checkout = tmp_path / "checkout"
     checkout.mkdir()
     monkeypatch.chdir(checkout)
-    with pytest.raises(review_runner.ReviewRunnerError, match="without legacy retention"):
+    with pytest.raises(review_runner.ReviewRunnerError, match="requires --local"):
         review_runner.run_evidence_review(
             tmp_path / "result",
             tmp_path / "stderr",
             [],
-            local=local,
-            preserve_private_artifacts=local,
+            local=False,
             debug_dir=tmp_path / "debug",
         )
     assert set(tmp_path.iterdir()) == {checkout}
@@ -409,3 +408,35 @@ def test_empty_finding_projection_is_not_reported_as_unsafe_content(tmp_path: Pa
         assert len(removed) == 1 and removed[0]["reason"] == "empty_projection"
     finally:
         bundle.close()
+
+
+@pytest.mark.parametrize("unit", ["records", "bytes", "entries"])
+def test_early_budget_failure_retains_closed_facts_without_a_safe_result(
+    tmp_path, monkeypatch, unit
+):
+    """Record typed resource refusal while keeping all model-output artifacts unclaimed."""
+    from ocr_toolkit.evidence.budgets import EvidenceBudgetExceeded
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OCR_LLM_AUTH_MODE", "api-key")
+
+    def refuse_collection(_result, _stderr, _args, *, state, dlp_enabled):
+        """Expose the real collection error type to the outer diagnostic owner."""
+        state.enter("evidence")
+        raise review_runner.ReviewRunnerError(
+            "synthetic collection refusal"
+        ) from EvidenceBudgetExceeded(actual=101, limit=100, unit=unit)
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", refuse_collection)
+    directory = tmp_path / "debug"
+    with pytest.raises(review_runner.ReviewRunnerError, match="synthetic collection refusal"):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json", tmp_path / "stderr.log", [], local=True, debug_dir=directory
+        )
+    journal = json.loads((directory / "journal.json").read_text())
+    assert journal["phases"]["evidence"] == {
+        "status": "failed",
+        "facts": {"reason": "evidence_budget_exceeded", "unit": unit, "actual": 101, "limit": 100},
+    }
+    assert journal["artifacts"]["raw-result.json"]["status"] == "not-run"
+    assert not (directory / "safe-result.json").exists()

@@ -267,14 +267,12 @@ gitlink-only or fully excluded ordinary diff stops before the model with exit
 shape stops without a coverage claim. The toolkit never initializes or fetches
 submodules, and MCP context cannot turn a skipped pointer into a reviewed file.
 
-Before disabling DLP to diagnose a suspected false positive, run
-`ocr-ci review --local --preserve-private-artifacts` with the normal private
-result, stderr, and report paths. After valid bounded output, it retains
-owner-only private inputs, the raw marked diagnostic JSON, and DLP decisions
-without creating a posting-eligible receipt. The local Markdown and console
-report still contain only admitted findings. Inspect the retained material only
-on the trusted host, keep it out of commits and shared artifacts, and remove it
-after diagnosis. This option cannot be combined with `--debug-dir`.
+Before disabling DLP to diagnose a suspected false positive, use
+`ocr-ci review --local --debug-dir PATH` with the normal private result, stderr
+and report paths. The bounded bundle preserves raw output, inputs and actual
+DLP decisions before ordinary cleanup. The normal successful result and local
+report still contain admitted findings. Inspect the bundle only on the trusted
+host, keep it out of commits and shared artifacts, and remove it after diagnosis.
 
 `OCR_DLP_ENABLED=false` is a strict per-run escape hatch. It disables
 context/federation and publication DLP, emits a prominent Markdown and console
@@ -289,8 +287,9 @@ non-DLP schema, size, origin, evidence, cleanup and output-safety gates remain.
 Add `--debug-dir PATH` to retain diagnostics from the same review execution.
 The directory must be fresh, must not traverse symlinks, and must not contain
 the normal result, stderr or report destinations. It is created with mode `0700`;
-its files use `0600`. This option requires `--local` and is separate from private
-artifact retention. It does not bypass validation, DLP or ordinary session cleanup.
+its files use `0600`. This option requires `--local`. It does not bypass
+validation, DLP or ordinary session cleanup. Native HOME and authentication/config
+stores are not retained; diagnostics use this one bounded interface.
 Its parent directory is pinned before the bundle is created, and every later
 write is descriptor-relative; replacing a visible ancestor path cannot redirect
 diagnostics to a different directory.
@@ -302,10 +301,19 @@ diagnostics to a different directory.
 | `safe-result.json` | Successfully finalized JSON, if available | 20,000,000 |
 | `summary.md` | Admitted report or closed failure summary | 20,000,000 |
 | `bootstrap.md` | Exact toolkit background supplied to OCR | 65,536 |
+| `evidence.json` | Immutable repository evidence store before cleanup | 20,000,000 |
+| `context.json` | Context store, when acquired for this run | 4,000,000 |
+| `policy-rules.json` | Generated Rules supplied to native review, when present | 2,000,000 |
+| `evidence-actions.json` | Actual evidence action receipt, when created | 1,000,000 |
 | `diagram.json` | Run collector state and private submitted candidate before cleanup | 20,000 |
 | `mcp-tools.json` | Toolkit diagram tool definition and schema hash; not provider wire capture | 16,384 |
 | `native-trace.jsonl` | Projected native task messages, model text/tool calls, tool responses and completion checkpoints | 20,000,000 |
 | `journal.json` | Actual phase observations and value-free DLP decisions | 1,000,000 |
+
+An early evidence-budget refusal records its closed reason, unit and actual/limit
+in the evidence phase. Missing, unavailable and truncated captures are explicit;
+they do not become successfully acquired inputs. `safe-result.json` is written
+only after successful admission and atomic replacement of the normal result.
 
 Raw files, bootstrap, candidates and trace text can contain confidential content
 or values rejected by DLP. Do not upload the bundle as a public CI artifact.

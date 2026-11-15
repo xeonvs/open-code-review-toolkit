@@ -144,7 +144,6 @@ from ocr_toolkit.ocr_result import (
     OcrResultTooLarge,
     OcrToolkitAdvisory,
     background_recommended_advisory,
-    inspect_ocr_result,
     load_ocr_result,
     toolkit_advisory_payload,
     transform_ocr_result,
@@ -215,10 +214,6 @@ STDERR_PROBE_BYTES = 64 * 1024
 BACKGROUND_PREVIEW_STDERR_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
 DLP_REASONS = ("forbidden", "invalid_text", "laundering", "limit", "pii", "secret")
-PRIVATE_DLP_DECISIONS_SCHEMA = "ocr.private-dlp-decisions/v1"
-PRIVATE_DLP_MAX_DECISIONS = 1_000
-PRIVATE_DLP_MAX_PATH_DEPTH = 32
-PRIVATE_DLP_PATH_SEGMENT_BUDGETS = TextBudgets(max_chars=256, max_bytes=1_024, max_lines=1)
 BACKGROUND_SOFT_WARNING_RE = re.compile(
     r"\[ocr\] --background-file content is ([0-9]{1,12}) characters, exceeding the "
     r"recommended ([0-9]{1,12}) \(continuing but review quality might be impacted\)\n?\Z"
@@ -956,124 +951,6 @@ def _code_field_allows_horizontal_tabs(path: tuple[object, ...]) -> bool:
         and isinstance(path[1], int)
         and path[2] in {"existing_code", "suggestion_code"}
     )
-
-
-def _private_dlp_decisions(
-    payload: dict[str, object], *, forbidden: tuple[str, ...]
-) -> dict[str, object]:
-    """Attribute rejected DLP values without retaining their content."""
-
-    budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
-    matcher = ForbiddenMatcher.compile(forbidden)
-    decisions: list[dict[str, object]] = []
-    rejected = 0
-
-    def bounded_path(path: tuple[object, ...], component: object) -> tuple[object, ...]:
-        if len(path) < PRIVATE_DLP_MAX_PATH_DEPTH:
-            return (*path, component)
-        return (*path[: PRIVATE_DLP_MAX_PATH_DEPTH - 1], "<truncated-path>")
-
-    def add_decision(decision: dict[str, object]) -> None:
-        nonlocal rejected
-        rejected += 1
-        if len(decisions) < PRIVATE_DLP_MAX_DECISIONS:
-            decisions.append(decision)
-
-    stack: list[tuple[object, tuple[object, ...]]] = [(payload, ())]
-    while stack:
-        value, path = stack.pop()
-        if isinstance(value, dict):
-            for key, nested in value.items():
-                checked_key = check_text(
-                    key,
-                    budgets=PRIVATE_DLP_PATH_SEGMENT_BUDGETS,
-                    publication=True,
-                    forbidden_matcher=matcher,
-                )
-                safe_key = key if checked_key.admitted else "<rejected-key>"
-                child_path = bounded_path(path, safe_key)
-                if not checked_key.admitted:
-                    encoded = key.encode("utf-8")
-                    add_decision(
-                        {
-                            "path": list(child_path),
-                            "scope": "key",
-                            "action": "reject-key",
-                            "reason": checked_key.reason,
-                            "detector": checked_key.detector,
-                            "value_type": "string",
-                            "characters": len(key),
-                            "bytes": len(encoded),
-                            "lines": key.count("\n") + 1,
-                            "sha256": hashlib.sha256(encoded).hexdigest(),
-                        }
-                    )
-                stack.append((nested, child_path))
-            continue
-        if isinstance(value, list):
-            stack.extend((nested, bounded_path(path, index)) for index, nested in enumerate(value))
-            continue
-        if not isinstance(value, str):
-            continue
-        checked = check_text(
-            value,
-            budgets=budgets,
-            publication=True,
-            forbidden_matcher=matcher,
-            allow_horizontal_tabs=_code_field_allows_horizontal_tabs(path),
-        )
-        if checked.admitted:
-            continue
-        encoded = value.encode("utf-8")
-        add_decision(
-            {
-                "path": list(path),
-                "scope": "value",
-                "action": "reject-value",
-                "reason": checked.reason,
-                "detector": checked.detector,
-                "value_type": "string",
-                "characters": len(value),
-                "bytes": len(encoded),
-                "lines": value.count("\n") + 1,
-                "sha256": hashlib.sha256(encoded).hexdigest(),
-            }
-        )
-    return {
-        "schema_version": PRIVATE_DLP_DECISIONS_SCHEMA,
-        "truncated": rejected > len(decisions),
-        "omitted_decisions": rejected - len(decisions),
-        "decisions": sorted(
-            decisions,
-            key=lambda item: json.dumps(item["path"], separators=(",", ":")),
-        ),
-    }
-
-
-def _write_private_dlp_decisions(
-    result_path: Path,
-    artifact_path: Path,
-    *,
-    forbidden: tuple[str, ...],
-) -> None:
-    """Write the local-only pre-publication DLP attribution sidecar."""
-
-    try:
-        payload = inspect_ocr_result(result_path)
-        if not isinstance(payload, dict):
-            raise OcrResultMalformed("OCR result JSON must be an object")
-        decisions = _private_dlp_decisions(payload, forbidden=forbidden)
-        write_private_bytes(
-            artifact_path,
-            json.dumps(
-                decisions,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            ).encode("utf-8"),
-        )
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError) as exc:
-        raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
 def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool, tuple[object, ...]]]:
@@ -1863,49 +1740,22 @@ def _publication_projection(
     return projected, publication, True
 
 
-def _retain_private_diagnostic_result(result_path: Path, *, reason: str) -> bool:
-    """Mark bounded rejected execution data without granting publication authority."""
+def _discard_unadmitted_result(result_path: Path) -> None:
+    """Remove owned model output without masking its original rejection or failure."""
 
     try:
-        transform_ocr_result(
-            result_path,
-            lambda payload: {
-                TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": reason},
-                "result": payload,
-            },
-        )
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError):
-        print(
-            "OCR private diagnostic retention failed; original failure preserved.",
-            file=sys.stderr,
-        )
-        try:
-            result_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return False
-    print(
-        "OCR rejected result retained as private diagnostics; not posting-eligible.",
-        file=sys.stderr,
-    )
-    return True
+        result_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
-def _verify_gitlink_after_execution(
-    result_path: Path, projection: GitlinkProjection, *, preserve_authorized: bool
-) -> None:
+def _verify_gitlink_after_execution(result_path: Path, projection: GitlinkProjection) -> None:
     """Reject drift and dispose of raw model output before any publication DLP work."""
 
     try:
         verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
     except (RepositoryEvidenceError, OSError, subprocess.TimeoutExpired) as exc:
-        if preserve_authorized:
-            _retain_private_diagnostic_result(result_path, reason="gitlink-input-drift")
-        else:
-            try:
-                result_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        _discard_unadmitted_result(result_path)
         raise ReviewRunnerError("OCR gitlink inputs drifted during model execution") from exc
 
 
@@ -1921,7 +1771,6 @@ def _finalize_ocr_result(
     toolkit_advisory: OcrToolkitAdvisory | None = None,
     report_consumer: Callable[[ReviewReport], None] | None = None,
     state: ReviewRunState | None = None,
-    private_diagnostics: bool = False,
     projection: GitlinkProjection | None = None,
     selected_diff: tuple[RawDiffEntry, ...] = (),
     expected_range: ReviewRange | None = None,
@@ -1949,6 +1798,7 @@ def _finalize_ocr_result(
         raise ReviewRunnerError("review range disagrees with the execution identity")
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
+        """Prepare an admitted range, receipt and material projection for atomic replacement."""
         nonlocal failure_telemetry, filtered, publication, usage, report
         for reserved in (
             TOOLKIT_RESULT_KEY,
@@ -2098,10 +1948,7 @@ def _finalize_ocr_result(
             )
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
-        if report_consumer is not None and (
-            not private_diagnostics
-            or (identity.target_protection == "local" and identity.mr_author_id is None)
-        ):
+        if report_consumer is not None:
             evidence = metadata.get("evidence")
             if not isinstance(evidence, dict):
                 raise ReviewRunnerError("verified evidence facts are unavailable")
@@ -2124,31 +1971,17 @@ def _finalize_ocr_result(
                 )
             except OcrResultContractError as exc:
                 raise ReviewRunnerError("admitted review report is inconsistent") from exc
-        if private_diagnostics:
-            return {**payload, TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": "private-retention"}}
         return finalized
 
     try:
         transform_ocr_result(result_path, finalize)
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
-        if private_diagnostics:
-            try:
-                result_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        _discard_unadmitted_result(result_path)
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
-    except ReviewRunnerError as exc:
+    except BaseException as exc:
         if isinstance(exc, ReviewRejected):
             print(exc.diagnostic(), file=sys.stderr)
-        retained = False
-        if private_diagnostics:
-            reason = exc.reason if isinstance(exc, ReviewRejected) else "result-validation-failed"
-            retained = _retain_private_diagnostic_result(result_path, reason=reason)
-        if not retained:
-            try:
-                result_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        _discard_unadmitted_result(result_path)
         raise
     _print_tool_failure_diagnostics(failure_telemetry)
     if state is not None:
@@ -3324,16 +3157,8 @@ def _prepare_enrichment(
     )
 
 
-def _authorize_private_artifact_preservation(identity: ReviewIdentity, *, requested: bool) -> bool:
-    """Allow sensitive diagnostic retention only outside GitLab MR execution."""
-
-    if requested and identity.mr_author_id is not None:
-        raise ReviewRunnerError("private artifact preservation is available for local reviews only")
-    return requested
-
-
 def _remove_ephemeral_review_artifacts(artifacts: EvidenceArtifacts) -> None:
-    """Remove every ordinary-run private input while preserving static handoff state."""
+    """Remove ephemeral inputs for every run while preserving static handoff state."""
 
     cleanup_error: OSError | None = None
     for path in (
@@ -3343,7 +3168,6 @@ def _remove_ephemeral_review_artifacts(artifacts: EvidenceArtifacts) -> None:
         artifacts.context_store,
         artifacts.action_receipt,
         artifacts.action_receipt_lock,
-        artifacts.dlp_decisions,
     ):
         try:
             remove_private_artifact(path)
@@ -3369,7 +3193,6 @@ def run_evidence_review(
     stderr_path: Path,
     ocr_args: list[str],
     *,
-    preserve_private_artifacts: bool = False,
     local: bool = False,
     report_path: Path | None = None,
     debug_dir: Path | None = None,
@@ -3406,8 +3229,6 @@ def run_evidence_review(
             report_destination = None
             raise ReviewRunnerNoHandoff("OCR private pre-execution state is unsafe") from exc
         if local:
-            if debug_dir is not None and preserve_private_artifacts:
-                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
             try:
                 ocr_args = _local_review_options(ocr_args)
                 destination = report_path or Path(str(result_path) + ".md")
@@ -3426,7 +3247,7 @@ def run_evidence_review(
                 local_input_error = exc
         if debug_dir is not None:
             if not local:
-                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
+                raise ReviewRunnerError("--debug-dir requires --local")
             try:
                 state.debug = DebugBundle(
                     debug_dir,
@@ -3479,7 +3300,6 @@ def run_evidence_review(
                 result_path,
                 stderr_path,
                 ocr_args,
-                preserve_private_artifacts=preserve_private_artifacts,
                 state=state,
                 dlp_enabled=dlp_enabled,
             )
@@ -3518,8 +3338,19 @@ def run_evidence_review(
                 raise ReviewRunnerError("local report output failed") from exc
             state.observe("reporting", "passed", facts={"report_artifact": True, "console": True})
         return code
-    except Exception:
-        state.observe(state.stage, "failed")
+    except Exception as exc:
+        budget = exc.__cause__
+        facts = (
+            {
+                "reason": EVIDENCE_BUDGET_EXCEEDED,
+                "unit": budget.unit,
+                "actual": budget.actual,
+                "limit": budget.limit,
+            }
+            if state.stage == "evidence" and isinstance(budget, EvidenceBudgetExceeded)
+            else None
+        )
+        state.observe(state.stage, "failed", facts=facts)
         if local and state.stage != "reporting":
             failure = failed_report(state.stage, reviewed_sha=state.reviewed_sha)
             artifact_delivered = False
@@ -3597,7 +3428,6 @@ def _run_evidence_review(
     stderr_path: Path,
     ocr_args: list[str],
     *,
-    preserve_private_artifacts: bool,
     state: ReviewRunState,
     dlp_enabled: bool,
 ) -> int:
@@ -3619,12 +3449,9 @@ def _run_evidence_review(
     artifacts = repository_artifacts()
     try:
         prepare_artifact_directory(artifacts)
-        remove_private_artifact(artifacts.action_receipt)
-        remove_private_artifact(artifacts.action_receipt_lock)
-        remove_private_artifact(artifacts.dlp_decisions)
+        _remove_ephemeral_review_artifacts(artifacts)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
-    _remove_optional_diagram_artifacts(artifacts)
     state.enter("identity")
     try:
         refs = _immutable_review_refs(_review_refs(ocr_args))
@@ -3668,7 +3495,6 @@ def _run_evidence_review(
     background_qualification = BackgroundQualification()
     gateway = None
     federation_forbidden: tuple[str, ...] = ()
-    preserve_authorized = False
     diagram_execution: DiagramExecution | None = None
     previous_handlers = _install_termination_handlers()
     try:
@@ -3686,9 +3512,6 @@ def _run_evidence_review(
             state.enter("identity")
             identity, effective_ocr_args = _prepare_policy_context(
                 refs, ocr_args, artifacts, **({"local": True} if state.local else {})
-            )
-            preserve_authorized = _authorize_private_artifact_preservation(
-                identity, requested=preserve_private_artifacts
             )
             if state.debug is not None:
                 state.debug.bind_native_session(session_home, Path.cwd(), effective_range)
@@ -3739,7 +3562,7 @@ def _run_evidence_review(
                         executable=native_binary, announce=False
                     )
                 except Exception:
-                    # Identity/retention authorization precedes optional probes.
+                    # Immutable identity validation precedes optional probes.
                     # Mandatory native preview and gitlink gates stay independent.
                     diagram_warning()
             diagram_execution = DiagramExecution.prepare(
@@ -3909,18 +3732,21 @@ def _run_evidence_review(
                 if diagram_execution is not None:
                     diagram_execution.capture()
             if state.debug is not None:
+                state.debug.capture("evidence.json", artifacts.store)
+                state.debug.capture("context.json", artifacts.context_store)
+                state.debug.capture("policy-rules.json", artifacts.policy_rules)
+                state.debug.capture("evidence-actions.json", artifacts.action_receipt)
                 state.debug.capture("diagram.json", artifacts.diagram)
                 state.debug.capture_native_trace()
-            if not preserve_authorized:
-                try:
-                    _remove_ephemeral_review_artifacts(artifacts)
-                except OSError as exc:
-                    cleanup_error = cleanup_error or exc
-                try:
-                    shutil.rmtree(session_home)
-                except OSError as exc:
-                    cleanup_error = cleanup_error or exc
-                state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
+            try:
+                _remove_ephemeral_review_artifacts(artifacts)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+            try:
+                shutil.rmtree(session_home)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+            state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
             if previous_home is None:
                 os.environ.pop("HOME", None)
             else:
@@ -3938,58 +3764,28 @@ def _run_evidence_review(
                         ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
                     )
                 if projection is not None:
-                    _verify_gitlink_after_execution(
-                        result_path, projection, preserve_authorized=preserve_authorized
-                    )
-                try:
-                    usage, publication_filtered, publication = _finalize_ocr_result(
-                        result_path,
-                        composition,
-                        identity,
-                        enrichment,
-                        evidence_action_counts,
-                        forbidden=forbidden,
-                        dlp_enabled=dlp_enabled,
-                        toolkit_advisory=background_qualification.advisory,
-                        expected_range=effective_range,
-                        diagram_execution=diagram_execution,
-                        **(
-                            {
-                                "projection": projection,
-                                "selected_diff": background_qualification.selected_diff,
-                            }
-                            if projection is not None
-                            else {}
-                        ),
-                        **({"private_diagnostics": True} if preserve_authorized else {}),
-                        **({"report_consumer": state.admit_report} if state.local else {}),
-                        **({"state": state} if state.local or state.progress is not None else {}),
-                    )
-                except ReviewRunnerError:
-                    # Authorized diagnostic retention is owned by finalization.
-                    if not preserve_authorized:
-                        try:
-                            result_path.unlink(missing_ok=True)
-                        except OSError:
-                            pass
-                    raise
-            if cleanup_error is None and exit_code != 0 and preserve_authorized:
-                _retain_private_diagnostic_result(result_path, reason="execution-failed")
-            if cleanup_error is None and exit_code == 0 and preserve_authorized:
-                forbidden = tuple(
-                    ForbiddenValue(v, "operator_secret") for v in composition.secret_values
-                )
-                forbidden += tuple(
-                    ForbiddenValue(v, "external_context") for v in federation_forbidden
-                )
-                if enrichment is not None:
-                    forbidden += enrichment.forbidden_sources or tuple(
-                        ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
-                    )
-                _write_private_dlp_decisions(
+                    _verify_gitlink_after_execution(result_path, projection)
+                usage, publication_filtered, publication = _finalize_ocr_result(
                     result_path,
-                    artifacts.dlp_decisions,
+                    composition,
+                    identity,
+                    enrichment,
+                    evidence_action_counts,
                     forbidden=forbidden,
+                    dlp_enabled=dlp_enabled,
+                    toolkit_advisory=background_qualification.advisory,
+                    expected_range=effective_range,
+                    diagram_execution=diagram_execution,
+                    **(
+                        {
+                            "projection": projection,
+                            "selected_diff": background_qualification.selected_diff,
+                        }
+                        if projection is not None
+                        else {}
+                    ),
+                    **({"report_consumer": state.admit_report} if state.local else {}),
+                    **({"state": state} if state.local or state.progress is not None else {}),
                 )
         finally:
             _restore_termination_handlers(previous_handlers)
@@ -4001,13 +3797,7 @@ def _run_evidence_review(
         except OSError:
             pass
         raise ReviewRunnerError("OCR private session cleanup failed") from cleanup_error
-    if preserve_authorized:
-        print(
-            "OCR private session artifacts retained; no posting-eligible result handoff "
-            f"session_home={session_home} artifact_directory={artifacts.directory}",
-            file=sys.stderr,
-        )
-    elif exit_code == 0:
+    if exit_code == 0:
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
             print(

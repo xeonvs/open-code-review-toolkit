@@ -146,14 +146,17 @@ flowchart TD
     selected -- No --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
-    exit -- Non-zero --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
+    exit -- Non-zero --> execution_cleanup
     exit -- Zero --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
-    diagram_snapshot --> finalize[Enter result finalization]
+    diagram_snapshot --> execution_cleanup[Capture bounded local debug inputs and trace;<br/>remove ephemeral inputs and native HOME]
+    execution_cleanup --> cleaned{Mandatory cleanup succeeded?}
+    cleaned -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
+    cleaned -- Yes --> successful_run{Review exit zero?}
+    successful_run -- No --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
+    successful_run -- Yes --> finalize[Enter result finalization]
     finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
     core -- No --> rejection_diag[Emit bounded rejection facts;<br/>zero vs unavailable; fixed reason code]
-    rejection_diag --> retain_rejected{Authorized local private retention?}
-    retain_rejected -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
-    retain_rejected -- Yes --> retained_rejected[Owner-only bounded diagnostic envelope;<br/>no receipt, successful report or posting authority]
+    rejection_diag --> integrity_error
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
     diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
@@ -166,9 +169,7 @@ flowchart TD
     dlp_state -- publication-filtered --> partial[Safe partial output; analysis stays complete<br/>only when native coverage proves it]
     publishable --> mode{Execution profile}
     partial --> mode
-    mode -- Local diagnostic retention --> local[Owner-only marked JSON and inputs retained;<br/>no provider receipt or posting authority]
-    mode -- Local ordinary --> local_result[Validated receipt-less local result]
-    local --> local_file
+    mode -- Local --> local_result[Validated receipt-less local result]
     local_result --> local_output{Explicit local provider?}
     local_output -- Yes --> local_file[Shared admitted summary and all findings<br/>to fresh private Markdown artifact and console]
     local_file --> local_delivery{Artifact and console delivery succeed?}
@@ -179,7 +180,6 @@ flowchart TD
     local_output -- No --> local_handoff[Private JSON handoff only]
     mode -- GitLab MR --> receipt[Attach exact v13 ordinary or v14 partial receipt:<br/>diff, target T, policy P and CI job]
     receipt --> post{Posting input valid at readback?}
-    retained_rejected --> posting_error
     post -- No --> posting_error[Job-local publication-policy error;<br/>findings transaction not started]
     post -- Yes --> diagram_post[Revalidate the same source bounds and DLP;<br/>render flowchart with deterministic LR/TB or sequence;<br/>fault omits diagram, findings continue]
     diagram_post --> live_state{Current MR diff, target T,<br/>policy P and lifecycle valid?}
@@ -266,7 +266,12 @@ ordinary-review meaning.
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
 contradictory manifest, stale identity, failed cleanup, or missing/mismatched toolkit action
-receipt blocks finalization. Mandatory evidence rejection emits safe facts before cleanup; authorized local diagnostic retention preserves a bounded private envelope, while its marker blocks even receipt-less posting. Failed diagnostic retention never replaces the original rejection. By contrast, OCR's additive failed-tool envelope is diagnostic: it
+receipt blocks finalization. Mandatory evidence rejection emits safe facts.
+Explicit local debug captures bounded inputs and raw output before ordinary
+cleanup; successful output always takes normal admission and atomic replacement.
+Rejected handoffs are discarded. Historical private-diagnostic markers remain
+hostile readback input and cannot authorize even receipt-less posting; current
+execution does not produce those envelopes. By contrast, OCR's additive failed-tool envelope is diagnostic: it
 cannot replace an otherwise valid manifest, findings, summary, or posting transaction.
 
 ## Additive failed-tool diagnostic states

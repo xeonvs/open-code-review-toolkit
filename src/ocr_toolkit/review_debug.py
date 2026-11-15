@@ -37,6 +37,10 @@ ArtifactName = Literal[
     "diagram.json",
     "native-trace.jsonl",
     "mcp-tools.json",
+    "evidence.json",
+    "context.json",
+    "policy-rules.json",
+    "evidence-actions.json",
 ]
 ARTIFACT_LIMITS: dict[ArtifactName, int] = {
     "raw-result.json": MAX_DEBUG_JSON_BYTES,
@@ -47,6 +51,10 @@ ARTIFACT_LIMITS: dict[ArtifactName, int] = {
     "diagram.json": 20_000,
     "native-trace.jsonl": MAX_TRACE_BYTES,
     "mcp-tools.json": 16_384,
+    "evidence.json": MAX_DEBUG_JSON_BYTES,
+    "context.json": 4_000_000,
+    "policy-rules.json": 2_000_000,
+    "evidence-actions.json": 1_000_000,
 }
 _SAFE_PATH_FIELDS = frozenset(
     {
@@ -104,6 +112,10 @@ _FACT_KEYS = frozenset(
         "extra_headers_present",
         "telemetry_enabled",
         "content_logging",
+        "reason",
+        "unit",
+        "actual",
+        "limit",
     }
 )
 

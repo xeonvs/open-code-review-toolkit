@@ -16,6 +16,8 @@ from tests.support import patched_attr
 
 
 class CliTests(unittest.TestCase):
+    """Bind public command parsing and dispatch to the intended runtime owner."""
+
     def test_required_subcommands_parse(self) -> None:
         parser = cli.build_parser()
 
@@ -39,39 +41,30 @@ class CliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("invalid choice", stderr.getvalue())
 
-    def test_review_parses_local_private_artifact_preservation(self) -> None:
-        parser = cli.build_parser()
+    def test_review_rejects_removed_private_retention_option(self) -> None:
+        """Keep the obsolete retention interface absent without a compatibility alias."""
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+            cli.main(
+                [
+                    "review",
+                    "--result",
+                    "result.json",
+                    "--stderr",
+                    "ocr.log",
+                    "--preserve-private-artifacts",
+                ]
+            )
+        self.assertEqual(raised.exception.code, 2)
 
-        args = parser.parse_args(
-            [
-                "review",
-                "--result",
-                "result.json",
-                "--stderr",
-                "ocr.log",
-                "--preserve-private-artifacts",
-                "--",
-                "--from",
-                "base",
-                "--to",
-                "head",
-            ]
-        )
-
-        self.assertTrue(args.preserve_private_artifacts)
-        self.assertEqual(args.ocr_args, ["--", "--from", "base", "--to", "head"])
-
-    def test_review_dispatch_forwards_private_artifact_preservation(self) -> None:
-        calls: list[tuple[Path, Path, list[str], bool]] = []
+    def test_review_dispatch_forwards_local_debug_directory(self) -> None:
+        """Forward one explicit local diagnostics directory through the normal runner."""
+        calls: list[tuple[Path, Path, list[str], bool, Path]] = []
 
         def run_review(
-            result: Path,
-            stderr: Path,
-            arguments: list[str],
-            *,
-            preserve_private_artifacts: bool,
+            result: Path, stderr: Path, arguments: list[str], *, local: bool, debug_dir: Path
         ) -> int:
-            calls.append((result, stderr, arguments, preserve_private_artifacts))
+            """Observe the public CLI handoff without executing a model review."""
+            calls.append((result, stderr, arguments, local, debug_dir))
             return 0
 
         with patched_attr(cli.review_runner, "run_evidence_review", run_review):
@@ -82,7 +75,9 @@ class CliTests(unittest.TestCase):
                     "result.json",
                     "--stderr",
                     "ocr.log",
-                    "--preserve-private-artifacts",
+                    "--local",
+                    "--debug-dir",
+                    "private-debug",
                     "--",
                     "--from",
                     "base",
@@ -90,11 +85,18 @@ class CliTests(unittest.TestCase):
                     "head",
                 ]
             )
-
         self.assertEqual(result, 0)
         self.assertEqual(
             calls,
-            [(Path("result.json"), Path("ocr.log"), ["--from", "base", "--to", "head"], True)],
+            [
+                (
+                    Path("result.json"),
+                    Path("ocr.log"),
+                    ["--from", "base", "--to", "head"],
+                    True,
+                    Path("private-debug"),
+                )
+            ],
         )
 
     def test_review_without_private_handoff_has_distinct_exit(self) -> None:

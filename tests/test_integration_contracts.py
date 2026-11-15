@@ -192,10 +192,10 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "OCR_MAX_TOOLS" in workflow
     assert "OCR_REVIEW_EFFORT" in configuration
     assert "OCR_REVIEW_EFFORT" in workflow
-    assert "--preserve-private-artifacts" in configuration
-    assert "without a posting receipt" in configuration
-    assert "rejects this flag before OCR execution" in configuration
+    assert "--local --debug-dir" in configuration
+    assert "--preserve-private-artifacts" not in configuration
     assert "--preserve-private-artifacts" not in workflow
+    assert "--debug-dir" not in workflow
     assert "OCR_REVIEW_CONTEXT_MODE" in configuration
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in workflow
     assert "OCR_TOOLKIT_VERSION" in workflow
