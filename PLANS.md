@@ -50,20 +50,20 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-005 | #312 conservative central-version links, ASP.NET Core plugin, deltas and MCP | WQ-03 | done |
 | REQ-006 | #313 shared container-build path recognition | WQ-03 | done |
 | REQ-007 | #314 all numeric/date cases and inverse material protection | WQ-04 | done |
-| REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | in_progress |
+| REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | done |
 | REQ-009 | Exact OCR assets, excluded coverage and request-scoped tools qualification | WQ-05 | in_progress |
 | REQ-010 | Hosted qualification, promotion, local binary update and weekly schedule | WQ-05, WQ-10 | in_progress |
 | REQ-011 | #311 actual concurrency control and #316 opt-in skip example | WQ-06 | done |
 | REQ-012 | Remove completed planning history; regroup inactive work and preserve unique limits | WQ-06 | done |
-| REQ-013 | Focused/installed/integration tests and measured coverage floors | WQ-02, WQ-03, WQ-04, WQ-05, WQ-06, WQ-07 | pending |
-| REQ-014 | Aggregate self-review, one Security scan, real own-tool review and admitted PR diagram | WQ-07 | in_progress |
-| REQ-015 | Final quality, protected feature merge and development TestPyPI verification | WQ-07, WQ-08 | pending |
+| REQ-013 | Focused/installed/integration tests and measured coverage floors | WQ-02, WQ-03, WQ-04, WQ-05, WQ-06, WQ-07 | in_progress |
+| REQ-014 | Aggregate self-review, one Security scan, real own-tool review and admitted PR diagram | WQ-07 | done |
+| REQ-015 | Final quality, protected feature merge and development TestPyPI verification | WQ-07, WQ-08 | in_progress |
 | REQ-016 | Signed Release v0.15.0 PR, markers, authorization, notes, pins and plan archive/reset | WQ-09 | pending |
 | REQ-017 | Independent registry/install/provenance/tag/receipt/issues/site/main verification | WQ-10 | pending |
 | REQ-018 | Owned source snapshots, builds, environments, debug and obsolete binaries removed | WQ-10 | pending |
-| REQ-019 | Local CLI debug/retention combinations preserve useful authorized diagnostics without forge authority | WQ-06, WQ-07 | in_progress |
-| REQ-020 | Improve the actual model/tool/release cycle and canonical instructions where evidence warrants | WQ-06, WQ-07 | in_progress |
-| REQ-021 | Update compatible stable libraries, uv and immutable GitHub Action pins before expensive acceptance | WQ-11, WQ-07 | in_progress |
+| REQ-019 | Local CLI debug/retention combinations preserve useful authorized diagnostics without forge authority | WQ-06, WQ-07 | done |
+| REQ-020 | Improve the actual model/tool/release cycle and canonical instructions where evidence warrants | WQ-06, WQ-07 | done |
+| REQ-021 | Update compatible stable libraries, uv and immutable GitHub Action pins before expensive acceptance | WQ-11, WQ-07 | done |
 
 ### Explicit Non-Goals
 
@@ -185,7 +185,7 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-04 | Numeric span/date corrections and initial authenticated paired audits accepted; final resource/repeat comparison remains at WQ-07 | REQ-007, REQ-008, REQ-013 | done |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | in_progress |
 | WQ-06 | Shared local diagnostics, actual concurrency guidance, opt-in label, future-only roadmap/backlog and canonical documentation accepted locally | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | done |
-| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | in_progress |
+| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | done |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
 | WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins, archive/reset and active roadmap/BL-010 pointer closure; protected merge | REQ-016 | pending |
 | WQ-10 | Stable external readback, CI-owned issue/milestone closure, site, local OCR update, synchronized main and cleanup | REQ-010, REQ-017, REQ-018 | pending |
@@ -514,20 +514,30 @@ subtests at 90.56% overall branch-aware coverage. Its sole failure was a stale
 coverage-loop inventory assertion; the focused script test is corrected. This
 run does not establish final runtime acceptance after the third-review fixes.
 
+Final local acceptance is complete on signed runtime commit 99079bf. The full
+quality gate passed 5733 tests, 74 skips and 357 subtests at 90.57% branch-aware
+coverage; every additional boundary floor passed. Its wheel was built from the
+sdist and installed through the hash-locked binary-runtime recipe. Independent
+installed MCP checks and the full installed local CLI matrix passed. Dependency
+audit passed with no known third-party vulnerabilities.
+Authenticated baseline/candidate comparisons are complete for all authorized
+corpora, with every new admission and primary-reason change reviewed and annotated.
+There are no new blocks, unexplained admissions, unreviewed changes or losses of
+annotated protection. The immutable current-checkout scan is complete. Resource
+checks passed after repeating the one RSS outlier under isolated comparable
+conditions; the repeat stayed within the agreed thresholds. Private details and
+source-bound annotations remain outside the repository. The earlier admitted
+diagram was compared with final change semantics and retained verbatim for the PR.
+
 ### Resume Point
 
-Finish focused/module coverage and auxiliary-read checks for the third-review
-corrections, self-review and commit them, then freeze the final runtime before
-the full quality gate, clean artifact checks and final candidate corpus replays.
-The third native run is complete; no additional OCR or aggregate Security scan
-is planned. Assess the retained admitted diagram against the final changes for
-the feature PR. Complete candidate corpus comparisons,
-resource checks and the current-checkout scan. All seven repeated baseline
-scans are authenticated and complete. Reuse completed proof for unchanged
-inputs. WQ-05 still requires current-contract
-hosted reconciliation after the final feature push, before merge. The feature
-PR remains draft at its signed plan commit; WQ-08/09/10 delivery and external
-readback have not occurred.
+Send the final feature push with the retained exact diagram after the pre-push
+privacy/history guards. WQ-05 requires exact-tag current-contract hosted qualification for
+both OCR candidates before merge. Wait for protected feature CI, merge and verify
+development TestPyPI (WQ-08), then perform release preparation and external readback
+(WQ-09/10). No further OCR model run or aggregate Security scan is planned; reuse
+completed proof for unchanged runtime. Delivery, final plan archival/reset and
+task-owned cleanup remain required and are not yet complete.
 
 ### Plan Fidelity Check
 
@@ -546,14 +556,14 @@ readback have not occurred.
 - [x] Sources and issue comments reconcile with the approved implementation plan.
 - [x] Full 2026-11-15 recheck retained all approved outcomes, bounds and lifecycle;
   the separately identified REQ-019 records the subsequent local CLI request.
-- [ ] Final runtime, tests, public contracts, planning and evidence owners agree.
-- [ ] Review findings and omissions are fixed or explicitly justified.
-- [ ] Release handoff and remaining external delivery are classified truthfully.
+- [x] Final runtime, tests, public contracts, planning and evidence owners agree.
+- [x] Review findings and omissions are fixed or explicitly justified.
+- [x] Release handoff and remaining external delivery are classified truthfully.
 
 ### Closure Gate
 
 - [ ] All in-scope implementation, documentation and validation complete.
-- [ ] Full final self-review, Security and actual own-tool acceptance complete.
+- [x] Full final self-review, Security and actual own-tool acceptance complete.
 - [ ] Feature protected CI/merge and development publication independently checked.
 - [ ] Release markers/authorization/notes/pins and focused release guards pass.
 - [ ] Lifecycle archive/reset and all indexes agree in the release PR.
