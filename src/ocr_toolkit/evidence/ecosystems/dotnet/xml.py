@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from xml.parsers import expat
@@ -11,13 +13,16 @@ from ocr_toolkit.evidence.ecosystems.contracts import (
     ManifestFact,
     ManifestParseResult,
 )
+from ocr_toolkit.evidence.ecosystems.dotnet.limits import (
+    MAX_ATTRIBUTES,
+    MAX_DEPTH,
+    MAX_ELEMENTS,
+    MAX_SCALAR,
+    ConstructionBudget,
+    bounded_text,
+)
 from ocr_toolkit.evidence.model import EvidenceValue
 
-MAX_BYTES = 1_000_000
-MAX_DEPTH = 32
-MAX_ELEMENTS = 4_096
-MAX_ATTRIBUTES = 32
-MAX_SCALAR = 4_096
 _MSBUILD_ESCAPE = re.compile(r"%[0-9a-fA-F]{2}")
 PROPERTIES = {
     "targetframework",
@@ -39,13 +44,6 @@ class _Element:
     text: str = ""
 
 
-def bounded_text(text: str) -> None:
-    """Reject oversized inputs before parser allocation; bytes are independent."""
-
-    if len(text) > MAX_BYTES or len(text.encode("utf-8")) > MAX_BYTES:
-        raise ValueError(".NET manifest byte limit exceeded")
-
-
 def _tree(text: str) -> _Element:
     """Build a bounded Project tree while refusing entity expansion and external resolution."""
     bounded_text(text)
@@ -54,6 +52,7 @@ def _tree(text: str) -> _Element:
     root: _Element | None = None
     count = 0
     pending_namespaces = 0
+    tree_budget = ConstructionBudget.for_text(text)
 
     def forbidden(*args: object) -> None:
         """Stop resource-bearing XML features before expansion or external access."""
@@ -83,6 +82,8 @@ def _tree(text: str) -> _Element:
             len(key) > MAX_SCALAR or len(value) > MAX_SCALAR for key, value in attributes.items()
         ):
             raise ValueError(".NET XML scalar limit exceeded")
+        if not tree_budget.admit("xml-element", name, attributes):
+            raise ValueError(".NET XML expanded tree limit exceeded")
         namespace, _, local_name = name.rpartition("}")
         node = _Element(local_name or name, attributes, namespace)
         if stack:
@@ -97,6 +98,8 @@ def _tree(text: str) -> _Element:
             node = stack[-1]
             if len(node.text) + len(value) > MAX_SCALAR:
                 raise ValueError(".NET XML text limit exceeded")
+            if not tree_budget.admit("xml-text", "", value):
+                raise ValueError(".NET XML expanded tree limit exceeded")
             node.text += value
 
     parser.StartDoctypeDeclHandler = forbidden
@@ -121,13 +124,16 @@ def parse_msbuild(text: str) -> ManifestParseResult:
     root = _tree(text)
     facts: list[ManifestFact] = []
     reasons: set[str] = set()
+    budget = ConstructionBudget.for_text(text)
 
     def add(kind: str, identity: str, value: dict[str, EvidenceValue]) -> None:
         """Reserve the source-state record while capping constructed declaration facts."""
-        if len(facts) < MAX_MANIFEST_ITEMS - 1:
+        if len(facts) >= MAX_MANIFEST_ITEMS - 1:
+            reasons.add("fact-limit")
+        elif budget.admit(kind, identity, value):
             facts.append(ManifestFact(kind, "dotnet", identity, value, source_scoped=True))
         else:
-            reasons.add("fact-limit")
+            reasons.add("fact-byte-limit")
 
     def walk(node: _Element, conditions: tuple[str, ...], location: str, parent: str = "") -> None:
         """Preserve declarations and inherited conditions without evaluating MSBuild."""
@@ -274,7 +280,12 @@ def parse_msbuild(text: str) -> ManifestParseResult:
             key = child.name.casefold() + ":" + child.attributes.get("Include", "").casefold()
             index = counts.get(key, 0)
             counts[key] = index + 1
-            walk(child, conditions, f"{location}/{key}:{index}", name)
+            # Bound the composed location before duplicating it into descendant
+            # facts. Per-key ordinals preserve unrelated-insertion stability.
+            child_location = hashlib.sha256(
+                json.dumps([location, key, index], ensure_ascii=False).encode("utf-8")
+            ).hexdigest()
+            walk(child, conditions, child_location, name)
 
     walk(root, (), "project")
     facts.append(
@@ -292,4 +303,6 @@ def parse_msbuild(text: str) -> ManifestParseResult:
     notices = (".NET declarations are partial: " + ", ".join(sorted(reasons)),) if reasons else ()
     if "fact-limit" in reasons:
         notices = (*notices, f".NET facts were truncated after {MAX_MANIFEST_ITEMS} items")
+    if "fact-byte-limit" in reasons:
+        notices = (*notices, f".NET fact payload was truncated at {budget.limit} bytes")
     return ManifestParseResult(tuple(facts), notices, runtime_dependent=bool(reasons))

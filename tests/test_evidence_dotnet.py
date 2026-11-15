@@ -119,6 +119,63 @@ def test_unevaluated_framework_identity_prevents_absence_claim(
     )
 
 
+def test_construction_budget_omission_cannot_prove_a_central_version(
+    dotnet_repo: Path, monkeypatch
+) -> None:
+    """Propagate parser-output omission through real Git collection and central-link admission."""
+    from ocr_toolkit.evidence.ecosystems.dotnet.limits import ConstructionBudget
+
+    base = commit(dotnet_repo)
+    write(dotnet_repo, "README.md", "synthetic change")
+    head = commit(dotnet_repo)
+    complete = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=head)
+    assert any(record.kind == "dotnet.central_version" for record in complete.records)
+    original = ConstructionBudget.admit
+
+    def budget(self, kind, identity, value):
+        """Exhaust only the central source's output without changing input acquisition."""
+        if kind == "dotnet.property" and value.get("name") == "ManagePackageVersionsCentrally":
+            self.limit = 1
+        return original(self, kind, identity, value)
+
+    monkeypatch.setattr(ConstructionBudget, "admit", budget)
+    partial = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=head)
+    assert not any(record.kind == "dotnet.central_version" for record in partial.records)
+    assert any(
+        record.kind == "dotnet.source"
+        and record.source_path == "Directory.Packages.props"
+        and "fact-byte-limit" in fact_value(record)["reasons"]
+        and fact_value(record)["interpretation"] == "runtime-dependent"
+        for record in partial.records
+    )
+
+
+def test_nested_manifest_is_bounded_through_real_git_and_store(dotnet_repo: Path) -> None:
+    """Recheck the original amplification trigger across immutable acquisition and persistence."""
+    opening = '<ItemGroup Include="' + "x" * 4096 + '">'
+    body = (
+        "<Project>"
+        + opening * 30
+        + "<Nullable>enable</Nullable>" * 500
+        + "</ItemGroup>" * 30
+        + "</Project>"
+    )
+    base = commit(dotnet_repo)
+    write(dotnet_repo, "src/hostile.csproj", body)
+    head = commit(dotnet_repo)
+    store = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=head)
+    records = [
+        record
+        for record in store.records
+        if record.source_path == "src/hostile.csproj" and record.kind.startswith("dotnet.")
+    ]
+    assert records and all(len(record.value["identity"]) < 256 for record in records)
+    target = dotnet_repo / "private" / "evidence.json"
+    store.write(target)
+    restored = EvidenceStore.read(target)
+    assert {record.id for record in restored.records} == {record.id for record in store.records}
+
+
 def test_nested_and_colocated_projects_keep_distinct_central_scopes(dotnet_repo: Path) -> None:
     """Keep nearest central declarations and colocated project values isolated."""
     write(

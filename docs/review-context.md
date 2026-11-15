@@ -73,6 +73,11 @@ does not assert an effective version. Missing, malformed, omitted, conflicting o
 noncanonical-case automatic-discovery inputs cannot prove that association.
 Nested central files and colocated projects remain separate scopes.
 
+Constructed .NET fact payloads have a shared UTF-8 byte budget before collector
+retention, independently of input-tree and evidence-store limits. XML semantic
+locations have fixed-size digest identities. Exhaustion retains explicit partial
+coverage and cannot establish central-version uniqueness or framework absence.
+
 The ASP.NET Core plugin distinguishes Web SDK, framework-reference and package-
 reference signals. Its component is the exact project path, and a TFM never becomes
 a resolved ASP.NET Core version. Lock-only data does not activate the framework.

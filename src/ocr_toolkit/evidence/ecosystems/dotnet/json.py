@@ -10,7 +10,11 @@ from ocr_toolkit.evidence.ecosystems.contracts import (
     ManifestFact,
     ManifestParseResult,
 )
-from ocr_toolkit.evidence.ecosystems.dotnet.xml import MAX_SCALAR, bounded_text
+from ocr_toolkit.evidence.ecosystems.dotnet.limits import (
+    MAX_SCALAR,
+    ConstructionBudget,
+    bounded_text,
+)
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -73,17 +77,19 @@ def parse_global_json(text: str) -> ManifestParseResult:
         or not all(isinstance(path, str) for path in values["paths"])
     ):
         raise ValueError("invalid .NET SDK paths")
+    budget = ConstructionBudget.for_text(text)
+    value = {**values, "name": "dotnet-sdk", "version_state": "declared"}
+    if not budget.admit("runtime.declared", "sdk", value):
+        return ManifestParseResult(
+            (), (".NET SDK fact payload was truncated",), runtime_dependent=True
+        )
     return ManifestParseResult(
         (
             ManifestFact(
                 "runtime.declared",
                 "dotnet",
                 "sdk",
-                {
-                    **values,
-                    "name": "dotnet-sdk",
-                    "version_state": "declared",
-                },
+                value,
             ),
         )
     )
@@ -100,6 +106,7 @@ def parse_packages_lock(text: str) -> ManifestParseResult:
         raise ValueError("invalid NuGet lock dependencies")
     facts = []
     notices = []
+    budget = ConstructionBudget.for_text(text)
     for framework, packages in dependencies.items():
         if not framework or not isinstance(packages, dict):
             raise ValueError("invalid NuGet framework dependencies")
@@ -120,19 +127,24 @@ def parse_packages_lock(text: str) -> ManifestParseResult:
             if len(facts) == MAX_MANIFEST_ITEMS:
                 notices.append(f"NuGet lock facts were truncated after {MAX_MANIFEST_ITEMS} items")
                 return ManifestParseResult(tuple(facts), tuple(notices))
+            identity = f"{framework}:{name.casefold()}"
+            value = {
+                "name": name,
+                "version": entry["resolved"],
+                "framework": framework,
+                "scope": entry["type"].casefold(),
+                "requested": entry.get("requested"),
+                "source": "packages.lock.json",
+            }
+            if not budget.admit("dependency.locked", identity, value):
+                notices.append(f"NuGet lock fact payload was truncated at {budget.limit} bytes")
+                return ManifestParseResult(tuple(facts), tuple(notices), runtime_dependent=True)
             facts.append(
                 ManifestFact(
                     "dependency.locked",
                     "dotnet",
-                    f"{framework}:{name.casefold()}",
-                    {
-                        "name": name,
-                        "version": entry["resolved"],
-                        "framework": framework,
-                        "scope": entry["type"].casefold(),
-                        "requested": entry.get("requested"),
-                        "source": "packages.lock.json",
-                    },
+                    identity,
+                    value,
                 )
             )
     return ManifestParseResult(tuple(facts), tuple(notices))

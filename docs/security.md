@@ -82,7 +82,15 @@ The main trust transitions are:
 Static .NET inputs are hostile repository data. XML construction rejects DTDs,
 entity declarations and external entities, with independent 1 MB input, 32-level,
 4096-element, 32-attribute and 4096-character scalar bounds. Fact construction is
-capped at 512 per source. JSON has independent duplicate-key, type, nesting,
+capped at 512 per source. Composed XML locations use fixed-size semantic digests;
+all .NET parsers enforce a cumulative UTF-8 fact-payload budget before retention:
+at most 1 MB and 16 times source bytes, with 1 KiB headroom for small inputs.
+Expanded XML names, attributes and text have a separate budget with the same
+ceiling, charged during Expat callbacks before tree retention; namespace expansion
+cannot bypass it.
+Exhaustion explicitly degrades completeness rather than proving absence or a
+unique central version. These are construction bounds, independent of the later
+store admission and persistence limits. JSON has independent duplicate-key, type, nesting,
 scalar and traversal checks. MSBuild expressions/imports remain unevaluated;
 no build, restore, configuration-file credential read or network resolution is
 available. Ambiguous central declarations do not become effective versions.

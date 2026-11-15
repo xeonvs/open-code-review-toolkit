@@ -10,6 +10,7 @@ Use this file as the short repository map and route table for Open Code Review T
 - `src/ocr_toolkit/native_capabilities.py` - pure exact-version qualifications for OCR handoffs and API URL routing; preflight owns runtime acceptance separately.
 - `src/ocr_toolkit/common/provider_http.py` - pure shared forge User-Agent policy; adapters select operator environment and own transport.
 - `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
+- `src/ocr_toolkit/evidence/ecosystems/dotnet/` - static declarations and shared input/fact construction bounds; no build or dependency resolution.
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
 - `src/ocr_toolkit/reporting/warnings.py` - pure shared warning text selection; artifact loaders and adapters preserve structured warning provenance separately.
 - `src/ocr_toolkit/evidence/text_contracts.py` and `text_excerpts.py` - pure text bounds, LF-addressed facts and incremental excerpt retention.

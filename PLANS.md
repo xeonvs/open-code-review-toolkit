@@ -56,7 +56,7 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-011 | #311 actual concurrency control and #316 opt-in skip example | WQ-06 | done |
 | REQ-012 | Remove completed planning history; regroup inactive work and preserve unique limits | WQ-06 | done |
 | REQ-013 | Focused/installed/integration tests and measured coverage floors | WQ-02, WQ-03, WQ-04, WQ-05, WQ-06, WQ-07 | pending |
-| REQ-014 | Aggregate self-review, one Security scan, real own-tool review and admitted PR diagram | WQ-07 | pending |
+| REQ-014 | Aggregate self-review, one Security scan, real own-tool review and admitted PR diagram | WQ-07 | in_progress |
 | REQ-015 | Final quality, protected feature merge and development TestPyPI verification | WQ-07, WQ-08 | pending |
 | REQ-016 | Signed Release v0.15.0 PR, markers, authorization, notes, pins and plan archive/reset | WQ-09 | pending |
 | REQ-017 | Independent registry/install/provenance/tag/receipt/issues/site/main verification | WQ-10 | pending |
@@ -451,8 +451,22 @@ selected/excluded path overlap and unevaluated MSBuild item/escape semantics;
 correct them with production handoff and property regressions. Current-document
 audit also found stale debug migration, policy identity and process guidance;
 reconcile the canonical owners without rewriting history. Then perform one
-Security scan, own-tool review and final runtime/installed/corpus gates. WQ-05's final
-Linux TLS/strong-grace and hosted reconciliation remain explicit hard gates.
+Security scan, own-tool review and final runtime/installed/corpus gates.
+Aggregate corrections are committed as 731d932. The single Security scan of
+80eebd6..731d932 reviewed all 50 changed source files and confirmed one medium
+pre-store XML allocation issue. Its correction bounds composed identities and
+shared .NET fact payload construction. Its independent patch review also found
+namespace-expanded XML tree amplification; construction callbacks now enforce a
+separate aggregate bound before retention. Confirm both paths with focused
+regressions before own-tool acceptance; no repeat aggregate scan is planned.
+Focused fix acceptance passed 136 tests including expanded Hypothesis, real
+Git/readback and central-link omission controls; .NET branch-aware coverage is
+99.38%, and the new construction-bound owner is fully covered. The one fresh
+patch-review cycle is complete and its namespace finding is addressed.
+Linux TLS, exclusion identity and strong-grace controls passed for both native
+candidates (nine cases each); an earlier installer-only failed attempt supplied
+no acceptance evidence. Hosted reconciliation remains a hard gate after the
+final feature push and before merge. Native ChatGPT model discovery succeeded.
 Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.
 

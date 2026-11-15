@@ -6,6 +6,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ocr_toolkit.evidence.ecosystems.dotnet import parse_msbuild
+from ocr_toolkit.evidence.ecosystems.dotnet.limits import ConstructionBudget
 
 
 @given(
@@ -67,3 +68,29 @@ def test_msbuild_escaped_item_names_never_claim_literal_completeness(code, eleme
     )
     assert result.runtime_dependent
     assert any(fact.value.get("name") == name for fact in result.facts)
+
+
+@given(
+    st.integers(1, 15),
+    st.integers(1, 40),
+    st.text(alphabet="abc\u754c\u00df&/", min_size=1, max_size=128),
+    st.sampled_from(["Include", "Condition"]),
+)
+def test_composed_xml_facts_stay_within_output_bounds(depth, leaves, scalar, attribute):
+    """Vary depth, fanout, Unicode and decoded attributes independently of source size."""
+    import json
+
+    body = (
+        "<Project>"
+        + f"<ItemGroup {attribute}={quoteattr(scalar)}>" * depth
+        + "<Nullable>enable</Nullable>" * leaves
+        + "</ItemGroup>" * depth
+        + "</Project>"
+    )
+    result = parse_msbuild(body)
+    assert all(len(fact.identity) < 256 for fact in result.facts)
+    encoded = json.dumps(
+        [{"identity": fact.identity, "value": fact.value} for fact in result.facts],
+        ensure_ascii=False,
+    ).encode()
+    assert len(encoded) < 2 * ConstructionBudget.for_text(body).limit
