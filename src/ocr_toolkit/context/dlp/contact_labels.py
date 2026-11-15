@@ -117,6 +117,8 @@ def _explicit_context(value: str, start: int) -> bool:
     while cursor > lower:
         char = value[cursor - 1]
         category = unicodedata.category(char)
+        if char == "=" and cursor > lower + 1 and value[cursor - 2] in "=<>!+-*/%&|^":
+            return False
         if (
             char in "+-/*%&\\!,;?"
             or category == "Pe"

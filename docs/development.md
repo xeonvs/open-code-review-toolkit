@@ -256,6 +256,9 @@ rejects. Keep those references in existing tests or the active plan; do not add
 another report or a prose-presence test. A missing witness or counterexample
 leaves the claim unverified and blocks the commit until the implementation,
 assertion or claim is corrected. Independent reviewers apply the same gate.
+For a changed or removed shared interface, inspect its current runtime and test
+references before selecting focused checks. Reconcile every affected caller and
+rejection contract; update obsolete fixtures without restoring a removed API.
 
 Apply that gate across the affected dimensions:
 

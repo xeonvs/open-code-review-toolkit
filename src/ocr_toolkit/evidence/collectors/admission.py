@@ -76,7 +76,21 @@ def admit_typed_facts(store: EvidenceStore, records: list[EvidenceRecord]) -> No
     notice = safe_diagnostic(BYTE_OMISSION)
     notice_cost = encoded_size(notice) + int(bool(store.diagnostics))
     store.add_diagnostic(BYTE_OMISSION)
-    store.to_json()
+    try:
+        store.to_json()
+    except EvidenceStoreBudgetError:
+        store.diagnostics = original_diagnostics
+        if any(
+            record.component == "ansible" and record.kind.startswith("ansible.")
+            for record in records
+        ):
+            raise EvidenceStoreError(
+                "Ansible topology facts exceed the atomic evidence store limits"
+            ) from None
+        # Mandatory evidence already passed. Omit the optional batch without
+        # requiring more bytes merely to explain its absence in prose.
+        _incomplete_coverage(store, {record.kind for record in records})
+        return
     store.diagnostics = original_diagnostics.copy()
     ceiling = store.limits.max_bytes - store.reserved_bytes - notice_cost
     groups: dict[str, list[EvidenceRecord]] = defaultdict(list)

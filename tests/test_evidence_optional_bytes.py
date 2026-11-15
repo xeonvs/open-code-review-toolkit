@@ -153,6 +153,38 @@ def test_empty_optional_batch_and_real_mandatory_failure_are_distinct():
     assert len(store.records) == 1 and not store.diagnostics
 
 
+@pytest.mark.parametrize("atomic", [False, True])
+def test_fitting_mandatory_envelope_does_not_need_room_for_an_optional_notice(atomic):
+    """Withhold optional facts structurally when even a diagnostic cannot fit."""
+    original = fact(kind="repository.manifest", size=300)
+    store = EvidenceStore()
+    assert store.add(original)
+    coverage = CoverageRecord(
+        "app",
+        "dependency.declared",
+        "manifest",
+        CoverageState.COMPLETE,
+        ("bounded-source-complete",),
+        RefRole.HEAD,
+        "a" * 40,
+    )
+    assert store.add_coverage(coverage)
+    store.limits = replace(store.limits, max_bytes=len(store.to_json().encode()))
+    before = store.to_json()
+    assert len(before.encode()) <= store.limits.max_bytes
+    assert store.limits.max_bytes - len(before.encode()) < len(BYTE_OMISSION)
+    record = fact(kind="ansible.playbook", component="ansible") if atomic else fact()
+    if atomic:
+        with pytest.raises(EvidenceStoreError, match="Ansible topology"):
+            admit_typed_facts(store, [record])
+    else:
+        admit_typed_facts(store, [record])
+        assert store.coverage[0].state is CoverageState.PARTIAL
+        assert not store.deltas
+        assert store.to_json()
+    assert store.records == (original,) and not store.diagnostics
+
+
 def test_fallback_preserves_mandatory_records_and_atomic_ansible_errors(monkeypatch):
     """Estimator failure never drops prior records or silently degrades atomic topology."""
     from ocr_toolkit.evidence.collectors import admission

@@ -84,6 +84,9 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|manual_review:map changed producer-consumer handoffs and failure cleanup|test:scripts/quality.sh check" -->
 | `development-validation` | Status or changed-boundary validation | Development guide | Status and handoff review; Python quality matrix |
 
+<!-- ew:route id="quality-gates" triggers="scripts/quality.sh|.github/workflows/ci.yml|coverage floor" owners="docs/development.md" guards="test:tests/test_quality_script.py|manual_review:compare local and hosted gate inventories and failure exit behavior" -->
+| `quality-gates` | Local and hosted validation ownership or floors | Development validation procedures | Focused wrapper contracts before the full gate |
+
 <!-- ew:route id="dependency-audit" triggers="pre-push|pyproject.toml|uv.lock|.github/workflows/security.yml|scripts/dependency-audit.sh" owners="docs/development.md" guards="test:scripts/dependency-audit.sh" -->
 | `dependency-audit` | Every push and dependency or audit-workflow change | Development guide | Shared local and hosted dependency audit |
 

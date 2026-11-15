@@ -102,3 +102,60 @@ def test_character_data_cannot_overrun_the_remaining_tree_budget(monkeypatch):
     monkeypatch.setattr(ConstructionBudget, "for_text", classmethod(lambda cls, text: cls(35)))
     with pytest.raises(ValueError, match="expanded tree limit"):
         parse_msbuild("<Project>data</Project>")
+
+
+def test_single_element_attribute_fanout_is_rejected_before_namespace_expansion(monkeypatch):
+    """Reach real Expat, but refuse input before URI copies can multiply by attribute count."""
+    from ocr_toolkit.evidence.ecosystems.dotnet import xml
+
+    create = xml.expat.ParserCreate
+    modes = []
+
+    def observed(*args, **kwargs):
+        """Delegate to real Expat while observing the namespace-expansion boundary."""
+        modes.append(kwargs.get("namespace_separator"))
+        return create(*args, **kwargs)
+
+    monkeypatch.setattr(xml.expat, "ParserCreate", observed)
+    attributes = " ".join(f'p:a{index}="x"' for index in range(512))
+    text = '<Project xmlns:p="' + "u" * 2000 + '" ' + attributes + "/>"
+    with pytest.raises(ValueError, match="construction limit"):
+        parse_msbuild(text)
+    assert modes == [None]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '<Project p:a="x"/>',
+        '<Project xmlns:p="u" xmlns:q="u" p:a="x" q:a="y"/>',
+        '<Project xmlns:xml="not-the-xml-namespace"/>',
+        '<p:q:Project xmlns:p="u"/>',
+    ],
+)
+def test_raw_attribute_guard_preserves_namespace_rejection_semantics(text):
+    """The second namespace-aware parse still rejects inputs a raw parser would accept."""
+    with pytest.raises(ValueError, match=r"invalid \.NET XML"):
+        parse_msbuild(text)
+
+
+@pytest.mark.parametrize("shape", ["depth", "elements"])
+def test_raw_prepass_preserves_early_tree_resource_limits(monkeypatch, shape):
+    """A non-retaining first pass must not defer the original depth and element ceilings."""
+    from ocr_toolkit.evidence.ecosystems.dotnet import xml
+
+    monkeypatch.setattr(xml, "MAX_DEPTH", 4)
+    monkeypatch.setattr(xml, "MAX_ELEMENTS", 6)
+    create = xml.expat.ParserCreate
+    modes = []
+
+    def observed(*args, **kwargs):
+        """Cross real Expat while proving the expanded parser is never reached."""
+        modes.append(kwargs.get("namespace_separator"))
+        return create(*args, **kwargs)
+
+    monkeypatch.setattr(xml.expat, "ParserCreate", observed)
+    body = "<Group>" * 4 + "</Group>" * 4 if shape == "depth" else "<Group/>" * 6
+    with pytest.raises(ValueError, match="construction limit"):
+        parse_msbuild("<Project>" + body + "</Project>")
+    assert modes == [None]

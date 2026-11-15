@@ -476,14 +476,52 @@ proof blocks the commit. Format-owner variants, competing sources, composed
 budgets, affected-mode documentation and an exact remaining-work resume point
 are mandatory checklist dimensions; the OCR route includes the selection guard.
 
+The first full gate was interrupted after ten stale test-contract failures
+(3550 passed). Removed retention APIs, promoted native versions, package ownership
+and canonical omission assertions are now reconciled; their focused suite passes
+188 tests with ten opt-in cases skipped; native qualification remains separate. No runtime change
+was needed for those corrections. Clean ca7dd78 wheel/sdist construction,
+installed runtime/MCP on Python 3.12, 3.14 and 3.15, and the complete installed
+local CLI debug/progress/diagram matrix pass. The third actual own-tool run is
+in progress on the immutable 80eebd6..ca7dd78 production range.
+
+The third own-tool run completed that range: all 96 selected files completed,
+ten raw findings, nine admitted findings, one finding and the candidate diagram
+omitted by DLP. No native group failed, reused or was waived. The omitted finding
+exposed a genuine comparison-context false positive; its raw content admits after
+the correction. The diagram's abbreviated version token remains conservatively
+blocked; retain the earlier actually admitted diagram for the PR rather than
+weakening DLP. Auxiliary failed reads still require recovery/gap assessment.
+All ten findings are confirmed and corrected locally: four documentation claims,
+no-notice optional capacity, inline SDK versions, case-shadowed discovery, verified
+suggestion coverage, comparison priority and pre-callback namespace amplification.
+The XML finding was independently reproduced before correction; its raw-attribute
+prepass and the other fixes passed one fresh independent patch-review cycle with
+no outstanding findings. The focused suite passed 414 tests with 97.60% combined
+branch-aware coverage; each affected measured module is at least 96%. Two further
+raw-prepass depth/element regressions passed with the 95-test XML/SDK suite. The
+raw prepass preserves those original early ceilings and attribute/entity limits.
+Captured trace records prove successful reads of the actual GitLab example,
+complete collector orchestration, DLP admission segments and the full coverage
+owner after guessed paths failed. No material auxiliary-read gap remains. The
+optional trace capture reached its explicit cap; raw result and stderr are complete.
+The extended numeric profile passed eleven properties at 1000 examples. The
+quality-owner route now runs the focused wrapper inventory test before the full
+gate; shared-interface edits require current runtime/test reference review.
+
+The second full quality run reached 5656 passing tests, 74 skips and 357 passing
+subtests at 90.56% overall branch-aware coverage. Its sole failure was a stale
+coverage-loop inventory assertion; the focused script test is corrected. This
+run does not establish final runtime acceptance after the third-review fixes.
+
 ### Resume Point
 
-Complete the pending logical commit by amend, then WQ-07 quality/installed checks.
-The owner has authorized a third real own-tool review because the optional
-admission/MCP correction is substantial. Use the frozen candidate, unlimited
-aggregate token budget, private debug and an admitted diagram; inspect raw
-findings, omissions, warnings and auxiliary reads. No further aggregate Security
-scan is planned. Complete candidate corpus comparisons,
+Finish focused/module coverage and auxiliary-read checks for the third-review
+corrections, self-review and commit them, then freeze the final runtime before
+the full quality gate, clean artifact checks and final candidate corpus replays.
+The third native run is complete; no additional OCR or aggregate Security scan
+is planned. Assess the retained admitted diagram against the final changes for
+the feature PR. Complete candidate corpus comparisons,
 resource checks and the current-checkout scan. All seven repeated baseline
 scans are authenticated and complete. Reuse completed proof for unchanged
 inputs. WQ-05 still requires current-contract

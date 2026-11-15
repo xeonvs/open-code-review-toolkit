@@ -472,7 +472,6 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
         ]
 
 
-@pytest.mark.parametrize("preserve_authorized", [False, True])
 @pytest.mark.parametrize(
     "failure",
     [
@@ -481,10 +480,9 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
         subprocess.TimeoutExpired(["git", "diff"], 30),
     ],
 )
-def test_post_model_gitlink_drift_disposes_or_marks_raw_result(
+def test_post_model_gitlink_drift_disposes_of_unadmitted_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    preserve_authorized: bool,
     failure: Exception,
 ) -> None:
     base, head = _fixture(tmp_path, "updated")
@@ -501,15 +499,8 @@ def test_post_model_gitlink_drift_disposes_or_marks_raw_result(
 
     monkeypatch.setattr(review_runner, "verify_gitlink_projection", drift)
     with pytest.raises(review_runner.ReviewRunnerError, match="drifted during"):
-        review_runner._verify_gitlink_after_execution(
-            result, projection, preserve_authorized=preserve_authorized
-        )
-    if preserve_authorized:
-        retained = json.loads(result.read_text())
-        assert retained["_ocr_toolkit_private_diagnostic"]["reason"] == "gitlink-input-drift"
-        assert retained["result"]["message"] == "private model output"
-    else:
-        assert not result.exists()
+        review_runner._verify_gitlink_after_execution(result, projection)
+    assert not result.exists()
 
 
 def test_git_inventory_kills_stream_when_byte_budget_is_exceeded(
@@ -673,10 +664,10 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
     qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
     manifest = payload["manifest"]
     assert isinstance(manifest, dict)
-    for version in ("v1.13.4", "v1.13.5", "v1.13.6", "v1.13.7", "v1.13.8"):
+    for version in ("v1.13.4", "v1.13.5", "v1.13.6", "v1.13.7", "v1.13.8", "v1.13.9", "v1.13.10"):
         manifest["execution"]["ocr_version"] = version
         qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
-    for version in (None, [], "1.13.7", "v1.13.9", "v1.13.7 "):
+    for version in (None, [], "1.13.7", "v1.13.11", "v1.13.7 "):
         manifest["execution"]["ocr_version"] = version
         with pytest.raises(RepositoryEvidenceError, match="unsupported binary"):
             qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)

@@ -427,7 +427,11 @@ def test_collection_continues_after_a_real_per_kind_store_limit(
     assert len([record for record in store.records if record.kind == "dependency.declared"]) == 2
     assert len([record for record in store.records if record.kind == "runtime.declared"]) == 2
     assert "per-kind evidence record limit reached for dependency.declared" in store.diagnostics
-    assert "typed dependency.declared evidence was truncated by store limits" in store.diagnostics
+    assert (
+        "typed dependency.declared comparison incomplete; unsafe semantic deltas omitted"
+        in store.diagnostics
+    )
+    assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
 
 
 def test_collection_builds_deltas_from_canonical_redacted_store_records(

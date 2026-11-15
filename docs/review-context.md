@@ -62,6 +62,9 @@ and declared SDK selection/roll-forward. It never reads `nuget.config`, evaluate
 MSBuild, follows imports, restores packages, builds or resolves dependencies online.
 SDK `global.json` accepts its documented line/block comments and preserves quoted
 comment markers. NuGet lock JSON remains strict; UTF-8 BOMs do not become content.
+Root `Sdk="name/version"` and child `Sdk Name="name" Version="version"`
+retain the same declared SDK name/version, following the
+[MSBuild SDK forms](https://learn.microsoft.com/en-us/visualstudio/msbuild/how-to-use-project-sdk).
 See the [SDK format](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
 and [NuGet lock producer](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Commands/PackagesLockFileBuilder.cs).
 
@@ -75,6 +78,8 @@ enablement and declaration are unambiguous and relevant project/build sources
 contain no unsupported evaluation. The link records both sources and explicitly
 does not assert an effective version. Missing, malformed, omitted, conflicting or
 noncanonical-case automatic-discovery inputs cannot prove that association.
+Nearer case-variant discovery candidates block ancestor fallback, including
+shared-build files; the declaration link must hold across filesystem case rules.
 Competing package-version declarations in the project or applicable shared-build
 files withhold the affected package's central link while preserving raw facts.
 Nested central files and colocated projects remain separate scopes.
@@ -208,7 +213,7 @@ Historical v3 aggregates do not establish this public/private split.
 federation and publication DLP for that run, adds a prominent local/GitLab warning,
 and always blocks automatic approval. Sensitive data may leave through service
 egress, local Markdown, or GitLab publication, and enabling DLP later cannot
-retract it. Use local `ocr-ci review --local --debug-dir PATH` diagnosis before considering
+retract it. Use the complete [local debug invocation](local.md#private-debug-bundle) before considering
 this setting; non-DLP schema, size, origin, identity, cleanup, evidence and posting
 transaction gates remain enforced.
 

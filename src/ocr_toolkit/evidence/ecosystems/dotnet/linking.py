@@ -25,14 +25,17 @@ def project_path(path: str) -> bool:
     return PurePosixPath(path).suffix.casefold() in PROJECT_SUFFIXES
 
 
-def nearest_file(path: str, basename: str, paths: frozenset[str]) -> str | None:
-    """Use exact canonical automatic-discovery names, not casefold guesses."""
+def nearest_file(
+    path: str, basename: str, paths: Mapping[str, frozenset[str]]
+) -> tuple[str | None, bool]:
+    """Stop at the nearest discovery candidate, withholding case-ambiguous associations."""
 
     for parent in PurePosixPath(path).parents:
         candidate = str(parent / basename)
-        if candidate in paths:
-            return candidate
-    return None
+        aliases = paths.get(candidate.casefold(), frozenset())
+        if aliases:
+            return (candidate, False) if aliases == frozenset({candidate}) else (None, True)
+    return None, False
 
 
 def central_links(
@@ -43,6 +46,10 @@ def central_links(
     """Keep links project-scoped; do not claim an effective MSBuild version."""
 
     grouped: dict[str, list[EvidenceRecord]] = {}
+    folded_paths: dict[str, set[str]] = {}
+    for path in paths:
+        folded_paths.setdefault(path.casefold(), set()).add(path)
+    discovery = {key: frozenset(values) for key, values in folded_paths.items()}
     for record in records:
         if record.component == "dotnet":
             grouped.setdefault(record.source_path, []).append(record)
@@ -67,13 +74,16 @@ def central_links(
 
     links = []
     for project in sorted(path for path in grouped if project_path(path)):
-        central = nearest_file(project, "Directory.Packages.props", paths)
-        if central is None or not safe(project) or not safe(central):
+        central, ambiguous = nearest_file(project, "Directory.Packages.props", discovery)
+        if ambiguous or central is None or not safe(project) or not safe(central):
             continue
-        build_files = [
-            nearest_file(project, name, paths)
+        build_choices = [
+            nearest_file(project, name, discovery)
             for name in ("Directory.Build.props", "Directory.Build.targets")
         ]
+        if any(ambiguous for _, ambiguous in build_choices):
+            continue
+        build_files = [path for path, _ in build_choices]
         if any(path is not None and (not safe(path) or settings(path)) for path in build_files):
             continue
         if [str(value).casefold() for value in settings(central)] != ["true"]:

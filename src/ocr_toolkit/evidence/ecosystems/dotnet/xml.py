@@ -44,19 +44,51 @@ class _Element:
     text: str = ""
 
 
+def _forbidden_xml(*args: object) -> None:
+    """Refuse resource-bearing XML features before expansion or external resolution."""
+    raise ValueError("DTD and entities are prohibited in .NET evidence")
+
+
+def _check_raw_attributes(text: str) -> None:
+    """Reject attribute fanout before namespace expansion constructs its dictionary."""
+    parser = expat.ParserCreate()
+    depth = 0
+    count = 0
+
+    def start(_name: str, attributes: dict[str, str]) -> None:
+        """Count raw attributes, including namespace declarations, without retaining a tree."""
+        nonlocal depth, count
+        depth += 1
+        count += 1
+        if len(attributes) > MAX_ATTRIBUTES or depth > MAX_DEPTH or count > MAX_ELEMENTS:
+            raise ValueError(".NET XML construction limit exceeded")
+
+    def end(_name: str) -> None:
+        """Release the raw depth counter without retaining element data."""
+        nonlocal depth
+        depth -= 1
+
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.StartDoctypeDeclHandler = _forbidden_xml
+    parser.EntityDeclHandler = _forbidden_xml
+    parser.ExternalEntityRefHandler = _forbidden_xml
+    try:
+        parser.Parse(text, True)
+    except expat.ExpatError as exc:
+        raise ValueError("invalid .NET XML") from exc
+
+
 def _tree(text: str) -> _Element:
     """Build a bounded Project tree while refusing entity expansion and external resolution."""
     bounded_text(text)
+    _check_raw_attributes(text)
     parser = expat.ParserCreate(namespace_separator="}")
     stack: list[_Element] = []
     root: _Element | None = None
     count = 0
     pending_namespaces = 0
     tree_budget = ConstructionBudget.for_text(text)
-
-    def forbidden(*args: object) -> None:
-        """Stop resource-bearing XML features before expansion or external access."""
-        raise ValueError("DTD and entities are prohibited in .NET evidence")
 
     def namespace(prefix: str | None, uri: str | None) -> None:
         """Bound namespace declarations before Expat expands qualified element names."""
@@ -102,9 +134,9 @@ def _tree(text: str) -> _Element:
                 raise ValueError(".NET XML expanded tree limit exceeded")
             node.text += value
 
-    parser.StartDoctypeDeclHandler = forbidden
-    parser.EntityDeclHandler = forbidden
-    parser.ExternalEntityRefHandler = forbidden
+    parser.StartDoctypeDeclHandler = _forbidden_xml
+    parser.EntityDeclHandler = _forbidden_xml
+    parser.ExternalEntityRefHandler = _forbidden_xml
     parser.StartNamespaceDeclHandler = namespace
     parser.StartElementHandler = start
     parser.EndElementHandler = lambda _name: stack.pop()
@@ -260,13 +292,16 @@ def parse_msbuild(text: str) -> ManifestParseResult:
         )
         if sdk:
             for index, value in enumerate(sdk.split(";")):
+                sdk_name, _, inline_version = value.strip().partition("/")
                 add(
                     "dotnet.sdk",
                     f"{location}:sdk:{index}",
                     {
                         **common,
-                        "name": value.strip(),
-                        "version": node.attributes.get("Version"),
+                        "name": sdk_name if node is root else value.strip(),
+                        "version": (inline_version or None)
+                        if node is root
+                        else node.attributes.get("Version"),
                     },
                 )
         # Unknown declarations may alter automatic discovery or imported values.

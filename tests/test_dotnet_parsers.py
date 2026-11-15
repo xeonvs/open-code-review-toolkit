@@ -12,6 +12,65 @@ from ocr_toolkit.evidence.ecosystems.dotnet import (
 
 
 @pytest.mark.parametrize(
+    "sdk,version", [("Microsoft.NET.Sdk.Web", "9.0.100"), ("Example.Custom.Sdk", "1.2.3-preview.4")]
+)
+def test_inline_and_child_sdk_declarations_preserve_the_same_name_and_version(sdk, version):
+    """Keep the documented SDK declaration forms semantically equivalent."""
+    inline = parse_msbuild(f'<Project Sdk="{sdk}/{version}"/>')
+    child = parse_msbuild(f'<Project><Sdk Name="{sdk}" Version="{version}"/></Project>')
+    for parsed in (inline, child):
+        facts = [fact for fact in parsed.facts if fact.kind == "dotnet.sdk"]
+        assert len(facts) == 1
+        assert (facts[0].value["name"], facts[0].value["version"]) == (sdk, version)
+
+
+def test_inline_sdk_lists_keep_versions_separate_from_names():
+    """Interpret each SDK list entry independently without using Project.Version as an SDK pin."""
+    parsed = parse_msbuild('<Project Sdk="First.Sdk/1.2.3; Second.Sdk" Version="99.0"/>')
+    assert [
+        (fact.value["name"], fact.value["version"])
+        for fact in parsed.facts
+        if fact.kind == "dotnet.sdk"
+    ] == [("First.Sdk", "1.2.3"), ("Second.Sdk", None)]
+
+
+def test_inline_sdk_pin_reaches_real_git_store_and_framework_mcp(tmp_path):
+    """Keep an inline SDK version declared, without inventing a resolved framework runtime."""
+    from ocr_toolkit.evidence.collect import collect_repository_evidence
+    from ocr_toolkit.evidence.mcp import call_tool
+    from ocr_toolkit.evidence.model import RefRole
+    from ocr_toolkit.evidence.store import EvidenceStore
+    from tests.test_evidence_repository import git
+
+    git(tmp_path, "init", "-q")
+    project = tmp_path / "app.csproj"
+    project.write_text('<Project Sdk="Microsoft.NET.Sdk.Web"/>')
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "base")
+    project.write_text('<Project Sdk="Microsoft.NET.Sdk.Web/9.0.100"/>')
+    git(tmp_path, "commit", "-qam", "head")
+    store = collect_repository_evidence(tmp_path, base_ref="HEAD~1", head_ref="HEAD")
+    sdk = next(
+        item for item in store.records if item.kind == "dotnet.sdk" and item.ref is RefRole.HEAD
+    )
+    assert sdk.component == "dotnet" and sdk.source_path == "app.csproj"
+    assert sdk.value["fact"]["version"] == "9.0.100"
+    saved = tmp_path / "store.json"
+    store.write(saved)
+    loaded = EvidenceStore.read(saved)
+    response = call_tool(
+        loaded,
+        {"action": "list", "kind": "framework.detected", "ref": "head", "component": "app.csproj"},
+    )
+    framework = json.loads(response["content"][0]["text"])["records"][0]["value"]["fact"]
+    assert any(
+        item["scope"] == "web-sdk" and item["declared_value"] == "9.0.100"
+        for item in framework["declarations"]
+    )
+    assert framework["version_state"] == "declared-only" and framework["resolutions"] == []
+
+
+@pytest.mark.parametrize(
     "comment", ["/* SDK pin */", "// SDK pin\n", "// SDK pin\r\n", "/* SDK\npin */"]
 )
 def test_sdk_json_accepts_documented_comments_without_changing_strings(comment):

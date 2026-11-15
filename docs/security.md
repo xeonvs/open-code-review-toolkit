@@ -85,9 +85,13 @@ entity declarations and external entities, with independent 1 MB input, 32-level
 capped at 512 per source. Composed XML locations use fixed-size semantic digests;
 all .NET parsers enforce a cumulative UTF-8 fact-payload budget before retention:
 at most 1 MB and 16 times source bytes, with 1 KiB headroom for small inputs.
-Expanded XML names, attributes and text have a separate budget with the same
-ceiling, charged during Expat callbacks before tree retention; namespace expansion
-cannot bypass it.
+A non-expanding Expat prepass enforces the per-element attribute bound, including
+namespace declarations, before the namespace-aware parser can multiply URI copies
+across attribute names. Both passes refuse DTD/entity features. The second pass
+preserves namespace validation and charges expanded names, attributes and text
+before tree retention. These limits bound retained construction and namespace
+fanout; Expat's temporary raw dictionaries still consume input-proportional memory,
+so the construction budget is not a total-process memory limit.
 Exhaustion explicitly degrades completeness rather than proving absence or a
 unique central version. These are construction bounds, independent of the later
 store admission and persistence limits. JSON has independent duplicate-key, type, nesting,

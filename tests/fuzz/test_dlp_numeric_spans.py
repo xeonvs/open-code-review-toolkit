@@ -77,7 +77,7 @@ def test_configured_protection_remains_independent_of_numeric_admission(number, 
 
 @given(
     st.sampled_from(["tel", "Phone no", "contact", "office_phone_number"]),
-    st.text(alphabet='.:#=\u2018\u2019"[({\t \u00a0\u3000', min_size=1, max_size=12),
+    st.text(alphabet='.:#\u2018\u2019"[({\t \u00a0\u3000', min_size=1, max_size=12),
     ENCODING,
 )
 def test_label_punctuation_preserves_contact_priority(label, separator, encoding):

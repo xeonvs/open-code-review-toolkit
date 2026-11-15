@@ -71,7 +71,15 @@ def test_publication_checks_contacts_even_with_source_proof(field):
     value = 'record["phone"] = "202555.0114"'
     comment = dict(path="source", start_line=1, end_line=1, content="Inspect the value.")
     comment[field] = value
-    proof = prove_opaque_code(comment, "source", lambda _path: value)
+    source = value
+    if field == "suggestion_code":
+        source = 'record["phone"] = ""'
+        comment["existing_code"] = source
+    proof = prove_opaque_code(comment, "source", lambda _path: source)
+    if field == "suggestion_code":
+        assert proof.suggestion_verified
+    elif field == "existing_code":
+        assert proof.existing_verified
     result, state, filtered = review_runner._publication_projection(
         dict(status="success", warnings=[], comments=[comment]),
         forbidden=(),
@@ -103,3 +111,13 @@ def test_calls_and_truncated_prefixes_never_become_grouped_labels(space):
     value = "mapping = {lookup" + space + "(phone): 202555.0114}"
     checked = check_text(value, budgets=BUDGETS, publication=True)
     assert checked.reason == "invalid_text" if space == "\t" else checked.admitted
+
+
+@pytest.mark.parametrize("label", ["phoneNumber", "office_phone", "Telephone", 'record["phone"]'])
+@pytest.mark.parametrize("operator", ["==", "!=", "<=", ">=", "==="])
+@pytest.mark.parametrize("value", ["2026-10-25", "202555.0114", "192.168.1.1/24"])
+def test_comparisons_do_not_bind_bare_or_closed_contact_labels(label, operator, value):
+    """An operator rejection survives both structured and human-label interpretation."""
+    for encoding in ("raw", "html", "numeric", "mermaid"):
+        text = encode(f'{label} {operator} "{value}"', encoding)
+        assert check_text(text, budgets=BUDGETS, publication=True).admitted

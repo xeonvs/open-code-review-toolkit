@@ -73,6 +73,9 @@ from ocr_toolkit.evidence.store import EvidenceStore
         ),
         ("Directory.Build.targets", '<Project><Import Project="unknown.targets"/></Project>'),
         ("src/Directory.Packages.props", "<Project>"),
+        ("src/directory.packages.props", "<Project/>"),
+        ("src/directory.build.props", "<Project/>"),
+        ("src/directory.build.targets", "<Project/>"),
         (
             "Directory.Build.props",
             '<Project><ItemGroup><PackageVersion Include="Example.Package" Version="2.0"/></ItemGroup></Project>',

@@ -277,7 +277,9 @@ B/H/P file snapshots, indexes, categories and coverage. Optional typed-fact budg
 remain separate. Typed records, semantic deltas and omission notices share the
 remaining byte pool after mandatory validation and invocation headroom. A typed
 overflow preserves B/H/P, omits unsafe comparisons and lowers affected complete
-coverage to partial, independently of diagnostic redaction. The absolute 100,000-record and 20 MB serialized-store limits,
+coverage to partial, independently of diagnostic redaction. Atomic Ansible
+topology is the exception: incomplete facts or comparisons stop review with a
+store error, without a v7 hard-budget note. The absolute 100,000-record and 20 MB serialized-store limits,
 plus bounded Git tree/blob acquisition, still apply. Genuine hard-limit refusal
 stops before the model and emits `ocr.pre-execution-status/v7` with the closed
 `evidence_budget_exceeded` reason, `records`/`bytes`/`entries` unit and actual/limit.
