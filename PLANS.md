@@ -180,7 +180,7 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | --- | --- | --- | --- |
 | WQ-01 | Full plan/fidelity, signed 6e11f47 first push and draft PR #317 completed | REQ-001 | done |
 | WQ-02 | Atomic structural/optional budgets, bounded serializer/target batches, v7 CLI/readback/freshness diagnostics qualified | REQ-002, REQ-003, REQ-013 | done |
-| WQ-11 | Update libraries/tooling/immutable Actions pins and freeze composition for remaining development and acceptance | REQ-021 | in_progress |
+| WQ-11 | Eleven compatible lock upgrades and uv 0.13.8 applied; all current Action tag/SHA identities verified; composition frozen | REQ-021 | done |
 | WQ-03 | Pure bounded .NET parser/linker, ASP.NET plugin, shared container predicate, real Git/MCP tests; logical commit | REQ-004, REQ-005, REQ-006, REQ-013 | pending |
 | WQ-04 | Numeric span/date corrections, regressions/properties and baseline/candidate audits; logical commit | REQ-007, REQ-008, REQ-013 | pending |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | pending |
@@ -325,11 +325,14 @@ coverage for all three new sizing/serialization/target owners. Ruff, formatter,
 mypy (183 sources), instruction and plan contracts pass. Aggregate quality,
 Security, own-tool acceptance and publication remain pending.
 
-Dependency inventory: 11 compatible lock upgrades; uv 0.13.8 is current. All 11
+Dependency inventory: 11 compatible lock upgrades and uv 0.13.8 applied. All 11
 Action versions and immutable tag targets already match latest stable releases,
 including dereferenced annotated tags. CodeQL Action is v4.39.3; its separate
 bundle release is not an Action version. Exact Bandit/setuptools-scm pins and
-Gitleaks 8.30.1 are already current. Apply the lock/uv updates before WQ-03.
+Gitleaks 8.30.1 are already current. The locked environment/export, 185 focused
+dependency/workflow/HTTPS/federation/markup/property checks and shared dependency
+audit pass. Supported-platform binary/installed acceptance remains at WQ-07/CI.
+The reviewed dependency/upstream composition is now frozen for this cycle.
 
 ### Risks And Recovery
 
@@ -350,10 +353,11 @@ Gitleaks 8.30.1 are already current. Apply the lock/uv updates before WQ-03.
 
 ### Resume Point
 
-WQ-11: after committing the reviewed WQ-02 slice, apply the compatible lock updates
-and pinned uv 0.13.8 consistently, validate dependency/workflow contracts and freeze
-composition. Continue WQ-03 afterward. Draft PR #317 remains at its signed plan
-commit; further implementation stays local until final feature acceptance.
+WQ-03: implement the bounded pure .NET manifest/parser and scoped-link contracts,
+then ASP.NET Core and shared container-path behavior with real Git/MCP tests.
+WQ-02 is committed as a031c1c; commit the reviewed dependency refresh before this
+next slice. Draft PR #317 remains at its signed plan commit; all development
+stays local until final feature acceptance.
 
 ### Plan Fidelity Check
 
