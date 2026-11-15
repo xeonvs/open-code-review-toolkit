@@ -11,13 +11,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.evidence.budgets import MAX_EVIDENCE_BYTES, MAX_EVIDENCE_RECORDS, MAX_TREE_ENTRIES
 from ocr_toolkit.repository_coverage import RepositoryCoverageError, parse_repository_coverage
 from ocr_toolkit.review_receipt import ReceiptReviewIdentity, _parse_review_identity
 
 STATUS_SCHEMA = "ocr.pre-execution-status/v5"
 GITLINK_STATUS_SCHEMA = "ocr.pre-execution-status/v6"
-# v5/v6 embed frozen v11/v12 review tuples. Only a changed embedded tuple needs
-# a new status schema; independent result range/diagram fields do not change it.
+EVIDENCE_BUDGET_STATUS_SCHEMA = "ocr.pre-execution-status/v7"
+EVIDENCE_BUDGET_EXCEEDED = "evidence_budget_exceeded"
+# v5/v6 freeze their reasons and v11/v12 review tuples. The v7 budget outcome
+# adds a reason without changing v11; independent result fields stay separate.
 STATUS_REVIEW_RECEIPT_VERSION = 11
 GITLINK_STATUS_REVIEW_RECEIPT_VERSION = 12
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
@@ -84,12 +87,17 @@ def _sha(value: str) -> bool:
 
 
 def _validate(status: PreExecutionStatus) -> None:
-    if status.schema_version not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA} or any(
-        not _sha(value) for value in (status.diff_base_sha, status.source_sha)
-    ):
+    if status.schema_version not in {
+        STATUS_SCHEMA,
+        GITLINK_STATUS_SCHEMA,
+        EVIDENCE_BUDGET_STATUS_SCHEMA,
+    } or any(not _sha(value) for value in (status.diff_base_sha, status.source_sha)):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.model_execution != MODEL_NOT_STARTED:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.schema_version == EVIDENCE_BUDGET_STATUS_SCHEMA:
+        _validate_evidence_budget_status(status)
+        return
     if status.schema_version == GITLINK_STATUS_SCHEMA:
         _validate_gitlink_status(status)
         return
@@ -230,6 +238,43 @@ def _validate(status: PreExecutionStatus) -> None:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
 
 
+def _validate_evidence_budget_status(status: PreExecutionStatus) -> None:
+    """Bind content-free hard-limit facts to the existing frozen review tuple."""
+
+    review = _parse_review_identity(status.review, STATUS_REVIEW_RECEIPT_VERSION)
+    ceilings = {
+        "records": MAX_EVIDENCE_RECORDS,
+        "bytes": MAX_EVIDENCE_BYTES,
+        "entries": MAX_TREE_ENTRIES,
+    }
+    if (
+        status.reason != EVIDENCE_BUDGET_EXCEEDED
+        or status.stage != EVIDENCE_PREFLIGHT_STAGE
+        or type(status.actual) is not int
+        or type(status.limit) is not int
+        or not isinstance(status.unit, str)
+        or status.unit not in ceilings
+        or not 0 < status.limit < status.actual <= 100_000_000
+        or status.limit > ceilings[status.unit]
+        or any(
+            value is not None
+            for value in (
+                status.diagnostic_count,
+                status.provider,
+                status.project_id,
+                status.change_id,
+                status.terminal_state,
+                status.repository_coverage,
+            )
+        )
+        or review is None
+        or review.diff_base_sha != status.diff_base_sha
+        or review.source_sha != status.source_sha
+        or review.policy_sha != status.policy_sha
+    ):
+        raise PreExecutionStatusError("pre-execution evidence budget status is invalid")
+
+
 def _validate_gitlink_status(status: PreExecutionStatus) -> None:
     if (
         status.reason not in {GITLINK_NO_REVIEWABLE_FILES, GITLINK_PROJECTION_UNQUALIFIED}
@@ -328,7 +373,7 @@ def write_pre_execution_status(path: Path, status: PreExecutionStatus) -> None:
 
     _validate(status)
     fields = asdict(status)
-    if status.schema_version == STATUS_SCHEMA:
+    if status.schema_version != GITLINK_STATUS_SCHEMA:
         fields.pop("repository_coverage")
     payload = (
         json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
@@ -444,7 +489,8 @@ def read_pre_execution_status(
         if (
             not isinstance(value, dict)
             or not isinstance(value.get("schema_version"), str)
-            or value["schema_version"] not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA}
+            or value["schema_version"]
+            not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA, EVIDENCE_BUDGET_STATUS_SCHEMA}
             or set(value)
             != (
                 legacy_fields | {"repository_coverage"}

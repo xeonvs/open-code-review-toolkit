@@ -126,7 +126,9 @@ flowchart TD
     target_policy --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
     unprotected_rules --> acquire
     separate_policy --> acquire
-    acquire --> diagram_setup[Prepare optional run collector by mode<br/>and qualified OCR capability;<br/>closed feedback allows bounded corrections;<br/>fault/conflict/budget omits only diagram]
+    acquire --> evidence_budget{Complete mandatory evidence<br/>fits hard resource bounds?}
+    evidence_budget -- No --> evidence_budget_stop[Closed v7 evidence-budget status;<br/>no model; fresh diagnostic only;<br/>preserve previous review]
+    evidence_budget -- Yes --> diagram_setup[Prepare optional run collector by mode<br/>and qualified OCR capability;<br/>closed feedback allows bounded corrections;<br/>fault/conflict/budget omits only diagram]
     diagram_setup --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
@@ -206,7 +208,13 @@ flowchart TD
 ```
 
 Recognized stops record an identity-bound `ocr.pre-execution-status/v5` or
-gitlink-specific v6 with a closed stage and `model_execution=not_started`.
+gitlink-specific v6, or hard-evidence-budget v7, with a closed stage and
+`model_execution=not_started`. Mandatory snapshot/category capacity scales with
+the immutable inputs while optional typed facts retain separate limits. The
+absolute store bounds are 100000 records and 20 MB serialized evidence; Git trees
+remain limited to 20000 entries and changed paths to 10000. A v7 note contains
+only unit/count/limit and the authenticated review identity. It never authorizes
+approval or old-thread cleanup.
 A stale merge-request revision is reported only in the old job's local output;
 it never posts into the newer merge request. Pure changed gitlinks under
 capability-qualified OCR are projected from the original trees before preview; unsafe forms
@@ -384,7 +392,8 @@ captured P when ancestry is proved; a changed default, lost protection, rewrite,
 unverifiable ancestry, or moved code tuple stops. Exact v9-v12 receipts remain
 historically readable under their frozen invariants but cannot authorize a
 new current publication. Pre-execution v5/v6 retain embedded v11/v12 review
-tuples; those tuples still receive freshness checks. A detached GitLab CI job without v13/v14 cannot use the
+tuples; v7 retains the embedded v11 tuple for hard evidence-budget diagnostics.
+All of those tuples still receive freshness checks. A detached GitLab CI job without v13/v14 cannot use the
 standalone direct-posting path; local review stays receipt-less and does not post
 to GitLab. Pre-write checks leave a provider-side race; neither the diagram nor a comment-only
 outcome implies that an earlier bot approval was revoked.

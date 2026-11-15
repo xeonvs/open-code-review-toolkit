@@ -8,7 +8,9 @@ One runner-owned immutable B/H range is proved before range-dependent evidence
 and independently matched to native requested/resolved/exact-range fields at
 admission. Complete coverage does not prove range identity. Current result
 receipts v13/v14 bind that claim; frozen v9-v12 remain historical readback and
-pre-execution v5/v6 keep their unchanged embedded review tuples.
+pre-execution v5/v6 keep their unchanged embedded review tuples. The v7 hard-evidence
+budget status uses the existing v11 review tuple and carries only closed numeric
+resource facts, without a review result or approval authority.
 
 The optional [typed diagram](diagrams.md) has a separate run-bound private output
 collector. It accepts no destination or provider-write authority. Whole-unit DLP
@@ -105,6 +107,16 @@ publishing environments and OIDC policy remain deployment prerequisites. Source
 review establishes the toolkit's checks, not that those external settings are
 currently enabled. External services still own object authorization. See the
 [GitLab prerequisites](gitlab.md) and [release contract](release.md).
+
+Mandatory evidence snapshots and category indexes scale with the exact immutable
+range inside absolute record/byte bounds. Optional typed facts have a separate
+bounded pool; actual-target facts are admitted afterward. Serialization checks
+UTF-8 bytes during construction, and target batches account incremental cost
+before a final atomic validation. A genuine record, byte or entry overflow stops
+before the model. Its private v7 status binds B/H/T/P; a GitLab diagnostic note
+requires fresh identity, contains no paths or source text, and preserves old
+findings without approval or thread cleanup. Corruption and unknown failures do
+not become budget diagnoses.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
 For an exact capability-qualified OCR version, the toolkit compares complete before/after Git

@@ -2,6 +2,24 @@
 
 This matrix records what the repository test suite proves and, equally importantly, what it does not prove. The governing rule is [Test doubles and integration proof](project_principles.md#test-doubles-and-integration-proof): a double may replace a collaborator beyond the production owner under test, but it may not replace that owner and still be cited as integration evidence.
 
+## v0.15.0 atomic structural evidence budgets
+
+Real temporary Git repositories cross the production collector, complete
+snapshots/deltas, private store serialization/readback and MCP pagination at
+255/256/257/260/413/513/1000 changed files. Optional typed limits remain independent
+from structural growth. Unicode/escape properties compare the streamed encoder
+with canonical JSON and verify atomic failure; target batches retain consistent
+indexes with bounded incremental admission and a final real serializer guard.
+
+The CLI hard-budget tests replace only provider identity acquisition, keeping
+Git, collection, status persistence, cleanup and local failure delivery real.
+Budget-note tests use production freshness with real Git graphs and a controlled
+external snapshot collaborator, and preserve previous comments across target,
+policy and job drift. They establish note routing/freshness, not new HTTPS
+transport qualification; the shared provider transport suites own that boundary.
+Hostile v7 readback, stale identities and v5/v6 downgrade attempts are separate
+checks. New sizing, serializer and target owners each have a 90% branch-aware floor.
+
 ## Evidence classes
 
 - **Unit or policy:** pure parsing, normalization, ordering, rendering, validation, or orchestration. A replaced boundary owner limits the claim to wiring.

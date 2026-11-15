@@ -257,6 +257,8 @@ def test_optional_target_header_omission_preserves_core_evidence(
 
     class TightStore(EvidenceStore):
         def __init__(self, **kwargs: object) -> None:
+            kwargs.pop("limits", None)
+            kwargs["reserved_bytes"] = 0
             super().__init__(limits=EvidenceStoreLimits(max_bytes=baseline_size + 256), **kwargs)
 
     monkeypatch.setattr("ocr_toolkit.evidence.collect.EvidenceStore", TightStore)
@@ -347,7 +349,7 @@ def test_target_byte_admission_rolls_back_without_partial_snapshot() -> None:
         commit_sha=sha,
         trust=TrustClass.TARGET_REPOSITORY,
     )
-    assert not store.add_target_context(oversized)
+    assert not store.add_target_context((oversized,))
     assert store.target.records == ()
     assert store.records == ()
     assert len(store.to_json().encode("utf-8")) <= store.limits.max_bytes

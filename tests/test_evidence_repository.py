@@ -412,6 +412,8 @@ def test_collection_continues_after_a_real_per_kind_store_limit(
         """Use a small genuine per-kind budget through the production store."""
 
         def __init__(self, **kwargs: object) -> None:
+            kwargs.pop("limits", None)
+            kwargs["reserved_bytes"] = 0
             super().__init__(
                 limits=EvidenceStoreLimits(max_records=64, max_records_per_kind=2),
                 **kwargs,

@@ -28,7 +28,9 @@ thresholds on the Linux/Python 3.14 coverage owner; retain the measured margin
 in the release evidence rather than inferring it from the configured floor.
 A high combined result cannot hide a weak group. Individual DLP/audit, source
 syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
-local and hosted coverage gates. Hosted pull requests run source and contract
+local and hosted coverage gates. Structural evidence sizing, bounded store
+serialization and optional target admission each have an independent 90% floor.
+Hosted pull requests run source and contract
 tests on all six supported OS/Python combinations. The expensive
 clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python
 3.12 job; the separate required build job smoke-tests both distribution paths.
@@ -456,7 +458,8 @@ receipt v14. Posting accepts the exact current form for each result route;
 automatic approval accepts only eligible v13 with verified native range.
 The frozen v9-v12 result readback rules, shared tuple parser, and pre-execution
 status v5/v6 with unchanged embedded v11/v12 tuples are separate
-version-specific contracts. When a new receipt version is introduced, preserve
+version-specific contracts. Evidence-budget status v7 also binds the existing
+v11 tuple and is not a completed review receipt. When a new receipt version is introduced, preserve
 prior wire meanings, implement its parser and nested-schema mapping explicitly,
 and version the private pre-execution status if its embedded review tuple changes. Verify
 old readback, new producer/readback, static-note handoff, normal publication,

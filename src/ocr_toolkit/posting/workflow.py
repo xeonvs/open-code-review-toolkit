@@ -129,6 +129,7 @@ from ocr_toolkit.posting.suggestions import (
 from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
     BACKGROUND_REASONS,
+    EVIDENCE_BUDGET_EXCEEDED,
     GITLAB_MERGE_REQUEST_TERMINAL,
     GITLINK_NO_REVIEWABLE_FILES,
     GITLINK_PREVIEW_UNSUPPORTED,
@@ -2141,20 +2142,31 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
                 return 1
             return posting_failure_exit(config, previous_refs, transaction)
         return 1 if strict_posting() else 0
-    if status.reason in BACKGROUND_REASONS:
+    if status.reason in BACKGROUND_REASONS or status.reason == EVIDENCE_BUDGET_EXCEEDED:
         transaction = PostingTransaction()
         heading = (
-            "**⛔ Open Code Review background was rejected**"
+            "**Open Code Review evidence budget was exceeded**"
+            if status.reason == EVIDENCE_BUDGET_EXCEEDED
+            else "**⛔ Open Code Review background was rejected**"
             if post_emoji()
             else "**Open Code Review background was rejected**"
         )
         unit = status.unit
         body = (
-            "The installed, preflight-qualified OCR executable rejected the generated review "
-            f"background before model execution: `{status.actual}` {unit} exceeded its current "
-            f"hard limit of `{status.limit}` {unit}.\n\n"
-            "No model review or review findings were produced. Previous Open Code Review "
-            "comments were preserved."
+            (
+                "Review not started: complete repository evidence requires at least "
+                f"`{status.actual}` {unit}; the hard limit is `{status.limit}` {unit}. "
+                "No model review or review findings were produced. Previous Open Code Review "
+                "comments were preserved."
+            )
+            if status.reason == EVIDENCE_BUDGET_EXCEEDED
+            else (
+                "The installed, preflight-qualified OCR executable rejected the generated review "
+                f"background before model execution: `{status.actual}` {unit} exceeded its current "
+                f"hard limit of `{status.limit}` {unit}.\n\n"
+                "No model review or review findings were produced. Previous Open Code Review "
+                "comments were preserved."
+            )
         )
         if not current_or_rollback(transaction, previous_refs):
             return 1

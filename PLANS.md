@@ -43,9 +43,9 @@ durable architectural limits and historical evidence at their existing owners.
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Complete plan fidelity, delivery goal, signed first push and draft PR | WQ-01 | in_progress |
-| REQ-002 | #315 adaptive structural budget, atomic store and bounded serialization | WQ-02 | pending |
-| REQ-003 | #315 v7 pre-execution budget diagnostic, freshness and preservation | WQ-02 | pending |
+| REQ-001 | Complete plan fidelity, delivery goal, signed first push and draft PR | WQ-01 | done |
+| REQ-002 | #315 adaptive structural budget, atomic store and bounded serialization | WQ-02 | done |
+| REQ-003 | #315 v7 pre-execution budget diagnostic, freshness and preservation | WQ-02 | done |
 | REQ-004 | #312 bounded XML/JSON .NET manifest facts and project scopes | WQ-03 | pending |
 | REQ-005 | #312 conservative central-version links, ASP.NET Core plugin, deltas and MCP | WQ-03 | pending |
 | REQ-006 | #313 shared container-build path recognition | WQ-03 | pending |
@@ -61,14 +61,17 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-016 | Signed Release v0.15.0 PR, markers, authorization, notes, pins and plan archive/reset | WQ-09 | pending |
 | REQ-017 | Independent registry/install/provenance/tag/receipt/issues/site/main verification | WQ-10 | pending |
 | REQ-018 | Owned source snapshots, builds, environments, debug and obsolete binaries removed | WQ-10 | pending |
+| REQ-019 | Local CLI debug/retention combinations preserve useful authorized diagnostics without forge authority | WQ-06, WQ-07 | in_progress |
+| REQ-020 | Improve the actual model/tool/release cycle and canonical instructions where evidence warrants | WQ-06, WQ-07 | in_progress |
+| REQ-021 | Update compatible stable libraries, uv and immutable GitHub Action pins before expensive acceptance | WQ-11, WQ-07 | in_progress |
 
 ### Explicit Non-Goals
 
 No new toolkit environment variables or CLI flags, general MSBuild evaluator,
 NuGet restore/build/network resolution, nuget.config acquisition, second review
 engine, new forge adapter or automatic finding masking. No activation of model
-profiles, configuration framework, managed OAuth or related-MR review. No broad
-dependency-upgrade campaign without demonstrated need/security evidence. No
+profiles, configuration framework, managed OAuth or related-MR review. No new
+dependency additions without a demonstrated package boundary. No
 landing-chat handoff, private corpus CI stage, historical evidence rewrite or
 post-release closure PR. No copied private code, private project identities,
 paths, credentials, internal chat identifiers or raw debug in public artifacts.
@@ -110,6 +113,8 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 - OCR releases https://github.com/alibaba/open-code-review/releases/tag/v1.13.9
   and https://github.com/alibaba/open-code-review/releases/tag/v1.13.10, their
   official assets/checksum files and adjacent source changes.
+- Actions-owned qualification issues #318 (1.13.9) and #319 (1.13.10), created by
+  workflow 43719258074; use these canonical trackers rather than duplicate issues.
 - MSBuild folder semantics:
   https://learn.microsoft.com/en-us/visualstudio/msbuild/customize-by-directory
   and central package management:
@@ -134,6 +139,21 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
   work remains inactive.
 - Keep minimum configuration surface, actual own-tool diagram acceptance and
   the normal protected two-PR delivery lifecycle. No landing-chat handoff.
+- Subsequent owner request: check local CLI debug/artifact-retention combinations
+  for later diagnosis, and recheck the recorded plan against the approved plan.
+  Current code/docs forbid --debug-dir with --preserve-private-artifacts; verify
+  their real lifecycles and remove an unjustified local-only incompatibility.
+- The owner subsequently rejects legacy preservation. Consolidate diagnosis into
+  --debug-dir with bounded necessary evidence/context/action captures before
+  cleanup; remove the separate --preserve-private-artifacts interface and producer
+  path without an alias. Keep hostile rejection of old diagnostic artifacts where
+  it prevents publication, not an old positive generation/execution path. Debug
+  must never mislabel an unfiltered retained result as safe-result.json.
+- Subsequent owner requests include improving the actual model/tool/release
+  cycle and checking agent/project instructions, plus updating existing libraries
+  and GitHub Actions to current compatible stable versions. This supersedes the
+  original dependency-only-on-need restriction. Check immutable action identity
+  and supported binary installs; freeze composition before expensive acceptance.
 
 ### Completed Baseline State
 
@@ -158,13 +178,14 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 
 | Queue | Ordered work and acceptance | Requirements | Status |
 | --- | --- | --- | --- |
-| WQ-01 | Materialize full plan, fidelity/self-review, activate state, signed plan commit and draft PR | REQ-001 | in_progress |
-| WQ-02 | Evidence budget planning/serialization, v7 diagnostic and production/readback/posting tests; logical commit | REQ-002, REQ-003, REQ-013 | pending |
+| WQ-01 | Full plan/fidelity, signed 6e11f47 first push and draft PR #317 completed | REQ-001 | done |
+| WQ-02 | Atomic structural/optional budgets, bounded serializer/target batches, v7 CLI/readback/freshness diagnostics qualified | REQ-002, REQ-003, REQ-013 | done |
+| WQ-11 | Update libraries/tooling/immutable Actions pins and freeze composition for remaining development and acceptance | REQ-021 | in_progress |
 | WQ-03 | Pure bounded .NET parser/linker, ASP.NET plugin, shared container predicate, real Git/MCP tests; logical commit | REQ-004, REQ-005, REQ-006, REQ-013 | pending |
 | WQ-04 | Numeric span/date corrections, regressions/properties and baseline/candidate audits; logical commit | REQ-007, REQ-008, REQ-013 | pending |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | pending |
-| WQ-06 | Operator guidance, opt-in label example, roadmap/backlog cleanup and canonical docs/test ownership; logical commit | REQ-011, REQ-012, REQ-013 | pending |
-| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015 | pending |
+| WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | pending |
+| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | pending |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
 | WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins and lifecycle archive/reset; protected merge | REQ-016 | pending |
 | WQ-10 | Stable external readback, CI-owned issue/milestone closure, site, local OCR update, synchronized main and cleanup | REQ-010, REQ-017, REQ-018 | pending |
@@ -275,6 +296,12 @@ qualification limits at their canonical owner; retarget documentation assertions
   coverage; retain existing floors/high results and measure the overall 88% gate.
 - Verify local/GitLab paths, hostile persistence, actual source/MCP/HTTP/process
   boundaries and clean wheel/sdist installs outside checkout on Python 3.12–3.15.
+- Local CLI matrix covers unified debug on/off, removed-flag rejection, API/native
+  auth, success/filter/failure, invalid/overlapping/private paths and cleanup.
+  Capture needed evidence/context/action data and closed early-budget facts before
+  cleanup; retain no native HOME or credential-store copy and grant no diagnostic
+  publication authority. Nonlocal debug remains rejected. Enter through the
+  installed CLI with controlled OCR rather than mocks of retention.
 - Aggregate semantic review, exactly one Security diff scan, then actual own-tool
   acceptance with budget 0/private debug/admitted diagram. Inspect findings,
   omissions, warnings and auxiliary reads; fix and run affected regressions.
@@ -286,10 +313,23 @@ qualification limits at their canonical owner; retarget documentation assertions
 
 ### Latest Validation Results
 
-Planning baseline only: both verified Darwin candidates passed the existing 20
-controlled-peer groups; the 260-file failure and numeric defects reproduce.
-Implementation checks, new-contract qualification, corpus comparison, aggregate
-reviews, final quality, hosted CI and publication remain pending.
+Planning baseline: both verified Darwin candidates passed the existing 20 groups.
+Hosted baseline workflow 43719258074 succeeded on 80eebd6 for both candidates,
+creating canonical #318/#319; both comment inventories are empty.
+
+WQ-02 passed 325 scoped collector/status/docs/workflow/property checks and a
+319-test runner/status slice. Self-review corrected target-kind headroom and late
+invocation-reserve interactions, adding their regressions. Latest affected rerun:
+86 passed (7 unchanged large-snapshot cases deselected), with 100% branch-aware
+coverage for all three new sizing/serialization/target owners. Ruff, formatter,
+mypy (183 sources), instruction and plan contracts pass. Aggregate quality,
+Security, own-tool acceptance and publication remain pending.
+
+Dependency inventory: 11 compatible lock upgrades; uv 0.13.8 is current. All 11
+Action versions and immutable tag targets already match latest stable releases,
+including dereferenced annotated tags. CodeQL Action is v4.39.3; its separate
+bundle release is not an Action version. Exact Bandit/setuptools-scm pins and
+Gitleaks 8.30.1 are already current. Apply the lock/uv updates before WQ-03.
 
 ### Risks And Recovery
 
@@ -310,9 +350,10 @@ reviews, final quality, hosted CI and publication remain pending.
 
 ### Resume Point
 
-WQ-01: self-review this materialization against the approved plan, activate the
-existing workflow state, run fidelity/instruction/privacy guards, then create the
-signed plan commit and first draft PR. All implementation remains unfinished.
+WQ-11: after committing the reviewed WQ-02 slice, apply the compatible lock updates
+and pinned uv 0.13.8 consistently, validate dependency/workflow contracts and freeze
+composition. Continue WQ-03 afterward. Draft PR #317 remains at its signed plan
+commit; further implementation stays local until final feature acceptance.
 
 ### Plan Fidelity Check
 
@@ -329,6 +370,8 @@ signed plan commit and first draft PR. All implementation remains unfinished.
 
 - [x] Baseline main/remote and current plan state checked before materialization.
 - [x] Sources and issue comments reconcile with the approved implementation plan.
+- [x] Full 2026-11-15 recheck retained all approved outcomes, bounds and lifecycle;
+  the separately identified REQ-019 records the subsequent local CLI request.
 - [ ] Final runtime, tests, public contracts, planning and evidence owners agree.
 - [ ] Review findings and omissions are fixed or explicitly justified.
 - [ ] Release handoff and remaining external delivery are classified truthfully.

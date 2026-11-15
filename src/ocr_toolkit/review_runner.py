@@ -84,6 +84,7 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_bytes,
     write_private_text,
 )
+from ocr_toolkit.evidence.budgets import EvidenceBudgetExceeded
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.gitlink_projection import (
     GitlinkProjection,
@@ -153,6 +154,8 @@ from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
+    EVIDENCE_BUDGET_EXCEEDED,
+    EVIDENCE_BUDGET_STATUS_SCHEMA,
     GITLAB_MERGE_REQUEST_TERMINAL,
     GITLINK_NO_REVIEWABLE_FILES,
     GITLINK_PROJECTION_UNQUALIFIED,
@@ -2709,6 +2712,44 @@ def _record_rules_path_setup(
     return True
 
 
+def _collect_run_evidence(
+    refs: ReviewRefs, identity: ReviewIdentity, artifacts: EvidenceArtifacts, *, local: bool
+) -> EvidenceStore:
+    """Collect atomically or retain only an identity-bound hard-budget diagnosis."""
+
+    try:
+        store = collect_repository_evidence(
+            base_ref=refs.base,
+            head_ref=refs.head,
+            policy_ref=identity.policy_sha,
+            target_ref=identity.target_sha if not local else None,
+            include_policy_records=local or identity.has_protected_policy,
+        )
+    except EvidenceBudgetExceeded as exc:
+        if not local:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=EVIDENCE_BUDGET_STATUS_SCHEMA,
+                    reason=EVIDENCE_BUDGET_EXCEEDED,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=identity.policy_sha,
+                    review=_status_review(identity),
+                    actual=exc.actual,
+                    limit=exc.limit,
+                    unit=exc.unit,
+                ),
+            )
+        raise ReviewRunnerError(
+            f"repository evidence requires at least {exc.actual} {exc.unit}; "
+            f"limit {exc.limit}. No model review was started"
+        ) from exc
+    store.reserved_bytes = 0
+    store.reserved_records = 0
+    return store
+
+
 def _record_unavailable_review_identity(artifacts: EvidenceArtifacts, refs: ReviewRefs) -> None:
     """Keep an unproven provider boundary as a private, job-only outcome."""
 
@@ -3655,13 +3696,7 @@ def _run_evidence_review(
                 },
             )
             state.enter("evidence")
-            store = collect_repository_evidence(
-                base_ref=refs.base,
-                head_ref=refs.head,
-                policy_ref=identity.policy_sha,
-                target_ref=identity.target_sha if not state.local else None,
-                include_policy_records=state.local or identity.has_protected_policy,
-            )
+            store = _collect_run_evidence(refs, identity, artifacts, local=state.local)
             head_sha = store.head.commit_sha if store.head else ""
             identifiers = () if state.local else invocation_identifiers(os.environ)
             for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
