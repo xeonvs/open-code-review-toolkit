@@ -110,6 +110,13 @@ The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` laye
 
 ### Framework and template evidence
 
+Static .NET evidence adds project, shared-build, central-package, lock and SDK
+declarations through the same collectors and MCP. Its conservative central links
+retain both source identities without claiming an evaluated MSBuild version;
+the [current context contract](../review-context.md#static-net-evidence) owns the
+details. ASP.NET Core is a package-owned provider with exact project-path scopes,
+distinct Web SDK/reference signals and no TFM-to-runtime-version inference.
+
 Framework support is package-owned static plugin extraction, not a code graph or framework-specific review engine. The established registry covers Jinja2 and Jinja/Ansible-style templates, Echo/Fiber with direct gRPC stack context, Symfony/Twig, and React/Next with TypeScript/Vite context. Plugins receive only immutable normalized dependency/tree evidence and exact core-owned source-status records from the collector, publish closed framework/template facts plus scoped completeness, and cannot read the repository independently, execute commands, fetch the network, mutate state, or create another MCP/review flow. Components follow the nearest declaration manifest (or conventional Ansible role); `.` is the unambiguous repository-root component and every other value is a real path. Go uses effective `go.mod` requirement/replacement semantics, and every read, parse, configuration, template, or provider limit degrades its exact scope instead of turning missing facts into proof.
 
 The implementation boundary is the internal `ocr_toolkit.evidence.frameworks` package. It owns immutable plugin contracts, closed framework/template schemas, generic package detection, template inventory, a static ordered registry, and package-owned declarations under `frameworks.providers`. The core collector remains responsible for Git/tree/manifest reads and passes only bounded immutable inputs; the evidence store and built-in MCP remain outside the package. Provider results are bounded and committed atomically so malformed facts, coverage, or notices from one provider cannot leak partial state or suppress its siblings. There are no runtime discovery hooks, legacy import shims, plugin-owned I/O, or framework-specific MCP services. A new demonstrated provider extends this one registry and the shared schemas instead of adding another collection or serving path.

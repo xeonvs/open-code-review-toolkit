@@ -46,9 +46,9 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-001 | Complete plan fidelity, delivery goal, signed first push and draft PR | WQ-01 | done |
 | REQ-002 | #315 adaptive structural budget, atomic store and bounded serialization | WQ-02 | done |
 | REQ-003 | #315 v7 pre-execution budget diagnostic, freshness and preservation | WQ-02 | done |
-| REQ-004 | #312 bounded XML/JSON .NET manifest facts and project scopes | WQ-03 | pending |
-| REQ-005 | #312 conservative central-version links, ASP.NET Core plugin, deltas and MCP | WQ-03 | pending |
-| REQ-006 | #313 shared container-build path recognition | WQ-03 | pending |
+| REQ-004 | #312 bounded XML/JSON .NET manifest facts and project scopes | WQ-03 | done |
+| REQ-005 | #312 conservative central-version links, ASP.NET Core plugin, deltas and MCP | WQ-03 | done |
+| REQ-006 | #313 shared container-build path recognition | WQ-03 | done |
 | REQ-007 | #314 all numeric/date cases and inverse material protection | WQ-04 | pending |
 | REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | pending |
 | REQ-009 | Exact OCR assets, excluded coverage and request-scoped tools qualification | WQ-05 | pending |
@@ -181,7 +181,7 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-01 | Full plan/fidelity, signed 6e11f47 first push and draft PR #317 completed | REQ-001 | done |
 | WQ-02 | Atomic structural/optional budgets, bounded serializer/target batches, v7 CLI/readback/freshness diagnostics qualified | REQ-002, REQ-003, REQ-013 | done |
 | WQ-11 | Eleven compatible lock upgrades and uv 0.13.8 applied; all current Action tag/SHA identities verified; composition frozen | REQ-021 | done |
-| WQ-03 | Pure bounded .NET parser/linker, ASP.NET plugin, shared container predicate, real Git/MCP tests; logical commit | REQ-004, REQ-005, REQ-006, REQ-013 | pending |
+| WQ-03 | Bounded .NET declarations/central links, project-scoped ASP.NET, shared container grammar and Git/store/stdio MCP handoffs accepted | REQ-004, REQ-005, REQ-006, REQ-013 | done |
 | WQ-04 | Numeric span/date corrections, regressions/properties and baseline/candidate audits; logical commit | REQ-007, REQ-008, REQ-013 | pending |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | pending |
 | WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | pending |
@@ -334,6 +334,16 @@ dependency/workflow/HTTPS/federation/markup/property checks and shared dependenc
 audit pass. Supported-platform binary/installed acceptance remains at WQ-07/CI.
 The reviewed dependency/upstream composition is now frozen for this cycle.
 
+WQ-03 scoped collector/framework/infrastructure/MCP/document checks pass. All
+new .NET parser/linker/provider and container grammar owners exceed their 90%
+branch-aware floors (latest measurement: 99% or 100% each). Real Git collection,
+source-local deltas, central version changes, persistence/readback and a real
+stdio MCP child are exercised. Semantic review strengthened unsupported XML
+placement/namespaces, malformed-signal isolation, source-scoped identities and
+runtime-dependent ASP.NET resolution coverage. Source adapters have an executable
+no-I/O/no-higher-lifecycle guard; no language-specific confidentiality exemption
+or new public configuration was introduced. Aggregate acceptance remains pending.
+
 ### Risks And Recovery
 
 - Numeric ambiguity is an explicit owner-approved policy; other contact/material
@@ -353,10 +363,11 @@ The reviewed dependency/upstream composition is now frozen for this cycle.
 
 ### Resume Point
 
-WQ-03: implement the bounded pure .NET manifest/parser and scoped-link contracts,
-then ASP.NET Core and shared container-path behavior with real Git/MCP tests.
-WQ-02 is committed as a031c1c; commit the reviewed dependency refresh before this
-next slice. Draft PR #317 remains at its signed plan commit; all development
+WQ-04: implement the complete numeric-span/date DLP contract and inverse controls,
+then compare paired authenticated public/private corpora and resource use.
+WQ-02 is committed as a031c1c and the dependency refresh as e37bf90.
+The .NET/container slice has passed scoped acceptance and semantic review.
+Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.
 
 ### Plan Fidelity Check

@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 
+from ocr_toolkit.evidence.container_paths import is_container_build_file
+
 CATEGORY_ORDER = (
     "ansible_playbooks",
     "ocr_integration",
@@ -19,6 +21,7 @@ CATEGORY_ORDER = (
     "templates",
     "terraform_hcl",
     "python",
+    "csharp",
     "go",
     "php",
     "javascript_typescript",
@@ -34,7 +37,7 @@ DEPENDENCY_MANIFEST_PATTERN = re.compile(
     r"package(-lock)?\.json|"
     r"pnpm-lock\.yaml|yarn\.lock|composer\.(json|lock)|go\.(mod|sum)|"
     r"Cargo\.(toml|lock)|Gemfile(\.lock)?|pom\.xml|build\.gradle(\.kts)?|"
-    r"gradle\.lockfile)$",
+    r"gradle\.lockfile|[^/]+\.(?:csproj|fsproj|vbproj)|Directory\.(?:Build\.(?:props|targets)|Packages\.props)|packages\.lock\.json|global\.json)$",
     re.I,
 )
 
@@ -55,9 +58,7 @@ CATEGORY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "containers",
         re.compile(
-            r"(^|/)(Dockerfile(?:\.[^/]+)?|Containerfile(?:\.[^/]+)?|"
-            r"[^/]+\.Dockerfile|docker-compose.*\.ya?ml|"
-            r"compose(?:\.[^/]+)?\.ya?ml)$|\.dockerfile$",
+            r"(^|/)(docker-compose.*\.ya?ml|compose(?:\.[^/]+)?\.ya?ml)$",
             re.I,
         ),
     ),
@@ -74,6 +75,7 @@ CATEGORY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("templates", re.compile(r"\.(j2|jinja|jinja2|tpl|tmpl)$", re.I)),
     ("terraform_hcl", re.compile(r"\.(tf|tfvars|hcl)$", re.I)),
     ("python", re.compile(r"\.(py|pyi)$", re.I)),
+    ("csharp", re.compile(r"\.(cs|csx)$", re.I)),
     ("go", re.compile(r"\.go$", re.I)),
     ("php", re.compile(r"\.php$", re.I)),
     ("javascript_typescript", re.compile(r"\.(js|jsx|ts|tsx|mjs|cjs)$", re.I)),
@@ -90,7 +92,9 @@ def categorize_paths(
     playbooks = set(ansible_playbooks)
     categorized: dict[str, list[str]] = {}
     for path in sorted(set(paths)):
-        matched = False
+        matched = is_container_build_file(path)
+        if matched:
+            categorized.setdefault("containers", []).append(path)
         if path in playbooks:
             categorized.setdefault("ansible_playbooks", []).append(path)
             matched = True

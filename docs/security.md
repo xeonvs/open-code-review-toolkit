@@ -77,6 +77,18 @@ The main trust transitions are:
    authority. Generated promotion outputs reject conflicting existing content
    before any pin is changed; exclusive creation protects new destinations.
 
+### Static declaration parsing
+
+Static .NET inputs are hostile repository data. XML construction rejects DTDs,
+entity declarations and external entities, with independent 1 MB input, 32-level,
+4096-element, 32-attribute and 4096-character scalar bounds. Fact construction is
+capped at 512 per source. JSON has independent duplicate-key, type, nesting,
+scalar and traversal checks. MSBuild expressions/imports remain unevaluated;
+no build, restore, configuration-file credential read or network resolution is
+available. Ambiguous central declarations do not become effective versions.
+These parser bounds supplement the shared immutable Git, optional fact, private
+store and DLP controls; file type supplies no confidentiality exception.
+
 ### Operator and execution assumptions
 
 The operator selects model/metadata endpoints, credentials, the installed OCR

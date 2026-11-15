@@ -6,6 +6,7 @@ import re
 from pathlib import PurePosixPath
 
 from ocr_toolkit.common.redaction import redact_sensitive, redact_url_userinfo
+from ocr_toolkit.evidence.container_paths import is_container_build_file
 from ocr_toolkit.evidence.ecosystems.contracts import (
     MAX_MANIFEST_ITEMS,
     ManifestFact,
@@ -80,7 +81,8 @@ def infrastructure_candidate(path: str) -> bool:
     return (
         (pure_path.suffix.casefold() in _SUPPORTED_SUFFIXES and generic_declarative)
         or name in _SUPPORTED_NAMES
-        or name.startswith(("dockerfile.", "containerfile.", "docker-compose."))
+        or is_container_build_file(path)
+        or name.startswith("docker-compose.")
     )
 
 
@@ -201,7 +203,7 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
         fact = _image_fact(path, "image", f"{name}{separator}{version}")
         add_fact(fact)
 
-    if PurePosixPath(path).name.casefold().startswith(("dockerfile", "containerfile")):
+    if is_container_build_file(path):
         stage_names: set[str] = set()
         for raw in text.splitlines():
             match = _FROM_RE.match(raw.strip())

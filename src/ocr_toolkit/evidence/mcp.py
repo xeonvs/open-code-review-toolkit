@@ -57,6 +57,9 @@ MAX_SEARCH_QUERY_CHARS = 128
 MAX_SEARCH_QUERY_TOKENS = 8
 _SEARCH_OPERATOR_CHARACTERS = frozenset("*?[]{}()|\\^$~:=!<>`\"'")
 _SEARCH_VALUE_KEYS: dict[str, frozenset[str]] = {
+    "dotnet": frozenset(
+        {"identity", "name", "value", "version", "project_path", "central_source_path"}
+    ),
     "dependency": frozenset({"identity", "name", "package", "requirement", "version"}),
     "runtime": frozenset({"identity", "name", "runtime", "version"}),
     "container": frozenset({"digest", "identity", "image", "name", "tag", "version"}),

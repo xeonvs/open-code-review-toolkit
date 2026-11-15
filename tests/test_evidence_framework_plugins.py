@@ -23,6 +23,7 @@ from ocr_toolkit.evidence.frameworks import (
     collect_template_files,
 )
 from ocr_toolkit.evidence.frameworks.providers import (
+    ASPNET_CORE_PLUGIN,
     GO_WEB_PLUGIN,
     JINJA2_PLUGIN,
     REACT_PLUGIN,
@@ -83,6 +84,7 @@ def test_framework_package_keeps_one_static_immutable_plugin_boundary() -> None:
         GO_WEB_PLUGIN,
         SYMFONY_PLUGIN,
         REACT_PLUGIN,
+        ASPNET_CORE_PLUGIN,
     )
     assert tuple(field.name for field in fields(FrameworkPluginContext)) == (
         "records",

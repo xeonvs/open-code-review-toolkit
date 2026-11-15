@@ -13,6 +13,9 @@ Use this file as the short repository map and route table for Open Code Review T
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
 - `src/ocr_toolkit/reporting/warnings.py` - pure shared warning text selection; artifact loaders and adapters preserve structured warning provenance separately.
 - `src/ocr_toolkit/evidence/text_contracts.py` and `text_excerpts.py` - pure text bounds, LF-addressed facts and incremental excerpt retention.
+- `src/ocr_toolkit/evidence/budgets.py` and `store/` - structural sizing, optional headroom, atomic bounded persistence and hostile readback.
+- `src/ocr_toolkit/evidence/ecosystems/`, `collectors/` and `frameworks/` - pure source adapters, immutable Git orchestration and static framework plugins; .NET XML/JSON/linking lives under `ecosystems/dotnet/` and its framework provider under `frameworks/providers/`.
+- `src/ocr_toolkit/evidence/container_paths.py` - shared container build-file recognition for categorization and image acquisition/parsing.
 - `src/ocr_toolkit/evidence/source_reader.py` and `text_metadata.py` - shared immutable Git text sessions and whole-blob validation; `src/ocr_toolkit/diagrams/sources.py` projects optional diagram references.
 - `src/ocr_toolkit/posting/source_suggestions.py` - bounded acquisition for already remapped GitLab suggestion ranges.
 - `tests/` - regression, contract, and synthetic integration tests.
@@ -37,6 +40,9 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Task Routes
 
 Read the matching owners and run their applicable guards. The general repository route applies alongside a more specific route; a shared owner or unchanged-state guard needs only one current read or check.
+
+<!-- ew:route id="evidence-packs" triggers="src/ocr_toolkit/evidence/ecosystems/**|src/ocr_toolkit/evidence/collectors/**|src/ocr_toolkit/evidence/frameworks/**|src/ocr_toolkit/evidence/categorize.py|src/ocr_toolkit/evidence/container_paths.py|ecosystem evidence" owners="docs/development.md|docs/review-context.md|docs/engineering/toolkit_strategy.md" guards="test:tests/test_evidence_collectors.py|test:tests/test_evidence_framework_plugins.py|manual_review:compare source grammar scoped completeness immutable provenance and generic MCP handoffs" -->
+| `evidence-packs` | Ecosystem adapters, scoped facts and framework derivation | Development, context and strategy owners | Grammar, scope and real Git/store/MCP boundary evidence |
 
 <!-- ew:route id="ocr-qualification" triggers="scripts/ocr_compat.py|scripts/ocr_compat_history.py|scripts/ocr_qualification/**|compatibility/**|.github/workflows/ocr-compatibility.yml|OCR qualification" owners="docs/compatibility.md|docs/development.md" guards="test:tests/test_ocr_compat.py|test:tests/test_ocr_qualification_boundaries.py|test:tests/test_native_capabilities.py|manual_review:compare frozen readback live probes immutable asset identity and promotion consumers" -->
 | `ocr-qualification` | OCR contracts, qualification and promotion | Compatibility policy and qualification maintenance | Contract tests and actual candidate boundary evidence |

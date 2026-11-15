@@ -20,6 +20,23 @@ transport qualification; the shared provider transport suites own that boundary.
 Hostile v7 readback, stale identities and v5/v6 downgrade attempts are separate
 checks. New sizing, serializer and target owners each have a 90% branch-aware floor.
 
+## v0.15.0 static .NET and container evidence
+
+`test_evidence_dotnet.py` crosses real Git collection, central-version changes,
+project isolation, private persistence/readback and an actual stdio MCP child.
+It verifies source and range identities, distinct Web SDK/reference signals,
+framework-scoped locks and manifest/category recognition. Pure parser and provider
+tests exercise malformed/hostile XML/JSON, conditions, conflicts, overrides,
+imports, nested central files and construction/fact/project limits. Structural
+Hypothesis varies namespaces, attribute/child forms and escaped literal data.
+Each new parser/linker/provider has a 90% branch-aware floor. These checks prove
+static declarations and mechanical references, not an evaluated MSBuild build.
+
+The shared container grammar crosses category selection, production acquisition
+selection and FROM parsing for both naming directions, variants, case, platform
+arguments and stage aliases, with near-match negative controls. Existing ecosystem
+and framework suites preserve other project types through the same pipeline.
+
 ## Evidence classes
 
 - **Unit or policy:** pure parsing, normalization, ordering, rendering, validation, or orchestration. A replaced boundary owner limits the claim to wiring.

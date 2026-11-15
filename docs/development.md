@@ -519,6 +519,21 @@ Provider I/O and executable CLI claims require separate production-boundary test
 
 ## Extending ecosystem evidence
 
+The `.NET` pack lives under `ecosystems/dotnet/`: `xml.py` and `json.py` own
+bounded declaration parsing, and `linking.py` derives conservative central links
+from normalized records, immutable path names and source states. It imports no
+framework lifecycle or Git I/O. `ManifestParseResult.runtime_dependent` is the
+shared adapter signal for unsupported evaluation; orchestration preserves it as
+partial source coverage for any ecosystem. `ManifestFact.source_scoped` keeps
+source-local declaration identities separate across files and their deltas
+without a language-specific rule in core projection. The ASP.NET Core provider belongs to
+`frameworks/providers/dotnet.py`. The [current pack contract](review-context.md#static-net-evidence)
+owns supported inputs and non-claims.
+
+`container_paths.py` owns the common Dockerfile/Containerfile grammar used by
+categorization and infrastructure acquisition/parsing. File recognition does not
+alter generic confidentiality, policy or publication boundaries.
+
 Normalized source adapters live under `src/ocr_toolkit/evidence/ecosystems/`. Shared parser result contracts belong in `ecosystems/contracts.py`; Python, JavaScript, Go, and PHP package metadata each have one adapter module. Ansible keeps Galaxy requirements and topology/inventory analysis as separate modules under `ecosystems/ansible/`. These adapters consume text or already bounded metadata and return normalized facts: they do not own Git or filesystem reads, subprocesses, network access, framework derivation, persistence, or MCP lifecycle.
 
 The `evidence/collectors/` package is the bounded immutable acquisition boundary. `registry.py` owns path-to-adapter registration, `sources.py` owns small cross-ecosystem CI/container source projections, `graphs.py` owns local include-graph reads, `projections.py` owns record/coverage/delta projection, and `orchestration.py` coordinates one immutable ref. Pure helper modules must not import orchestration, persistence, MCP, or higher policy/framework lifecycles. The package `__init__.py` is the intentional runtime facade; do not recreate a flat compatibility module.

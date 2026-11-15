@@ -51,6 +51,33 @@ only committed records through fixed `context_list` and `context_get` tools on
 the mandatory internal MCP; neither tool has network, subprocess, arbitrary URL,
 arbitrary identifier, search, traversal, or write authority.
 
+## Static .NET evidence
+
+The `dotnet` pack uses the existing immutable collector, store and evidence MCP.
+It reads `*.csproj`, `*.fsproj`, `*.vbproj`, `Directory.Build.props/targets`,
+`Directory.Packages.props`, `packages.lock.json` and `global.json`. It retains SDK,
+TFM(s), language/nullable settings, package/framework declarations and conditions,
+central package declarations, framework-scoped direct/transitive lock versions,
+and declared SDK selection/roll-forward. It never reads `nuget.config`, evaluates
+MSBuild, follows imports, restores packages, builds or resolves dependencies online.
+
+These are declarations, not the evaluated build configuration. Conditional,
+expression-based, imported, updated or overridden values remain explicit and
+partial/runtime-dependent. Shared files retain their own provenance. The nearest
+canonical central file may supply a `dotnet.central_version` link only when its
+enablement and declaration are unambiguous and relevant project/build sources
+contain no unsupported evaluation. The link records both sources and explicitly
+does not assert an effective version. Missing, malformed, omitted, conflicting or
+noncanonical-case automatic-discovery inputs cannot prove that association.
+Nested central files and colocated projects remain separate scopes.
+
+The ASP.NET Core plugin distinguishes Web SDK, framework-reference and package-
+reference signals. Its component is the exact project path, and a TFM never becomes
+a resolved ASP.NET Core version. Lock-only data does not activate the framework.
+Facts, partial coverage and base/head deltas remain available through the same
+list/get/search MCP interface. Categorization of manifests and `.cs`/`.csx` is
+independent of which extensions the qualified native OCR actually reviews.
+
 ## Protected policy v4
 
 The toolkit reads only `.opencodereview/review-context-policy.json` from the
