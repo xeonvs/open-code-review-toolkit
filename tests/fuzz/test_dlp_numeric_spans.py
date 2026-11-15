@@ -75,10 +75,35 @@ def test_configured_protection_remains_independent_of_numeric_admission(number, 
     assert not check_text(text, budgets=BUDGETS, publication=True, forbidden=(protected,)).admitted
 
 
+@given(
+    st.sampled_from(["tel", "Phone no", "contact", "office_phone_number"]),
+    st.text(alphabet='.:#=\u2018\u2019"[({\t \u00a0\u3000', min_size=1, max_size=12),
+    ENCODING,
+)
+def test_label_punctuation_preserves_contact_priority(label, separator, encoding):
+    """Vary bounded punctuation independently of contact words and encoded views."""
+    value = encode(label + separator + "1234.567", encoding)
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
 @given(fraction(), st.sampled_from(["offset + ({})", '"prefix" + "{}"', "length(data) + ({})"]))
 def test_unrelated_addition_does_not_grant_contact_intent(number, wrapper):
     """Distinguish arithmetic and concatenation from a numeric telephone prefix."""
     assert check_text(wrapper.format(number), budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    fraction(),
+    st.sampled_from(
+        ["print(phone); {}", "phone(); {}", "[phone], {}", "phone != {}", "phone ? {} : other"]
+    ),
+    ENCODING,
+)
+def test_closed_expressions_and_operators_do_not_supply_contact_intent(number, wrapper, encoding):
+    """Keep label adjacency from crossing completed expressions and operator boundaries."""
+    assert check_text(
+        encode(wrapper.format(number), encoding), budgets=BUDGETS, publication=True
+    ).admitted
 
 
 @given(

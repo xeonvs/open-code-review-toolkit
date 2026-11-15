@@ -80,9 +80,9 @@ federation and publication DLP for that run, emits a prominent warning in the
 summary and Technical details, and makes automatic approval unreachable. It can
 expose sensitive content through service/model egress or GitLab publication, and
 the toolkit cannot retract prior egress or writes. Diagnose locally with
-`--preserve-private-artifacts` before using it. Invalid or empty values fail before
-OCR; non-DLP bounds, identity, evidence, cleanup and posting transaction gates
-remain active.
+`ocr-ci review --local --debug-dir PATH` before using it. Invalid values fail before
+OCR; unset, empty and whitespace-only values keep DLP enabled. Non-DLP bounds,
+identity, evidence, cleanup and posting transaction gates remain active.
 
 `OCR_MAX_TOKENS_BUDGET` can set an aggregate input-plus-output token ceiling for the OCR diff review. The default `0` is unlimited. A positive ceiling is approximate rather than a hard billing cutoff because already-running work may complete; when it stops further dispatch, completed findings remain publishable and unreviewed files stay explicit as budget-attributed failed coverage. Such a run is partial and cannot automatically approve.
 
@@ -221,7 +221,7 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 When required evidence use is not confirmed, the review is rejected before publication or automatic approval. The console emits `Review rejected:` with the stable reason `evidence-use-unconfirmed`, an explicitly reported zero or `unavailable`, and validated outcome/manifest coverage counts where present. A positive primary count with unconfirmed completed summary attribution uses `evidence-action-attribution-invalid`. Malformed telemetry remains a separate integrity error. These facts do not establish whether the model omitted a call or OCR omitted attribution; successful MCP preflight establishes readiness and never supplies model-use evidence.
 
-Safe rejection facts appear before result cleanup in local and CI execution. An advisory green job does not mean the review was accepted. Authorized `--preserve-private-artifacts` runs still enforce the evidence gate: bounded rejected JSON is retained in an owner-only private diagnostic envelope, with no successful receipt, report, or approval authority. Retention failure keeps the original rejection and removes the unsafe handoff. All retained diagnostic results carry `_ocr_toolkit_private_diagnostic`; posting refuses this marker even when no provider receipt is present. GitLab MR execution continues to reject private retention. Inspect retained material only locally and do not upload it as a public CI artifact.
+Safe rejection facts appear before result cleanup in local and CI execution. An advisory green job does not mean the review was accepted. Local `--debug-dir PATH` captures bounded raw diagnostics separately from any admitted result and report; it does not bypass evidence, DLP or result admission. Ephemeral evidence and native HOME are cleaned up even in debug mode. Debug files cannot authorize posting. The reader still refuses hostile historical private-diagnostic markers. Inspect the owner-only bundle locally and do not upload it as a public CI artifact.
 
 
 OCR's optional failed-tool `arguments` are validated only for type and bounds and
@@ -255,7 +255,7 @@ The `rate-or-spending-limit` job guidance keeps that intentionally broad reason 
 
 Raw provider/model identities, response bodies, error codes and messages, request IDs, paths, warnings, and stderr remain in owner-only private artifacts for a classified provider failure. Normal findings from the failed result are ignored, the previous successful review is preserved, and automatic approval is not attempted. Missing, oversized, malformed, or internally contradictory retry reports keep the generic job-local failure path instead of guessing a classification.
 
-For a local diagnosis, add `--preserve-private-artifacts` before the `--` separator. The command retains owner-only private review material and deliberately leaves no posting-eligible receipt. Inspect it locally before considering `OCR_DLP_ENABLED=false`, keep it out of commits and shared artifacts, and remove it afterward. The escape hatch can expose sensitive content through service/model egress, local Markdown or GitLab and cannot retract prior disclosure.
+For a local diagnosis, use `ocr-ci review --local --debug-dir PATH`, placing toolkit options before the `--` separator. The command captures bounded owner-only diagnostics; ordinary local review remains receipt-less. Inspect it locally before considering `OCR_DLP_ENABLED=false`, keep it out of commits and shared artifacts, and remove it afterward. The escape hatch can expose sensitive content through service/model egress, local Markdown or GitLab and cannot retract prior disclosure.
 
 The next admitted review in a checkout clears an earlier private status before
 runtime configuration validation, so an early failure cannot hand the previous

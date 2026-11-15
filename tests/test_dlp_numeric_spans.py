@@ -59,6 +59,11 @@ def test_technical_value_cannot_cover_independent_sensitive_material(
         "telephone: ",
         "office_phone: ",
         "phone no: ",
+        "tel. ",
+        "Tel.: ",
+        "Phone # ",
+        "Phone no. ",
+        "contact\uff1a\u2018",
     ],
 )
 @pytest.mark.parametrize("value", ["1234.567", "60 000.00", "25.10.2026", "22.03.2026 23:59"])
@@ -116,6 +121,15 @@ def test_long_decimal_cannot_hide_a_neighboring_phone(length: int) -> None:
         '"text" + "1114112"',
         "offset + (1234.567)",
         "phone версия: 1234.567",
+        "phone + (1234.567)",
+        "phone / (1234.567)",
+        "phone - (1234.567)",
+        "PhoneVersion: 1234.567",
+        "print(phone); 1234.567",
+        "phone(); 1234.567",
+        "[phone], 1234.567",
+        "phone != 1234.567",
+        "phone ? 1234.567 : fallback",
     ],
 )
 def test_unrelated_addition_is_not_a_phone_prefix(value: str) -> None:

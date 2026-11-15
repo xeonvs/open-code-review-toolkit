@@ -6,11 +6,11 @@ Participation in this project is governed by the [Code of Conduct](CODE_OF_CONDU
 
 1. Create a branch from `main`.
 2. Install the locked development environment with `uv sync --frozen`.
-3. Update `PLANS.md` for substantial work.
+3. Maintain `PLANS.md` using the [canonical planning workflow](docs/development.md#planning-and-documentation-lifecycle).
 4. Add a Towncrier fragment for user-visible changes.
 5. Run the checks in [docs/development.md](docs/development.md).
 6. Open a pull request; protected `main` accepts changes only through green pull requests.
 
-Every non-release merge publishes a development build for the current `.next-version` line to TestPyPI. Stable releases use a repository-owned `release/vX.Y.Z` branch and an exact `Release vX.Y.Z` pull-request title; merging that reviewed PR authorizes the automated TestPyPI, PyPI, and GitHub Release chain.
+Development publication follows the [release classification](docs/release.md): internal CI and test-only changes do not automatically publish artifacts. Stable releases use a repository-owned `release/vX.Y.Z` branch and an exact `Release vX.Y.Z` pull-request title; merging that reviewed PR authorizes the automated TestPyPI, PyPI, and GitHub Release chain.
 
 Do not include real credentials, provider payloads, internal hosts, or private repository details. Security reports should follow [SECURITY.md](SECURITY.md), while conduct incidents follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md); neither belongs in a public issue.

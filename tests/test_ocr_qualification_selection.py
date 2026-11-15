@@ -13,6 +13,7 @@ from tests.test_result_contract import manifest_result
 def excluded_result():
     """Build one selected file and a separate non-dispatched exclusion."""
     value = manifest_result("complete", selected=["selected"], completed=["selected"])
+    value["manifest"]["coverage"]["selected"][0]["path"] = "example.py"
     value["manifest"]["coverage"]["excluded"] = [
         {"item_id": "excluded", "path": "unknown.data", "exclude_reason": "unsupported_ext"}
     ]
@@ -26,6 +27,8 @@ def excluded_result():
         "missing",
         "duplicate",
         "overlap",
+        "path-overlap",
+        "missing-selected-path",
         "wrong-path",
         "wrong-reason",
         "fingerprint",
@@ -44,6 +47,10 @@ def test_exclusions_do_not_widen_or_repair_selected_coverage(excluded_result, de
         coverage["excluded"].append(dict(item))
     elif defect == "overlap":
         item["item_id"] = "selected"
+    elif defect == "path-overlap":
+        coverage["selected"][0]["path"] = item["path"]
+    elif defect == "missing-selected-path":
+        coverage["selected"][0].pop("path")
     elif defect == "wrong-path":
         item["path"] = "other.data"
     elif defect == "wrong-reason":
@@ -71,6 +78,14 @@ def test_live_promotion_requires_each_new_consumed_proof(field):
     value.pop(field)
     with pytest.raises(module.core.CompatibilityError, match=field):
         module.contracts._validate_contracts_for_version("1.13.9", value)
+
+
+def test_native_exclusions_keep_selected_effective_paths_disjoint(tmp_path, qualified_native_ocr):
+    """Cross the path/ID partition validator with an actual qualified native result."""
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
+    module = load_script()
+    observed = module.contracts.exclusions.exclusion_probe(Path(binary), tmp_path)
+    assert observed == module.contracts.exclusions.EXPECTED
 
 
 def test_later_round_must_retain_the_same_tool_declarations():

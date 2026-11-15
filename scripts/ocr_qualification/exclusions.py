@@ -37,6 +37,12 @@ def validate_exclusions(result: dict[str, Any], expected: dict[str, str]) -> Non
     observed: dict[str, str] = {}
     identities: set[str] = set()
     selected = {item["item_id"] for item in coverage["selected"]}
+    selected_paths: set[str] = set()
+    for item in coverage["selected"]:
+        path = item.get("path")
+        if not isinstance(path, str) or not path:
+            core._fail("exclusion probe lost selected path identity")
+        selected_paths.add(path)
     for item in excluded:
         if not isinstance(item, dict):
             core._fail("exclusion probe returned a malformed item")
@@ -49,6 +55,7 @@ def validate_exclusions(result: dict[str, Any], expected: dict[str, str]) -> Non
             or identity in identities
             or identity in selected
             or not isinstance(path, str)
+            or path in selected_paths
             or path in observed
             or expected.get(path) != reason
             or "fingerprint" in item

@@ -12,6 +12,37 @@ from ocr_toolkit.evidence.ecosystems.dotnet import (
 
 
 @pytest.mark.parametrize(
+    "identity", ["First;Second", "Microsoft%2EAspNetCore%2EApp", "First*", "First?"]
+)
+@pytest.mark.parametrize("element", ["PackageReference", "FrameworkReference", "PackageVersion"])
+def test_nonliteral_item_identity_retains_raw_value_and_requires_evaluation(identity, element):
+    """Keep unsupported MSBuild item semantics visible without a completeness claim."""
+    parsed = parse_msbuild(
+        f'<Project><ItemGroup><{element} Include="{identity}"/></ItemGroup></Project>'
+    )
+    item = next(
+        fact
+        for fact in parsed.facts
+        if fact.kind in {"dependency.declared", "dotnet.package_version"}
+    )
+    assert item.value["name"] == identity
+    assert parsed.runtime_dependent and parsed.notices
+
+
+def test_supported_sdk_and_framework_lists_remain_literal():
+    """Keep supported list-valued declarations distinct from unevaluated ItemSpecs."""
+    parsed = parse_msbuild(
+        '<Project Sdk="First.Sdk;Second.Sdk"><PropertyGroup>'
+        "<TargetFrameworks>net8.0;net9.0</TargetFrameworks></PropertyGroup></Project>"
+    )
+    assert not parsed.runtime_dependent
+    assert [fact.value["name"] for fact in parsed.facts if fact.kind == "dotnet.sdk"] == [
+        "First.Sdk",
+        "Second.Sdk",
+    ]
+
+
+@pytest.mark.parametrize(
     "body",
     [
         "<Project>" + "<ItemGroup>" * 32 + "</ItemGroup>" * 32 + "</Project>",

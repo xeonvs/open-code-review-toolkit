@@ -130,7 +130,18 @@ _TECHNICAL_BLOCK = re.compile(
 def _explicit_context(value: str, start: int) -> bool:
     """Bind a numeric candidate to an adjacent contact label, excluding unrelated operators."""
     cursor = start
-    while cursor and value[cursor - 1] in " \t'\"=:[{(":
+    while cursor:
+        char = value[cursor - 1]
+        # Human label punctuation is independent of programming-language syntax.
+        # Operators, statement separators and closed expressions terminate label
+        # adjacency; assignment remains a supported label/value separator.
+        category = unicodedata.category(char)
+        if (
+            char in "+-/*%&\\!,;?"
+            or category == "Pe"
+            or not (char in "\t=" or category.startswith("P") or category == "Zs")
+        ):
+            break
         cursor -= 1
     return _contact_context(value[max(0, cursor - 64) : cursor])
 

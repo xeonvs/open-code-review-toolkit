@@ -63,7 +63,9 @@ MSBuild, follows imports, restores packages, builds or resolves dependencies onl
 
 These are declarations, not the evaluated build configuration. Conditional,
 expression-based, imported, updated or overridden values remain explicit and
-partial/runtime-dependent. Shared files retain their own provenance. The nearest
+partial/runtime-dependent. Percent-escaped values and list/wildcard item identities
+retain their raw spelling without MSBuild evaluation; supported SDK and TFM lists
+remain separate declarations. Shared files retain their own provenance. The nearest
 canonical central file may supply a `dotnet.central_version` link only when its
 enablement and declaration are unambiguous and relevant project/build sources
 contain no unsupported evaluation. The link records both sources and explicitly
@@ -195,7 +197,7 @@ Historical v3 aggregates do not establish this public/private split.
 federation and publication DLP for that run, adds a prominent local/GitLab warning,
 and always blocks automatic approval. Sensitive data may leave through service
 egress, local Markdown, or GitLab publication, and enabling DLP later cannot
-retract it. Use local `--preserve-private-artifacts` diagnosis before considering
+retract it. Use local `ocr-ci review --local --debug-dir PATH` diagnosis before considering
 this setting; non-DLP schema, size, origin, identity, cleanup, evidence and posting
 transaction gates remain enforced.
 

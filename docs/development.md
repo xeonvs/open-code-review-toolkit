@@ -212,14 +212,14 @@ When auditing session efficiency, distinguish tool-call counts, output volume, c
 
 For a PR-only task, finish the scoped local checks, review security-relevant changes and run the pinned secret gate before push, create the PR, and read its initial check state once. Report pending CI honestly. Wait for completion when merge, release, CI repair, or explicit monitoring is part of the task; otherwise PR creation is the handoff boundary. When waiting is needed, keep repeated watch output in the execution layer and return only meaningful changes or the terminal result.
 
-Wait for a long-running local command through one completion-driven waiter when the execution environment exposes a persistent process or session identity. The waiter stays attached until exit, cancellation, or the command's overall deadline and returns as soon as that terminal state occurs. Internal infrastructure waits must not yield periodic empty observations back to the model: repeated model-driven `status`, terminal, or process polls add tool results and task history without changing a decision. The waiter is a completion signal, never the only copy of command output or a required result: its transport or model-facing output can be truncated, discarded after completion, or lost with the session.
+Wait for a long-running local command through one completion-driven waiter when the execution environment exposes a persistent process or session identity. Use its native exit status and standard streams as ordinary completion evidence. Keep unchanged watch output in the execution layer. Preserve a private log or result only when output truncation, detachment/recovery, diagnosis or a required acceptance artifact makes durable output necessary.
 
 Keep the wait bounded and diagnosable:
 
 - assign an overall command deadline and preserve a cancellation path; terminate and clean up owned child processes when either is reached;
-- before starting the process, choose explicit ignored owner-only paths outside any transient directory that the command cleans up, remove or reject stale owned artifacts, and have the process atomically publish every result required for later validation;
-- redirect potentially large stdout and stderr to ignored private files and preserve them until their focused inspection is complete; return from the waiter only the exit status, elapsed time, artifact paths, digests, and a bounded diagnostic tail or structured summary;
-- validate the persisted artifact's type, ownership/permissions, size, completion marker or exact schema, and digest before trusting it; a missing or invalid artifact is a failed/inconclusive run, not permission to reconstruct the result from a truncated waiter transcript;
+- when durable output is needed, choose ignored owner-only paths outside directories the command cleans up, reject stale results, and preserve the command's exit status;
+- reduce large results before sending them to the model; report the terminal status, relevant diagnostics and any required artifact location;
+- validate required artifacts according to their existing consumer contract; a missing or invalid required artifact makes the run inconclusive, while routine commands need no extra receipt, digest or completion-marker protocol;
 - retain enough process or session identity to distinguish completion from a lost waiter, but do not expose credentials, inherited environment, unbounded logs, or result bodies through the waiter;
 - let the outer wait return immediately on process completion even when its maximum deadline is much longer; and
 - inspect full logs only after a concrete failure makes a focused range relevant.

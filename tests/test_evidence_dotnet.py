@@ -61,6 +61,10 @@ from ocr_toolkit.evidence.store import EvidenceStore
         ),
         (
             "Directory.Packages.props",
+            '<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><PackageVersion Include="Example.Package" Version="1.0"/><PackageVersion Include="%45xample.Package" Version="2.0"/></ItemGroup></Project>',
+        ),
+        (
+            "Directory.Packages.props",
             '<Project><ItemGroup><PackageVersion Include="Example.Package" Version="1.0"/></ItemGroup></Project>',
         ),
         (
@@ -82,6 +86,36 @@ def test_unproven_central_version_is_never_effective(
     assert not any(
         record.kind == "dotnet.central_version" and record.ref is RefRole.HEAD
         for record in store.records
+    )
+
+
+@pytest.mark.parametrize(
+    "identity", ["Microsoft.AspNetCore.App;Other.Framework", "Microsoft%2EAspNetCore%2EApp"]
+)
+def test_unevaluated_framework_identity_prevents_absence_claim(
+    dotnet_repo: Path, identity: str
+) -> None:
+    """Propagate raw ItemSpec uncertainty through actual acquisition and framework coverage."""
+    write(
+        dotnet_repo,
+        "src/web.csproj",
+        f'<Project><ItemGroup><FrameworkReference Include="{identity}"/></ItemGroup></Project>',
+    )
+    base = commit(dotnet_repo)
+    write(dotnet_repo, "README.md", "synthetic change")
+    head = commit(dotnet_repo)
+    store = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=head)
+    assert any(
+        record.kind == "dependency.declared"
+        and record.ref is RefRole.HEAD
+        and fact_value(record).get("name") == identity
+        for record in store.records
+    )
+    assert any(
+        coverage.component == "src/web.csproj"
+        and coverage.domain == "framework.declaration"
+        and coverage.state.value in {"partial", "runtime-dependent", "unavailable"}
+        for coverage in store.coverage
     )
 
 
@@ -385,3 +419,43 @@ def test_real_git_central_link_framework_delta_readback_and_mcp(dotnet_repo: Pat
     assert not response["result"].get("isError"), response
     assert "2.0.0" in response["result"]["content"][0]["text"]
     assert peer.stderr == ""
+
+
+def test_large_dotnet_snapshot_keeps_atomic_files_when_optional_kinds_truncate(
+    dotnet_repo: Path,
+) -> None:
+    """Cross structural growth, .NET facts, typed limits and canonical delta/readback together."""
+    projects = {f"projects/app{index:03}.csproj" for index in range(270)}
+    for framework in ("net8.0", "net9.0"):
+        for path in projects:
+            write(
+                dotnet_repo,
+                path,
+                f'<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>{framework}</TargetFramework></PropertyGroup></Project>',
+            )
+        revision = commit(dotnet_repo)
+        if framework == "net8.0":
+            base = revision
+    store = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=revision)
+    head_files = {
+        record.source_path
+        for record in store.records
+        if record.kind == "repository.file" and record.ref is RefRole.HEAD
+    }
+    assert head_files == projects
+    assert any("typed dotnet.sdk" in diagnostic for diagnostic in store.diagnostics)
+    assert not any(delta.kind == "dotnet.sdk" for delta in store.deltas)
+    target = dotnet_repo / "private" / "store.json"
+    store.write(target)
+    restored = EvidenceStore.read(target)
+    encoded = json.loads(target.read_text())
+    assert len(encoded["snapshots"]["head"]["record_ids"]) == len(projects)
+    assert set(encoded["snapshots"]["head"]["record_ids"]) <= {
+        record.id for record in restored.records
+    }
+    assert any(
+        coverage.component in projects
+        and coverage.domain == "framework.declaration"
+        and coverage.state.value == "partial"
+        for coverage in restored.coverage
+    )

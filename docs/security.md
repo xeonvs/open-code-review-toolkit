@@ -554,7 +554,8 @@ projects supply neither executable code nor exclusion policy to the audit.
   `suggestion_code`. HTML-like syntax in those fields additionally requires
   exact immutable reviewed-head source proof and safe code rendering. All
   other sensitive-data checks still run on the original text; unproved code
-  and prose retain the HTML restriction.
+  retains the literal-code HTML restriction. Prose uses the shared inert HTML
+  and comment projection after original-material checks.
 - The mandatory evidence MCP requires reconciled attempted/completed action
   accounting and a completed summary. Federation cannot satisfy or replace it.
 - Built-in evidence search reads only the already DLP-admitted store and exposes

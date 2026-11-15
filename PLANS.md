@@ -185,7 +185,7 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-04 | Numeric span/date corrections and initial authenticated paired audits accepted; final resource/repeat comparison remains at WQ-07 | REQ-007, REQ-008, REQ-013 | done |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | in_progress |
 | WQ-06 | Shared local diagnostics, actual concurrency guidance, opt-in label, future-only roadmap/backlog and canonical documentation accepted locally | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | done |
-| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | pending |
+| WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | in_progress |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
 | WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins, archive/reset and active roadmap/BL-010 pointer closure; protected merge | REQ-016 | pending |
 | WQ-10 | Stable external readback, CI-owned issue/milestone closure, site, local OCR update, synchronized main and cleanup | REQ-010, REQ-017, REQ-018 | pending |
@@ -445,9 +445,13 @@ WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
 purpose-focused descriptions are committed as a7004e2.
 The numeric slice is committed as 0d16bab and OCR qualification as a759d51.
 Unified diagnostics are committed as bdbaa34 after scoped CLI/auth boundaries.
-Concurrency/label guidance and future-only roadmap/backlog cleanup passed focused
-validation. Commit the reviewed slice, then aggregate self-review, one Security
-scan, own-tool review and final runtime/installed/corpus gates. WQ-05's final
+Concurrency/label guidance and future-only roadmap/backlog cleanup are committed
+as 5e46d49. Independent aggregate review identified contact-label punctuation,
+selected/excluded path overlap and unevaluated MSBuild item/escape semantics;
+correct them with production handoff and property regressions. Current-document
+audit also found stale debug migration, policy identity and process guidance;
+reconcile the canonical owners without rewriting history. Then perform one
+Security scan, own-tool review and final runtime/installed/corpus gates. WQ-05's final
 Linux TLS/strong-grace and hosted reconciliation remain explicit hard gates.
 Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.

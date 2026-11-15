@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from xml.parsers import expat
 
@@ -17,6 +18,7 @@ MAX_DEPTH = 32
 MAX_ELEMENTS = 4_096
 MAX_ATTRIBUTES = 32
 MAX_SCALAR = 4_096
+_MSBUILD_ESCAPE = re.compile(r"%[0-9a-fA-F]{2}")
 PROPERTIES = {
     "targetframework",
     "targetframeworks",
@@ -177,6 +179,8 @@ def parse_msbuild(text: str) -> ManifestParseResult:
             for marker in ("$(", "@(", "%(")
         ):
             reasons.add("expressions")
+        if any(_MSBUILD_ESCAPE.search(value) for value in (node.text, *node.attributes.values())):
+            reasons.add("escaped-values")
         common: dict[str, EvidenceValue] = {
             "conditions": list(conditions),
             "version_state": "declared",
@@ -218,6 +222,10 @@ def parse_msbuild(text: str) -> ManifestParseResult:
             if not package:
                 reasons.add("missing-item-identity")
             else:
+                # Include lists and wildcard ItemSpecs require MSBuild evaluation.
+                # Retain their raw spelling without claiming a complete identity.
+                if any(marker in package for marker in ";*?"):
+                    reasons.add("item-evaluation")
                 add(
                     "dotnet.package_version" if name == "packageversion" else "dependency.declared",
                     f"{location}:{name}:{package.casefold()}",

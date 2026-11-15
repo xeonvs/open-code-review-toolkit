@@ -53,3 +53,17 @@ def test_escaped_literal_text_is_not_reinterpreted_as_markup(name: str, value: s
     )
     fact = next(fact for fact in result.facts if fact.kind == "dotnet.property")
     assert fact.value["value"] == value.strip()
+
+
+@given(
+    st.integers(0, 255),
+    st.sampled_from(["PackageReference", "FrameworkReference", "PackageVersion"]),
+)
+def test_msbuild_escaped_item_names_never_claim_literal_completeness(code, element):
+    """Retain every percent escape as raw data without inventing evaluated identity."""
+    name = f"Example%{code:02X}.Item"
+    result = parse_msbuild(
+        f'<Project><ItemGroup><{element} Include="{name}"/></ItemGroup></Project>'
+    )
+    assert result.runtime_dependent
+    assert any(fact.value.get("name") == name for fact in result.facts)
