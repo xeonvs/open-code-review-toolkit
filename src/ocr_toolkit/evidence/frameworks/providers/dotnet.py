@@ -18,6 +18,8 @@ from ocr_toolkit.evidence.model import CoverageState, EvidenceValue
 
 @dataclass(frozen=True, slots=True)
 class AspNetCorePlugin:
+    """Project static ASP.NET Core signals with independent resolution coverage."""
+
     plugin_id: str = "aspnet-core"
 
     def collect(self, context: FrameworkPluginContext) -> FrameworkPluginResult:

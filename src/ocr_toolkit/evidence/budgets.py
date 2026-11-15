@@ -22,6 +22,7 @@ class EvidenceBudgetExceeded(ValueError):
     """Carry only validated numeric resource facts, never source content."""
 
     def __init__(self, actual: int, limit: int, unit: str, *, message: str | None = None) -> None:
+        """Bind a closed hard-limit diagnostic to validated numeric facts and a resource unit."""
         if (
             type(actual) is not int
             or type(limit) is not int

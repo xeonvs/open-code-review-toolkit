@@ -23,11 +23,13 @@ from tests.test_evidence_repository import git
 
 
 def _record(kind: str, value: str, path: str) -> EvidenceRecord:
+    """Build a complete synthetic structural record with immutable provenance."""
     return EvidenceRecord(kind, value, path, RefRole.HEAD, "a" * 40)
 
 
 @pytest.mark.parametrize("count", [255, 256, 257, 260, 413, 513, 1000])
 def test_complete_large_snapshot_survives_real_store_and_mcp(tmp_path: Path, count: int) -> None:
+    """Cross Git, persistence and paginated MCP with a complete large snapshot."""
     git(tmp_path, "init", "-q")
     for index in range(count):
         (tmp_path / f"file-{index:04}.txt").write_text("base\n")
@@ -73,6 +75,7 @@ def test_complete_large_snapshot_survives_real_store_and_mcp(tmp_path: Path, cou
 
 
 def test_target_never_borrows_reserved_late_invocation_records():
+    """Protect invocation headroom from optional target records."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_records=10, max_records_per_kind=10),
         target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()),
@@ -88,6 +91,7 @@ def test_target_never_borrows_reserved_late_invocation_records():
 
 
 def test_target_does_not_borrow_structural_capacity_for_dependency_kind():
+    """Keep structural per-kind growth separate from optional dependency capacity."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_records=2000, max_records_per_kind=1500),
         target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()),
@@ -99,6 +103,7 @@ def test_target_does_not_borrow_structural_capacity_for_dependency_kind():
 
 
 def test_large_structural_budget_keeps_bounded_target_file_room():
+    """Reserve bounded optional target capacity beside a large structural snapshot."""
     counts = {"repository.file": 2000, "repository.change_category": 1000}
     budget = structural_budget(counts, 0, include_target=True)
     assert budget.max_records_per_kind == 2064
@@ -126,6 +131,7 @@ def test_large_structural_budget_keeps_bounded_target_file_room():
 
 
 def test_structural_capacity_never_expands_optional_per_kind_budget() -> None:
+    """Keep typed fact admission capped independently of structural file growth."""
     store = EvidenceStore(EvidenceStoreLimits(max_records=10000, max_records_per_kind=5000))
     for index in range(512):
         assert store.add_optional(
@@ -152,6 +158,7 @@ def test_structural_capacity_never_expands_optional_per_kind_budget() -> None:
 
 
 def test_optional_pool_exhaustion_does_not_consume_structural_capacity() -> None:
+    """Preserve structural admission when optional typed capacity is exhausted."""
     store = EvidenceStore(optional_records=1)
     record = _record("runtime.declared", "one", "one")
     assert store.add_optional(record)
@@ -162,6 +169,7 @@ def test_optional_pool_exhaustion_does_not_consume_structural_capacity() -> None
 
 
 def test_structural_budget_reserves_late_facts_at_absolute_record_ceiling() -> None:
+    """Retain late invocation headroom at the absolute record limit."""
     budget = structural_budget(
         {"repository.file": MAX_EVIDENCE_RECORDS - INVOCATION_RECORD_RESERVE}, 0
     )
@@ -176,6 +184,7 @@ def test_structural_budget_reserves_late_facts_at_absolute_record_ceiling() -> N
     "counts,coverage", [({"file": True}, 0), ({"file": -1}, 0), ({}, True), ({}, -1)]
 )
 def test_invalid_structural_counts_have_no_budget_claim(counts, coverage) -> None:
+    """Reject invalid sizing inputs before computing structural capacity."""
     with pytest.raises(ValueError, match="invalid structural"):
         structural_budget(counts, coverage)
 
@@ -185,12 +194,14 @@ def test_invalid_structural_counts_have_no_budget_claim(counts, coverage) -> Non
     [(True, 1, "bytes"), (2, True, "bytes"), (1, 1, "bytes"), (2, 0, "records"), (2, 1, "paths")],
 )
 def test_invalid_budget_exception_facts_are_rejected(actual, limit, unit) -> None:
+    """Keep resource diagnostics numeric, ordered and restricted to supported units."""
     with pytest.raises(ValueError, match="invalid evidence budget"):
         EvidenceBudgetExceeded(actual, limit, unit)
 
 
 @pytest.mark.parametrize("scope", ["tree", "diff"])
 def test_entry_overflow_is_typed_and_keeps_actual_reader_limit(tmp_path: Path, scope: str) -> None:
+    """Preserve the exact tree or changed-path ceiling in reader failures."""
     git(tmp_path, "init", "-q")
     for name in ("a", "b", "c"):
         (tmp_path / name).write_text(name)
@@ -210,6 +221,7 @@ def test_entry_overflow_is_typed_and_keeps_actual_reader_limit(tmp_path: Path, s
 
 
 def test_streamed_byte_overflow_preserves_the_previous_private_file(tmp_path: Path) -> None:
+    """Keep an existing private store intact when bounded serialization fails."""
     target = tmp_path / "store.json"
     target.write_text("old state")
     store = EvidenceStore(EvidenceStoreLimits(max_bytes=1024))
@@ -224,6 +236,7 @@ def test_streamed_byte_overflow_preserves_the_previous_private_file(tmp_path: Pa
 
 
 def test_byte_reserve_is_consumed_only_after_runner_releases_it() -> None:
+    """Protect late byte headroom until orchestration explicitly releases it."""
     store = EvidenceStore(EvidenceStoreLimits(max_bytes=2048), reserved_bytes=1500)
     assert store.add(_record("repository.manifest", "x" * 400, "manifest"))
     with pytest.raises(EvidenceBudgetExceeded):
@@ -233,6 +246,7 @@ def test_byte_reserve_is_consumed_only_after_runner_releases_it() -> None:
 
 
 def _target_record(index: int, value="bounded") -> EvidenceRecord:
+    """Build a target-owned record bound to an immutable actual-target revision."""
     return EvidenceRecord(
         "dependency.declared",
         value,
@@ -245,11 +259,13 @@ def _target_record(index: int, value="bounded") -> EvidenceRecord:
 
 @pytest.mark.parametrize("count", [1, 8, 64])
 def test_target_batch_checks_canonical_store_only_twice(tmp_path, monkeypatch, count):
+    """Verify target batches avoid per-record whole-store serialization."""
     store = EvidenceStore(target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()))
     calls = []
     original = EvidenceStore.to_json
 
     def observe(self):
+        """Count real canonical serialization calls while preserving their behavior."""
         calls.append(len(self.records))
         return original(self)
 
@@ -266,6 +282,7 @@ def test_target_batch_checks_canonical_store_only_twice(tmp_path, monkeypatch, c
 
 @pytest.mark.parametrize("case", ["missing", "role", "sha", "count"])
 def test_target_batch_rejects_invalid_input_before_any_admission(case):
+    """Reject malformed target batches before modifying shared store state."""
     store = EvidenceStore(target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()))
     records = (_target_record(0),)
     if case == "missing":
@@ -284,6 +301,7 @@ def test_target_batch_rejects_invalid_input_before_any_admission(case):
 
 
 def test_target_rejection_and_byte_limit_leave_consistent_indexes(tmp_path):
+    """Preserve coherent records and indexes after target admission fails."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_bytes=2048), target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ())
     )
@@ -296,6 +314,7 @@ def test_target_rejection_and_byte_limit_leave_consistent_indexes(tmp_path):
 
 
 def test_target_oversized_value_rejection_retains_bounded_diagnostic():
+    """Keep a useful bounded diagnostic when an optional target value is rejected."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_value_chars=8),
         target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()),
@@ -306,6 +325,7 @@ def test_target_oversized_value_rejection_retains_bounded_diagnostic():
 
 
 def test_target_final_byte_guard_rolls_back_an_underestimated_batch(monkeypatch):
+    """Roll back target additions if the final canonical size check fails."""
     from ocr_toolkit.evidence.store import target
 
     store = EvidenceStore(
@@ -319,6 +339,7 @@ def test_target_final_byte_guard_rolls_back_an_underestimated_batch(monkeypatch)
 
 
 def test_target_never_hides_a_preexisting_mandatory_byte_failure():
+    """Propagate mandatory-store failure before considering optional target degradation."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_bytes=1024), target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ())
     )
@@ -329,6 +350,7 @@ def test_target_never_hides_a_preexisting_mandatory_byte_failure():
 
 
 def test_target_diagnostic_cannot_displace_prior_valid_state():
+    """Prevent optional omission diagnostics from consuming protected prior capacity."""
     store = EvidenceStore(
         EvidenceStoreLimits(max_bytes=1024, max_value_chars=8),
         target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()),
@@ -341,6 +363,7 @@ def test_target_diagnostic_cannot_displace_prior_valid_state():
 
 
 def test_target_redacted_duplicates_share_one_canonical_index(monkeypatch):
+    """Deduplicate equivalent redacted target records before consuming admission budget."""
     monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-first-value")
     monkeypatch.setenv("GITLAB_API_TOKEN", "synthetic-second-value")
     store = EvidenceStore(target=EvidenceSnapshot(RefRole.TARGET, "b" * 40, ()))
@@ -364,5 +387,6 @@ def test_target_redacted_duplicates_share_one_canonical_index(monkeypatch):
     ],
 )
 def test_invalid_runtime_reserves_cannot_disable_bounding(kwargs):
+    """Reject invalid runtime reserves rather than silently disabling headroom controls."""
     with pytest.raises(EvidenceStoreError, match="reserve"):
         EvidenceStore(**kwargs)

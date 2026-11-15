@@ -23,6 +23,7 @@ from tests.test_evidence_model import coverage, record
 
 @given(st.text(alphabet='safe é漢😀"\\\n', max_size=1500), st.integers(1024, 4096))
 def test_streaming_store_uses_exact_canonical_utf8_budget_and_atomic_failure(value, byte_limit):
+    """Compare bounded streaming output with canonical JSON and preserve prior files on failure."""
     store = EvidenceStore(EvidenceStoreLimits(max_bytes=byte_limit))
     assert store.add(record(value))
     expected = (

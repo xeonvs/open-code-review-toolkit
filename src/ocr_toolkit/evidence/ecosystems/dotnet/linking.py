@@ -21,6 +21,7 @@ def fact_value(record: EvidenceRecord) -> Mapping[str, EvidenceValue]:
 
 
 def project_path(path: str) -> bool:
+    """Identify project manifests without granting native review or build authority."""
     return PurePosixPath(path).suffix.casefold() in PROJECT_SUFFIXES
 
 
@@ -47,6 +48,7 @@ def central_links(
             grouped.setdefault(record.source_path, []).append(record)
 
     def safe(path: str) -> bool:
+        """Require a complete source with no unsupported evaluation before deriving a link."""
         sources = [record for record in grouped.get(path, ()) if record.kind == "dotnet.source"]
         return (
             source_states.get(path) == "complete"
@@ -55,6 +57,7 @@ def central_links(
         )
 
     def settings(path: str) -> list[EvidenceValue]:
+        """Read explicit central-management settings separately for each source path."""
         return [
             fact_value(record).get("value")
             for record in grouped.get(path, ())

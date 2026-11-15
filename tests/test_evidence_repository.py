@@ -412,6 +412,7 @@ def test_collection_continues_after_a_real_per_kind_store_limit(
         """Use a small genuine per-kind budget through the production store."""
 
         def __init__(self, **kwargs: object) -> None:
+            """Apply the controlled fixture ceiling after adaptive production limits are supplied."""
             kwargs.pop("limits", None)
             kwargs["reserved_bytes"] = 0
             super().__init__(

@@ -17,6 +17,7 @@ from ocr_toolkit.evidence.model import EvidenceRecord, RefRole
 
 
 def context(projects: tuple[str, ...], declarations: int = 1) -> FrameworkPluginContext:
+    """Build immutable provider inputs without replacing the provider under test."""
     records = tuple(
         EvidenceRecord(
             "dotnet.sdk",
@@ -48,6 +49,7 @@ def context(projects: tuple[str, ...], declarations: int = 1) -> FrameworkPlugin
 
 
 def test_framework_provider_bounds_projects_and_keeps_partial_coverage() -> None:
+    """Bound project/fact expansion and preserve explicit incomplete coverage."""
     selected = context(tuple(f"project{i:04}.csproj" for i in range(513)))
     result = ASPNET_CORE_PLUGIN.collect(selected)
     assert len(result.facts) == 256 and len(result.coverage) <= 1024
@@ -62,6 +64,7 @@ def test_framework_provider_bounds_projects_and_keeps_partial_coverage() -> None
 
 
 def test_framework_provider_bounds_declarations_and_long_paths() -> None:
+    """Keep one oversized declaration or path from invalidating other project evidence."""
     selected = context(("web.csproj",), 129)
     result = ASPNET_CORE_PLUGIN.collect(selected)
     assert len(result.facts[0].value["declarations"]) == 128
@@ -90,6 +93,7 @@ def test_framework_provider_bounds_declarations_and_long_paths() -> None:
 
 
 def test_unknown_attributes_missing_items_and_child_sdk_are_explicit() -> None:
+    """Preserve unsupported XML semantics and conditional metadata as partial evidence."""
     result = parse_msbuild("""<Project InitialTargets="custom"><Sdk Name="Microsoft.NET.Sdk.Web" Version="9.0"/>
 <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup>
 <PackageReference/><PackageReference Include="P"><Version Condition="flag">1.0</Version></PackageReference>
@@ -109,6 +113,7 @@ def test_unknown_attributes_missing_items_and_child_sdk_are_explicit() -> None:
 
 
 def test_framework_unknown_value_does_not_turn_into_a_detection() -> None:
+    """Avoid inventing a framework signal from a malformed declaration value."""
     selected = context(("web.csproj",))
     missing = replace(selected.records[0], value={"identity": "x", "fact": {}})
     result = ASPNET_CORE_PLUGIN.collect(replace(selected, records=(missing,)))
@@ -117,6 +122,7 @@ def test_framework_unknown_value_does_not_turn_into_a_detection() -> None:
 
 
 def test_central_link_budget_is_explicit_and_a_missing_version_is_not_linked() -> None:
+    """Make central-link truncation visible and refuse absent version evidence."""
     records = []
     for path, text in {
         "web.csproj": "<Project><ItemGroup>"
@@ -162,6 +168,7 @@ def test_central_link_budget_is_explicit_and_a_missing_version_is_not_linked() -
 
 
 def test_source_adapters_do_not_import_execution_or_higher_lifecycle_owners() -> None:
+    """Enforce the pure source-adapter dependency and execution boundary."""
     directory = Path(__file__).parents[1] / "src/ocr_toolkit/evidence/ecosystems/dotnet"
     for source in directory.glob("*.py"):
         tree = ast.parse(source.read_text())
@@ -199,6 +206,7 @@ def test_source_adapters_do_not_import_execution_or_higher_lifecycle_owners() ->
     ],
 )
 def test_invalid_xml_placement_cannot_prove_static_evaluation(xml: str) -> None:
+    """Refuse static inclusion claims from structurally misplaced declarations."""
     result = parse_msbuild(xml)
     assert result.runtime_dependent
     source = next(fact for fact in result.facts if fact.kind == "dotnet.source")
@@ -206,6 +214,7 @@ def test_invalid_xml_placement_cannot_prove_static_evaluation(xml: str) -> None:
 
 
 def test_unknown_namespace_and_invalid_signal_do_not_suppress_other_projects() -> None:
+    """Isolate unsupported XML and malformed framework signals by project."""
     result = parse_msbuild(
         '<Project xmlns="urn:unqualified"><PropertyGroup><Nullable>enable</Nullable></PropertyGroup></Project>'
     )

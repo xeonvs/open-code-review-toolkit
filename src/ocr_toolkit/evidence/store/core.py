@@ -71,6 +71,7 @@ class EvidenceStore:
     _optional_count: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        """Validate runtime headroom independently of persisted store limits."""
         if (
             type(self.optional_records) is not int
             or not 0 <= self.optional_records <= OPTIONAL_RECORDS

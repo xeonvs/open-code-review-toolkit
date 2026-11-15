@@ -21,6 +21,7 @@ from tests.test_pre_execution_status import BASE, SOURCE, private_directory, rev
 
 
 def budget_status():
+    """Build one valid closed hard-budget status for hostile-readback tests."""
     return replace(
         status(),
         schema_version=EVIDENCE_BUDGET_STATUS_SCHEMA,
@@ -38,6 +39,7 @@ def budget_status():
 def test_private_v7_roundtrip_and_existing_review_identity(
     tmp_path: Path, unit, actual, limit
 ) -> None:
+    """Round-trip v7 diagnostics without changing the embedded immutable review identity."""
     value = replace(budget_status(), unit=unit, actual=actual, limit=limit)
     path = private_directory(tmp_path) / "status.json"
     write_pre_execution_status(path, value)
@@ -79,6 +81,7 @@ def test_private_v7_roundtrip_and_existing_review_identity(
     ],
 )
 def test_hostile_v7_cannot_gain_valid_status_or_downgrade(tmp_path: Path, field, value) -> None:
+    """Reject hostile budget fields and unsupported schema reinterpretation."""
     path = private_directory(tmp_path) / "status.json"
     write_pre_execution_status(path, budget_status())
     payload = json.loads(path.read_text())
@@ -89,6 +92,7 @@ def test_hostile_v7_cannot_gain_valid_status_or_downgrade(tmp_path: Path, field,
 
 
 def test_v7_stale_source_never_passes_hostile_readback(tmp_path: Path) -> None:
+    """Keep a budget status bound to the expected immutable source identity."""
     path = private_directory(tmp_path) / "status.json"
     write_pre_execution_status(path, budget_status())
     with pytest.raises(PreExecutionStatusError, match="identity does not match"):
@@ -96,6 +100,7 @@ def test_v7_stale_source_never_passes_hostile_readback(tmp_path: Path) -> None:
 
 
 def test_v7_limits_cannot_exceed_their_resource_ceiling(tmp_path: Path) -> None:
+    """Reject diagnostic claims exceeding the actual resource ceiling."""
     value = replace(budget_status(), actual=200001, limit=200000)
     with pytest.raises(PreExecutionStatusError, match="evidence budget"):
         write_pre_execution_status(private_directory(tmp_path) / "status.json", value)
@@ -105,6 +110,7 @@ def test_v7_limits_cannot_exceed_their_resource_ceiling(tmp_path: Path) -> None:
 def test_cli_real_git_budget_failure_never_starts_native_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, local: bool
 ) -> None:
+    """Cross real Git collection and prove a hard budget stops before OCR execution."""
     from ocr_toolkit import cli, review_runner
     from ocr_toolkit.evidence import budgets
     from ocr_toolkit.evidence.artifacts import repository_artifacts
@@ -186,6 +192,7 @@ def test_cli_real_git_budget_failure_never_starts_native_review(
 def test_budget_note_uses_real_git_freshness_and_preserves_previous_review(
     tmp_path, monkeypatch, drift
 ):
+    """Publish only fresh safe diagnostics while preserving prior findings and approval state."""
     from dataclasses import asdict
 
     from ocr_toolkit.posting import workflow

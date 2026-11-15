@@ -87,6 +87,7 @@ def _sha(value: str) -> bool:
 
 
 def _validate(status: PreExecutionStatus) -> None:
+    """Check versioned pre-execution identities and closed diagnostic payloads."""
     if status.schema_version not in {
         STATUS_SCHEMA,
         GITLINK_STATUS_SCHEMA,

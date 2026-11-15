@@ -28,6 +28,8 @@ PROPERTIES = {
 
 @dataclass(slots=True)
 class _Element:
+    """Retain inert XML declaration data within the parser's construction budgets."""
+
     name: str
     attributes: dict[str, str]
     namespace: str = ""
@@ -43,6 +45,7 @@ def bounded_text(text: str) -> None:
 
 
 def _tree(text: str) -> _Element:
+    """Build a bounded Project tree while refusing entity expansion and external resolution."""
     bounded_text(text)
     parser = expat.ParserCreate(namespace_separator="}")
     stack: list[_Element] = []
@@ -51,9 +54,11 @@ def _tree(text: str) -> _Element:
     pending_namespaces = 0
 
     def forbidden(*args: object) -> None:
+        """Stop resource-bearing XML features before expansion or external access."""
         raise ValueError("DTD and entities are prohibited in .NET evidence")
 
     def namespace(prefix: str | None, uri: str | None) -> None:
+        """Bound namespace declarations before Expat expands qualified element names."""
         nonlocal pending_namespaces
         pending_namespaces += 1
         if pending_namespaces > MAX_ATTRIBUTES:
@@ -62,6 +67,7 @@ def _tree(text: str) -> _Element:
             raise ValueError(".NET XML namespace scalar limit exceeded")
 
     def start(name: str, attributes: dict[str, str]) -> None:
+        """Admit an element only after depth, scalar and combined attribute checks pass."""
         nonlocal root, count, pending_namespaces
         count += 1
         if (
@@ -84,6 +90,7 @@ def _tree(text: str) -> _Element:
         stack.append(node)
 
     def characters(value: str) -> None:
+        """Retain bounded scalar text without accumulating an unbounded node buffer."""
         if stack:
             node = stack[-1]
             if len(node.text) + len(value) > MAX_SCALAR:
@@ -114,12 +121,14 @@ def parse_msbuild(text: str) -> ManifestParseResult:
     reasons: set[str] = set()
 
     def add(kind: str, identity: str, value: dict[str, EvidenceValue]) -> None:
+        """Reserve the source-state record while capping constructed declaration facts."""
         if len(facts) < MAX_MANIFEST_ITEMS - 1:
             facts.append(ManifestFact(kind, "dotnet", identity, value, source_scoped=True))
         else:
             reasons.add("fact-limit")
 
     def walk(node: _Element, conditions: tuple[str, ...], location: str, parent: str = "") -> None:
+        """Preserve declarations and inherited conditions without evaluating MSBuild."""
         condition = node.attributes.get("Condition")
         conditions = (*conditions, condition) if condition else conditions
         if conditions:

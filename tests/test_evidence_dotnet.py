@@ -74,6 +74,7 @@ from ocr_toolkit.evidence.store import EvidenceStore
 def test_unproven_central_version_is_never_effective(
     dotnet_repo: Path, path: str, body: str
 ) -> None:
+    """Refuse central associations whose inclusion or version evidence is unproven."""
     base = commit(dotnet_repo)
     write(dotnet_repo, path, body)
     head = commit(dotnet_repo)
@@ -85,6 +86,7 @@ def test_unproven_central_version_is_never_effective(
 
 
 def test_nested_and_colocated_projects_keep_distinct_central_scopes(dotnet_repo: Path) -> None:
+    """Keep nearest central declarations and colocated project values isolated."""
     write(
         dotnet_repo,
         "src/nested/Directory.Packages.props",
@@ -136,6 +138,7 @@ def test_nested_and_colocated_projects_keep_distinct_central_scopes(dotnet_repo:
     ],
 )
 def test_registry_and_categories_agree_on_dotnet_manifests(path: str) -> None:
+    """Align manifest discovery with .NET change categorization."""
     collector = manifest_collector("nested/" + path)
     assert collector is not None and collector.ecosystem == "dotnet"
     assert categorize_paths(["nested/" + path])["dependency_manifests"] == ("nested/" + path,)
@@ -155,6 +158,7 @@ def test_registry_and_categories_agree_on_dotnet_manifests(path: str) -> None:
     ],
 )
 def test_container_grammar_shared_by_category_acquisition_and_parser(name: str) -> None:
+    """Cross container classification, acquisition selection and actual FROM parsing."""
     path = "containers/" + name
     assert is_container_build_file(path) and infrastructure_candidate(path)
     assert categorize_paths([path])["containers"] == (path,)
@@ -178,12 +182,14 @@ def test_container_grammar_shared_by_category_acquisition_and_parser(name: str) 
     ],
 )
 def test_container_grammar_rejects_near_matches(path: str) -> None:
+    """Avoid treating similarly spelled ordinary files as container build inputs."""
     assert not is_container_build_file(path)
     assert "containers" not in categorize_paths([path])
     assert not parse_infrastructure_pins(path, "FROM example:1.0").facts
 
 
 def test_dotnet_values_use_the_shared_redaction_boundary(dotnet_repo: Path) -> None:
+    """Apply existing secret redaction to .NET facts before persistence."""
     write(
         dotnet_repo,
         "global.json",
@@ -203,6 +209,7 @@ def test_dotnet_values_use_the_shared_redaction_boundary(dotnet_repo: Path) -> N
 
 
 def test_lock_only_aspnet_does_not_activate_framework(dotnet_repo: Path) -> None:
+    """Require a project declaration rather than a lock-only ASP.NET package."""
     (dotnet_repo / "src/web.csproj").unlink()
     write(
         dotnet_repo,
@@ -228,6 +235,7 @@ def test_lock_only_aspnet_does_not_activate_framework(dotnet_repo: Path) -> None
 
 
 def git(root: Path, *args: str) -> str:
+    """Run deterministic Git plumbing in an isolated synthetic repository."""
     return subprocess.check_output(
         [
             "git",
@@ -244,12 +252,14 @@ def git(root: Path, *args: str) -> str:
 
 
 def write(root: Path, path: str, text: str) -> None:
+    """Create a synthetic repository input without modifying external sources."""
     target = root / path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
 
 
 def commit(root: Path) -> str:
+    """Freeze the complete synthetic tree and return its immutable revision."""
     git(root, "add", ".")
     git(root, "commit", "-qm", "synthetic")
     return git(root, "rev-parse", "HEAD")
@@ -257,6 +267,7 @@ def commit(root: Path) -> str:
 
 @pytest.fixture
 def dotnet_repo(tmp_path: Path) -> Path:
+    """Provide isolated colocated projects with a declared central-package source."""
     git(tmp_path, "init", "-q")
     git(tmp_path, "config", "user.name", "Synthetic")
     git(tmp_path, "config", "user.email", "synthetic@example.invalid")
@@ -281,6 +292,7 @@ def dotnet_repo(tmp_path: Path) -> Path:
 
 
 def test_real_git_central_link_framework_delta_readback_and_mcp(dotnet_repo: Path) -> None:
+    """Cross collection, scoped deltas, private readback and a real stdio MCP child."""
     write(
         dotnet_repo,
         "src/console.csproj",

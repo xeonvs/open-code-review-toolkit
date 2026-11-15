@@ -14,6 +14,7 @@ from ocr_toolkit.evidence.ecosystems.dotnet.xml import MAX_SCALAR, bounded_text
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate JSON keys instead of choosing an ambiguous declaration."""
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
@@ -23,6 +24,7 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _load(text: str) -> dict[str, Any]:
+    """Decode one bounded JSON object and validate its nesting, scalars and traversal cost."""
     bounded_text(text)
     try:
         data = json.loads(text, object_pairs_hook=_pairs, parse_constant=_invalid_constant)
@@ -47,6 +49,7 @@ def _load(text: str) -> dict[str, Any]:
 
 
 def _invalid_constant(value: str) -> None:
+    """Reject non-JSON constants before they can masquerade as manifest values."""
     raise ValueError("non-JSON numeric constant in .NET manifest")
 
 

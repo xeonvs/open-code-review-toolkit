@@ -251,12 +251,16 @@ def test_non_budget_target_read_failure_still_fails_closed(
 def test_optional_target_header_omission_preserves_core_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Keep mandatory evidence when an optional target header does not fit."""
     root, base, head, target, policy = _distinct_review_refs(tmp_path)
     baseline = collect_repository_evidence(root, base_ref=base, head_ref=head, policy_ref=policy)
     baseline_size = len(baseline.to_json().encode("utf-8"))
 
     class TightStore(EvidenceStore):
+        """Exercise target-header omission through a deliberately constrained real store."""
+
         def __init__(self, **kwargs: object) -> None:
+            """Set a fixture ceiling without bypassing the production store's validation."""
             kwargs.pop("limits", None)
             kwargs["reserved_bytes"] = 0
             super().__init__(limits=EvidenceStoreLimits(max_bytes=baseline_size + 256), **kwargs)
@@ -338,6 +342,7 @@ def test_target_symlink_is_metadata_only_and_reports_unavailable_source(tmp_path
 
 
 def test_target_byte_admission_rolls_back_without_partial_snapshot() -> None:
+    """Preserve the complete prior snapshot when target byte admission fails."""
     sha = "a" * 40
     store = EvidenceStore(limits=EvidenceStoreLimits(max_bytes=1024))
     store.target = EvidenceSnapshot(RefRole.TARGET, sha, ())

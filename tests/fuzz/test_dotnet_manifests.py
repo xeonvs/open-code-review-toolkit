@@ -20,6 +20,7 @@ from ocr_toolkit.evidence.ecosystems.dotnet import parse_msbuild
 def test_literal_declarations_preserve_scope_and_version(
     package: str, version: str, conditional: bool, child_version: bool, namespace: bool
 ) -> None:
+    """Preserve literal package values and inherited conditions across XML forms."""
     condition = ' Condition="flag"' if conditional else ""
     declaration = f"<PackageReference Include={quoteattr(package)}"
     declaration += (
@@ -46,6 +47,7 @@ def test_literal_declarations_preserve_scope_and_version(
     st.text(alphabet="abc<>;&\"'012", max_size=40),
 )
 def test_escaped_literal_text_is_not_reinterpreted_as_markup(name: str, value: str) -> None:
+    """Keep escaped XML scalar content as declaration data rather than nested elements."""
     result = parse_msbuild(
         f"<Project><PropertyGroup><{name}>{escape(value)}</{name}></PropertyGroup></Project>"
     )

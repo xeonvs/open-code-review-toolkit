@@ -24,11 +24,13 @@ from ocr_toolkit.evidence.ecosystems.dotnet import (
     ],
 )
 def test_xml_construction_bounds(body: str) -> None:
+    """Stop XML construction at byte, depth, element, attribute and scalar limits."""
     with pytest.raises(ValueError):
         parse_msbuild(body)
 
 
 def test_xml_fact_limit_and_semantic_identity() -> None:
+    """Report fact truncation while keeping unrelated insertions out of value identity."""
     body = "".join(f'<PackageReference Include="Package{i}" Version="1.0"/>' for i in range(600))
     parsed = parse_msbuild("<Project><ItemGroup>" + body + "</ItemGroup></Project>")
     assert len(parsed.facts) == 512
@@ -65,6 +67,7 @@ def test_xml_fact_limit_and_semantic_identity() -> None:
     ],
 )
 def test_malformed_lock_inputs_fail_closed(text: str) -> None:
+    """Reject hostile NuGet lock shapes without partial dependency claims."""
     with pytest.raises(ValueError):
         parse_packages_lock(text)
 
@@ -85,11 +88,13 @@ def test_malformed_lock_inputs_fail_closed(text: str) -> None:
     ],
 )
 def test_malformed_sdk_inputs_fail_closed(text: str) -> None:
+    """Reject malformed SDK selection and bounded-JSON violations."""
     with pytest.raises(ValueError):
         parse_global_json(text)
 
 
 def test_lock_fact_limit_and_sdk_options() -> None:
+    """Bound resolved dependencies and preserve declared SDK selection options."""
     result = parse_packages_lock(
         json.dumps(
             {
@@ -108,6 +113,7 @@ def test_lock_fact_limit_and_sdk_options() -> None:
 
 
 def test_xml_namespace_conditions_children_and_sdk() -> None:
+    """Retain namespace-aware declarations, inherited conditions and child metadata."""
     parsed = parse_msbuild("""<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Sdk="Microsoft.NET.Sdk">
 <PropertyGroup Condition="'$(Mode)' == 'release'"><TargetFramework>net9.0</TargetFramework><LangVersion>preview</LangVersion></PropertyGroup>
 <ItemGroup><PackageReference Include="Example"><Version>2.3.4</Version><VersionOverride>5.0</VersionOverride></PackageReference></ItemGroup></Project>""")
@@ -121,6 +127,7 @@ def test_xml_namespace_conditions_children_and_sdk() -> None:
 
 
 def test_json_sdk_and_framework_scoped_lock() -> None:
+    """Keep SDK declarations distinct from framework-scoped direct/transitive resolutions."""
     sdk = parse_global_json('{"sdk":{"version":"9.0.100","rollForward":"latestFeature"}}')
     assert sdk.facts[0].value["version_state"] == "declared"
     lock = parse_packages_lock(
@@ -156,12 +163,14 @@ def test_json_sdk_and_framework_scoped_lock() -> None:
     ],
 )
 def test_xml_rejects_malformed_or_entity_inputs(text: str) -> None:
+    """Reject malformed XML and entity-bearing documents before deriving facts."""
     with pytest.raises(ValueError):
         parse_msbuild(text)
 
 
 @pytest.mark.parametrize("declarations,attributes", [(33, 0), (17, 16), (1, 32)])
 def test_namespaces_share_the_per_element_attribute_budget(declarations, attributes):
+    """Include namespace declarations in the element's combined attribute ceiling."""
     names = " ".join(f'xmlns:n{i}="urn:{i}"' for i in range(declarations))
     values = " ".join(f'a{i}="x"' for i in range(attributes))
     with pytest.raises(ValueError):
@@ -176,11 +185,13 @@ def test_namespaces_share_the_per_element_attribute_budget(declarations, attribu
     ],
 )
 def test_namespace_values_are_bounded_before_expanded_names(value):
+    """Reject oversized namespace inputs before qualified-name expansion."""
     with pytest.raises(ValueError):
         parse_msbuild(value)
 
 
 def test_namespace_budget_resets_at_each_element():
+    """Keep namespace construction limits local to each element's declarations."""
     declarations = " ".join(f'xmlns:n{i}="urn:{i}"' for i in range(32))
     assert parse_msbuild(
         f'<Project xmlns=""><ItemGroup {declarations}/><PropertyGroup {declarations}/></Project>'
