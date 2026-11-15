@@ -1,3 +1,32 @@
+## 0.15.0 - 2026-11-16
+
+### 🚀 Features
+
+- Collect bounded static .NET project, shared-build, central-package, NuGet lock and SDK evidence through the existing immutable Git/MCP pipeline, including inline SDK versions, documented SDK JSON comments and NuGet central-transitive scopes. Preserve conditions and partial evaluation, case-safe central declaration links and project-scoped ASP.NET Core signals without running MSBuild or inferring a runtime from the target framework. ([#312](https://github.com/xeonvs/open-code-review-toolkit/issues/312))
+
+### 🐛 Bug Fixes
+
+- Replace ineffective concurrency-variable recommendations with the supported native `--concurrency N` option after `ocr-ci review ... --`, preserving the OCR default and independent completion-token controls. ([#311](https://github.com/xeonvs/open-code-review-toolkit/issues/311))
+- Use one Dockerfile/Containerfile naming grammar across change categorization, immutable acquisition and image parsing, including named prefixes and variants. ([#313](https://github.com/xeonvs/open-code-review-toolkit/issues/313))
+- Recognize complete decimals, grouped fractional amounts, independent fractions and dotted calendar dates/datetimes without inventing phone numbers. Preserve contact-key assignments across closed selectors without borrowing intent from unrelated comparisons, and check adjacent sensitive material independently. Qualify parser supplements and extend structural fuzzing and authenticated corpus replay. ([#314](https://github.com/xeonvs/open-code-review-toolkit/issues/314))
+- Review changes beyond 256 modified files with an adaptive, atomic evidence budget. Optional records and composed deltas share remaining bytes without consuming invocation reserves or creating false completeness. Mandatory snapshot hard-limit failures stop before model execution and provide an identity-bound, content-free diagnostic while preserving previous review comments. ([#315](https://github.com/xeonvs/open-code-review-toolkit/issues/315))
+- Consolidate local diagnostics under the bounded `--debug-dir` bundle: preserve evidence, Rules and action inputs before cleanup, retain early budget facts, and keep successful output on ordinary admission. Replace `--preserve-private-artifacts` with explicit local `--debug-dir PATH` and remove the duplicate DLP sidecar; ephemeral inputs and isolated native HOME require verified cleanup before ordinary admission, and authentication/configuration stores are not copied into debug artifacts. ([#317](https://github.com/xeonvs/open-code-review-toolkit/issues/317))
+- Reject caller-selected native repository and resume state in every review mode, preserving the toolkit's immutable repository/range and current execution ownership. ([#319](https://github.com/xeonvs/open-code-review-toolkit/issues/319))
+
+### 🛠 Maintenance
+
+- Refresh compatible runtime and development dependencies, including regex 2026.11.9, SSE-Starlette 3.7.0 and Hypothesis 6.170.15, and use uv 0.13.8 consistently in CI and the local dependency audit. ([#317](https://github.com/xeonvs/open-code-review-toolkit/issues/317))
+- Target checksum-verified Open Code Review 1.13.10 after qualifying 1.13.9 through 1.13.10. ([#319](https://github.com/xeonvs/open-code-review-toolkit/issues/319))
+
+### 📖 Documentation
+
+- Document an opt-in exact `no-ai-review` merge-request label rule, pipeline-time evaluation, unchanged manual readiness and the implications for prior reviews, approvals and merge policy. Automatic review remains enabled in the distributed example. ([#316](https://github.com/xeonvs/open-code-review-toolkit/issues/316))
+
+### Security
+
+- Bound expanded XML tree storage and constructed .NET fact identities/payloads before collector retention. A non-expanding XML prepass checks attribute, depth and element limits before namespace fanout, while preserving namespace and entity rejection. Exhausted sources remain explicitly incomplete and cannot establish central-version uniqueness or framework absence. ([#317](https://github.com/xeonvs/open-code-review-toolkit/issues/317))
+
+
 ## 0.14.8 - 2026-11-12
 
 ### 🚀 Features

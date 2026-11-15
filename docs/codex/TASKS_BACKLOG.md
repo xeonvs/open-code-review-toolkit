@@ -11,12 +11,11 @@ The [signal-ownership audit](../engineering/review_signal_ownership.md) remains 
 ### BL-010: Add evidence packs from demonstrated use cases
 
 - **Status:** conditional
-- **Active slice:** .NET is promoted to [the active 0.15.0 plan](../../PLANS.md).
 - **Priority:** medium
 - **Roadmap theme:** Evidence packs
 - **Dependencies:** Established evidence, snapshot/delta, scoped-completeness, static-plugin, and built-in MCP contracts.
 - **Activation trigger:** A real repository need identifies a missing ecosystem/framework and supplies safe synthetic fixtures and deterministic semantics.
-- **Next safe action:** Reproduce the next missing evidence need and define one bounded pack; the activated .NET slice belongs to the current plan.
+- **Next safe action:** Reproduce the next missing evidence need and define one bounded pack.
 - **Goal:** Extend coverage without accumulating shallow detectors.
 - **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public operational examples using safe placeholders.
 - **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.

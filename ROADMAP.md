@@ -15,8 +15,6 @@ a new toolkit product or expand trust.
 
 | Outcome | State | Scope and activation | Owner |
 | --- | --- | --- | --- |
-| Complete immutable evidence for large changes | In progress | Atomic B/H/P snapshots remain bounded without an artificial file-count ceiling; genuine hard limits stop before the model with a closed identity-bound diagnosis. | [Active plan](PLANS.md) |
-| Bounded static .NET evidence and numeric precision | In progress | Declared project/package/framework facts, conservative source-scoped central links and shared MCP; full-span numeric DLP with inverse controls and private corpus replay. | [Active plan](PLANS.md), BL-010 slice |
 | Further ecosystem/framework evidence | Conditional | One demonstrated missing pack with deterministic semantics, provenance, scoped completeness and common MCP validation. | [BL-010](docs/codex/TASKS_BACKLOG.md#bl-010-add-evidence-packs-from-demonstrated-use-cases) |
 | Federation authentication and more forges | Conditional | A real upstream OAuth requirement or funded forge use case, preserving resource authorization and provider-neutral lifecycle boundaries. | [External integrations](docs/codex/TASKS_BACKLOG.md#external-integrations), BL-012 and BL-021 |
 | Related-change or combined-delivery review | Conditional | An explicitly approved product/graph, immutable revision and publication contract, bounded resources and a separate implementation plan. | [BL-025](docs/codex/TASKS_BACKLOG.md#bl-025-evaluate-optional-review-of-related-mrs-and-delivery-sets) |
