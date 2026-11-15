@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 
+CALENDAR_DAY_PATTERN = r"(?:\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})"
 _DATETIME = re.compile(
-    r"(?P<day>\d{4}-\d{2}-\d{2})(?:T|[ \t]+)"
+    rf"(?P<day>{CALENDAR_DAY_PATTERN})(?:T|[ \t]+)"
     r"(?P<clock>\d{2}:\d{2}(?::\d{2}(?:[.,]\d{1,9})?)?)"
     r"(?P<zone>Z|[ \t]+UTC|[+-]\d{2}:?\d{2})?",
     re.IGNORECASE,
@@ -16,7 +17,17 @@ _CONTINUED_ZONE = re.compile(r"(?:UTC|Z(?:$|[^a-z]))", re.IGNORECASE)
 _WINDOW = 128
 
 
+def calendar_day(value: str) -> str:
+    """Validate ISO or dotted day/month/year with one calendar implementation."""
+
+    value = "".join(str(int(char)) if char.isdecimal() else char for char in value)
+    if "." in value:
+        value = f"{value[6:10]}-{value[3:5]}-{value[:2]}"
+    return date.fromisoformat(value).isoformat()
+
+
 def _word_part(char: str) -> bool:
+    """Recognize Unicode word continuations at numeric token boundaries."""
     return char.isalnum() or unicodedata.category(char).startswith("M")
 
 
@@ -34,8 +45,18 @@ def complete_datetime(value: str, start: int, end: int) -> bool:
         right = tail[:1]
         if left and (_word_part(left) or left in "_.:+/-"):
             continue
-        if right and (_word_part(right) or right in "_:+/-"):
+        if right and (_word_part(right) or right in "_+/-"):
             continue
+        if right == ":":
+            remainder = tail[1:]
+            separated = bool(remainder) and (
+                remainder[0].isspace()
+                or (remainder.startswith("\\") and remainder[1:2] in {"n", "r", "t"})
+            )
+            # Prose punctuation may precede real or escaped whitespace. Do not
+            # decode material or extend the proof span over that separator.
+            if not separated and (remainder or not block["zone"]):
+                continue
         if right == "." and len(tail) > 1 and (_word_part(tail[1]) or tail[1] in "_.:+/-"):
             continue
         if _CONTINUED_ZONE.match(tail.lstrip(" \t")):
@@ -53,7 +74,7 @@ def complete_datetime(value: str, start: int, end: int) -> bool:
             if int(digits[:2]) > 23 or int(digits[2:]) > 59:
                 continue
         try:
-            token = f"{block['day']}T{block['clock']}{zone}"
+            token = f"{calendar_day(block['day'])}T{block['clock']}{zone}"
             # PHONE_RE recognizes every Unicode decimal digit. Preserve that
             # semantic domain while feeding the ASCII-only calendar parser;
             # no code-point positions are changed for containment checks.

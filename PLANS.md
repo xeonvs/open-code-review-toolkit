@@ -49,8 +49,8 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-004 | #312 bounded XML/JSON .NET manifest facts and project scopes | WQ-03 | done |
 | REQ-005 | #312 conservative central-version links, ASP.NET Core plugin, deltas and MCP | WQ-03 | done |
 | REQ-006 | #313 shared container-build path recognition | WQ-03 | done |
-| REQ-007 | #314 all numeric/date cases and inverse material protection | WQ-04 | pending |
-| REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | pending |
+| REQ-007 | #314 all numeric/date cases and inverse material protection | WQ-04 | done |
+| REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | in_progress |
 | REQ-009 | Exact OCR assets, excluded coverage and request-scoped tools qualification | WQ-05 | pending |
 | REQ-010 | Hosted qualification, promotion, local binary update and weekly schedule | WQ-05, WQ-10 | pending |
 | REQ-011 | #311 actual concurrency control and #316 opt-in skip example | WQ-06 | pending |
@@ -182,8 +182,8 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-02 | Atomic structural/optional budgets, bounded serializer/target batches, v7 CLI/readback/freshness diagnostics qualified | REQ-002, REQ-003, REQ-013 | done |
 | WQ-11 | Eleven compatible lock upgrades and uv 0.13.8 applied; all current Action tag/SHA identities verified; composition frozen | REQ-021 | done |
 | WQ-03 | Bounded .NET declarations/central links, project-scoped ASP.NET, shared container grammar and Git/store/stdio MCP handoffs accepted | REQ-004, REQ-005, REQ-006, REQ-013 | done |
-| WQ-04 | Numeric span/date corrections, regressions/properties and baseline/candidate audits; logical commit | REQ-007, REQ-008, REQ-013 | pending |
-| WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | pending |
+| WQ-04 | Numeric span/date corrections and initial authenticated paired audits accepted; final resource/repeat comparison remains at WQ-07 | REQ-007, REQ-008, REQ-013 | done |
+| WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | in_progress |
 | WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | pending |
 | WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | pending |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
@@ -344,7 +344,35 @@ runtime-dependent ASP.NET resolution coverage. Source adapters have an executabl
 no-I/O/no-higher-lifecycle guard; no language-specific confidentiality exemption
 or new public configuration was introduced. Aggregate acceptance remains pending.
 
+WQ-04: 1510 scoped DLP/audit/property checks passed; the measured numeric owner
+was 98% and calendar owner 100% branch-aware. Subsequent punctuation refinements
+passed 227 affected checks and focused production admission/projection replay.
+Eight structural numeric properties passed the 1000-example local profile.
+Initial authenticated pairs cover the public corpus and all authorized private
+inputs, including .NET. Every changed admission was bound to original bytes and
+classified individually as benign numeric syntax. Newly introduced timestamp
+punctuation blocks were reproduced synthetically and resolved through the actual
+proof/admission/publication path. The final repeated pairs, resource comparison
+and current-checkout scan remain mandatory at WQ-07; private details stay private.
+Dateparser was qualified as a supplement, not selected for runtime admission:
+strict parsing can reinterpret invalid dates or truncate excess time precision,
+and adds measured startup/resources without demonstrated benefit for this slice.
+The shared lexical boundary and stdlib calendar validation remain authoritative.
+
+Docstring review found no removed pre-existing descriptions, but uncovered missing
+descriptions for new runtime and test definitions. They were added and executable
+AST equality verified; the existing development self-review requirement now
+explicitly includes constructors, callbacks and observable test intent.
+
 ### Risks And Recovery
+
+Dateparser 1.5.0 was qualified as a possible supplement on a synthetic 34-value
+matrix, including strict order and custom-only profiles. It recognizes additional
+numeric dates but strict parse success can reinterpret invalid ISO-like input or
+accept excessive timestamp precision. No automatic admission fallback or runtime
+dependency is selected from that result. Retain the shared calendar grammar and
+stdlib validation, preserve synthetic research probes, and include remaining
+calendar causes in the required corpus analysis before selecting broader support.
 
 - Numeric ambiguity is an explicit owner-approved policy; other contact/material
   checks remain independent. A lost expected-protection case blocks acceptance.
@@ -363,10 +391,12 @@ or new public configuration was introduced. Aggregate acceptance remains pending
 
 ### Resume Point
 
-WQ-04: implement the complete numeric-span/date DLP contract and inverse controls,
-then compare paired authenticated public/private corpora and resource use.
-WQ-02 is committed as a031c1c and the dependency refresh as e37bf90.
-The .NET/container slice has passed scoped acceptance and semantic review.
+WQ-05: finish expanded OCR 1.13.9/1.13.10 platform qualification and promotion,
+then WQ-06 operator guidance and unified debug lifecycle. The numeric slice has
+passed scoped checks, initial paired audits and focused correction replay; retain
+its final full repeat/resource comparison at WQ-07 after runtime work is complete.
+WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
+purpose-focused descriptions are committed as a7004e2.
 Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.
 

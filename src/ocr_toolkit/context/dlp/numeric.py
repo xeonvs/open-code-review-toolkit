@@ -6,11 +6,15 @@ import ipaddress
 import re
 import unicodedata
 import uuid
-from datetime import date
 
 import regex
 
-from ocr_toolkit.context.dlp.datetimes import complete_datetime
+from ocr_toolkit.context.dlp.datetimes import (
+    CALENDAR_DAY_PATTERN,
+    _word_part,
+    calendar_day,
+    complete_datetime,
+)
 from ocr_toolkit.context.dlp.decoding import _technical_decode, bounded_nfkc
 
 _DIGIT_MARKS = regex.compile(r"(?<=\p{Nd})\p{M}+")
@@ -29,7 +33,10 @@ def phone_markup_view(value: str, *, formatting: bool = True) -> str:
     return _DIGIT_MARKS.sub(" ", value, timeout=0.05)
 
 
-PHONE_RE = re.compile(r"(?<!\w)(?:\+?\d[\d .()/-]{5,62}\d)(?!\w)")
+PHONE_RE = re.compile(
+    rf"(?<!\w)(?:\+?{CALENDAR_DAY_PATTERN}(?=[Tt]\d{{2}}:)|"
+    r"(?:\+?\d[\d .()/-]{5,62}\d)(?!\w))"
+)
 MIN_PHONE_DIGITS = 7
 
 
@@ -40,9 +47,6 @@ def _phone_shape(value: str, match: re.Match[str]) -> bool:
         return True
     digits = sum(c.isdecimal() for c in match[0])
     return digits >= MIN_PHONE_DIGITS or (digits >= 6 and len(match[0]) >= 9)
-
-
-ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
 
 
 _NETWORK_TOKEN_CHARS = frozenset("0123456789abcdefABCDEF:./")
@@ -61,18 +65,52 @@ VERSION_CONTEXT_RE = re.compile(
 )
 
 
-DATE_CONTEXT_RE = re.compile(
-    rf"(?i)\b(?:date|dated|on|since|until|before|after|expires)"
-    rf"(?:[ \t]+on)?{_TECHNICAL_SEPARATOR}$"
-)
-
-
 IP_CONTEXT_RE = re.compile(
     r"(?i)(?:\b|_)(?:ipv4|ip|cidr|subnet|address|host|loginhost|listen|allow|network)\b"
 )
 
 
-PHONE_CONTEXT_RE = re.compile(r"(?i)\b(?:call|phone|tel|contact)[ \t]*$")
+_CONTACT_HINT = re.compile(r"phone|tel|contact|call", re.IGNORECASE)
+_CONTACT_WORDS = frozenset({"call", "phone", "telephone", "tel", "contact"})
+
+
+def _contact_context(prefix: str) -> bool:
+    """Recognize contact words in human labels and identifier components."""
+
+    prefix = prefix[-64:].rstrip(" \t")
+    if not prefix or not prefix[-1].isalnum() or _CONTACT_HINT.search(prefix) is None:
+        return False
+    # Split naming structure, not repository-specific key names. Operators stay
+    # outside the accepted suffix so unrelated addition never supplies intent.
+    parts: list[str] = []
+    word = ""
+    for index, char in enumerate(prefix):
+        if not char.isalnum():
+            if word:
+                parts.append(word.casefold())
+                word = ""
+            continue
+        previous = prefix[index - 1] if index else ""
+        camel_boundary = (
+            bool(word)
+            and char.isupper()
+            and (
+                not previous.isupper() or (index + 1 < len(prefix) and prefix[index + 1].islower())
+            )
+        )
+        if camel_boundary:
+            parts.append(word.casefold())
+            word = ""
+        word += char
+    parts.append(word.casefold())
+    last = parts[-1]
+    if last in {"number", "no"} and len(parts) > 1:
+        return parts[-2] in _CONTACT_WORDS
+    return last in _CONTACT_WORDS or any(
+        last.endswith(suffix) and last[: -len(suffix)] in _CONTACT_WORDS
+        for suffix in ("number", "no")
+    )
+
 
 _VERSION = r"(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){1,3}"
 _DATE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
@@ -83,17 +121,18 @@ _TECHNICAL_BLOCK = re.compile(
     rf"(?P<versions>{_VERSION}(?:/|-|\.\.\.){_VERSION})|"
     r"(?P<iteration>for[ \t]+[A-Za-z_][A-Za-z0-9_]{0,63}[ \t]+in[ \t]+"
     r"[0-9](?:[ \t]+[0-9]){1,31}[ \t]*;[ \t]*do)|"
-    rf"(?P<date>{_DATE})"
+    rf"(?P<date>{CALENDAR_DAY_PATTERN})"
     rf")(?!\w)",
     re.IGNORECASE,
 )
 
 
 def _explicit_context(value: str, start: int) -> bool:
+    """Bind a numeric candidate to an adjacent contact label, excluding unrelated operators."""
     cursor = start
     while cursor and value[cursor - 1] in " \t'\"=:[{(":
         cursor -= 1
-    return PHONE_CONTEXT_RE.search(value[max(0, cursor - 64) : cursor]) is not None
+    return _contact_context(value[max(0, cursor - 64) : cursor])
 
 
 def _complete_technical_block(value: str, start: int, end: int) -> bool:
@@ -107,7 +146,7 @@ def _complete_technical_block(value: str, start: int, end: int) -> bool:
             if block["uuid"]:
                 uuid.UUID(block["uuid"])
             elif block["date"] or block["release_date"]:
-                date.fromisoformat(block["date"] or block["release_date"])
+                calendar_day(block["date"] or block["release_date"])
             elif block["iteration"]:
                 return True
             else:
@@ -152,7 +191,7 @@ def _network_number(value: str, start: int, end: int) -> bool:
     while end < len(value) and end - start < 64 and value[end] in _NETWORK_TOKEN_CHARS:
         end += 1
     contact_prefix = value[max(0, start - 25) : start].rstrip(": \t")
-    if PHONE_CONTEXT_RE.search(contact_prefix):
+    if _contact_context(contact_prefix):
         return False
     left = value[start - 1] if start and not label_separator else ""
     for neighbor in (left, value[end : end + 1]):
@@ -188,6 +227,37 @@ def _decoded_network_number(before: str, candidate: str, after: str) -> bool:
     )
 
 
+_DECIMAL_TOKEN = re.compile(r"(?<![\w.])(?:\d{1,3}(?: \d{3})+|\d+)\.\d+")
+
+
+def _decimal_partition(value: str, start: int, end: int) -> bool:
+    """Cover complete decimals independently, never join adjacent numeric spans."""
+
+    cursor = start
+    found = False
+    for token in _DECIMAL_TOKEN.finditer(value, max(0, start - 64), min(len(value), end + 64)):
+        if token.end() <= start or token.start() >= end:
+            continue
+        # Validate real neighbors beyond the bounded search window. A prefix
+        # match or a network/timestamp fragment does not prove a complete token.
+        left = value[token.start() - 1] if token.start() else ""
+        tail = value[token.end() : token.end() + 2]
+        right = tail[:1]
+        if (left and (_word_part(left) or left in "_.:/+")) or (
+            right and (_word_part(right) or right in "_:/+-")
+        ):
+            continue
+        if right == "." and len(tail) > 1 and (_word_part(tail[1]) or tail[1] in "_.:/+-"):
+            continue
+        if any(char not in " ()" for char in value[cursor : max(cursor, token.start())]):
+            return False
+        cursor = min(end, token.end())
+        found = True
+        if cursor == end:
+            return True
+    return found and all(char in " ()" for char in value[cursor:end])
+
+
 def _technical_number(value: str, match: re.Match[str]) -> bool:
     """Exclude only bounded, parsed technical syntax from phone candidates."""
 
@@ -206,7 +276,7 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
     # document per candidate when a file contains many valid technical tokens.
     before = value[max(0, match.start() - 1024) : match.start()]
     after = value[match.end() : match.end() + 1024]
-    if PHONE_CONTEXT_RE.search(before[-24:]):
+    if _contact_context(before[-64:]):
         return False
     network = "/" in candidate or re.match(r"/[+-]?[0-9]", after) is not None
     if network and _network_number(value, *match.span()):
@@ -215,6 +285,8 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
         return True
     if network:
         return False
+    if _decimal_partition(value, *match.span()):
+        return True
     if before.endswith((".", "/", "-")) or re.match(r"(?:[./-]\d)", after):
         return False
     try:
@@ -234,26 +306,11 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
         and re.fullmatch(r"[0-9]+(?:\.[0-9]+){2,7}", candidate)
     ):
         return True
-    if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(technical_prefix):
-        try:
-            date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
-        except ValueError:
-            return False
-        return True
-    if re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", candidate):
-        return bool(VERSION_CONTEXT_RE.search(technical_prefix))
-    if re.fullmatch(r"\d+\.\d+", candidate):
-        return bool(
-            re.search(r"(?i)\bdecimal\([ \t]*['\"]$", technical_prefix)
-            and (
-                re.match(r"['\"][ \t]*\)", after)
-                or re.match(r"['\"][ \t]*\)", _technical_decode(after[:64]))
-            )
-        )
     return False
 
 
 def _explicit_contact_phone(value: str) -> bool:
+    """Preserve explicit contact priority in verified literal-code sinks."""
     for match in PHONE_RE.finditer(value):
         candidate = match.group(0)
         if (

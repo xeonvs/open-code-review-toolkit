@@ -336,10 +336,19 @@ delimiters, including on internal hostnames. Ordinary path/query data does not
 acquire userinfo authority. Scheme near-matches are searched once per contiguous
 scheme-character run, avoiding repeated suffix scans on long unrelated text.
 
-Numeric interpretation recognizes a complete bounded calendar timestamp around
-the entire phone candidate, including its clock, optional fractional seconds
-and timezone. It validates calendar and offset components, rejects continued or
-malformed tokens, and preserves explicit contact priority. Unicode decimal digits
+Numeric interpretation recognizes full single-dot decimals, correctly grouped
+fractional amounts and independent decimals separated by spaces or parentheses.
+A complete single-dot decimal without a leading `+` or explicit contact intent
+is treated as a decimal, including an otherwise ambiguous short telephone shape.
+National and multi-dot telephone forms retain conservative checks. A technical
+span cannot cover a neighboring contact or combine independent fractions.
+
+One shared grammar recognizes ISO and `DD.MM.YYYY` calendar days and complete
+bounded timestamps, including their clock, optional fractional seconds and
+timezone. Calendar validation uses the standard library rather than enumerating
+months and leap years in regular expressions. Complete timestamps may precede
+prose punctuation; incomplete clocks and numeric zone continuations do not gain
+that boundary. The checks preserve explicit contact priority. Unicode decimal digits
 have the same calendar meaning as ASCII digits; no surrounding keyword, filename
 or source proof grants an exception. Other contacts, credentials and configured
 values in the original and derived material remain independently checked.

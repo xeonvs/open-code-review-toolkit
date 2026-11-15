@@ -31,6 +31,7 @@ def test_incomplete_timezone_continuation_is_rejected_across_lookahead_splits(
 
 @st.composite
 def calendar_stamp(draw):
+    """Generate complete calendar values with varied date, clock and zone structure."""
     instant = draw(st.datetimes(min_value=datetime(1, 1, 1), max_value=datetime(9999, 12, 31)))
     clock = f"{instant.hour:02}:{instant.minute:02}"
     if draw(st.booleans()):
@@ -47,7 +48,12 @@ def calendar_stamp(draw):
             + f"{draw(st.integers(0, 59)):02}"
         )
     separator = draw(st.sampled_from(("T", "t", " ", "   ")))
-    return instant.date().isoformat() + separator + clock + zone
+    day = (
+        instant.date().isoformat()
+        if draw(st.booleans())
+        else f"{instant.day:02}.{instant.month:02}.{instant.year:04}"
+    )
+    return day + separator + clock + zone
 
 
 @given(

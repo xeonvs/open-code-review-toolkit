@@ -333,7 +333,8 @@ a detector precision or recall rate.
 `tests/research/test_dlp_parser_candidates.py` retains synthetic comparisons for
 optional parser additions. Run it separately in an isolated Python 3.14 environment
 with the built toolkit wheel and `pytest==9.2.0`, `tree-sitter==0.26.0`,
-`tree-sitter-c==0.24.2`, `pygments==2.21.0`, and `pii-extract-plg-regex==0.5.1`:
+`tree-sitter-c==0.24.2`, `pygments==2.21.0`, `pii-extract-plg-regex==0.5.1`,
+and `dateparser==1.5.0`:
 
 ```sh
 "$probe_env/bin/pytest" --confcutdir=tests/research -o addopts= \
@@ -351,6 +352,17 @@ absence. PIISA's full regional/context pipeline is not qualified by that lexical
 probe. Its plugin currently also lacks a wheel. Reconsider a focused addition
 only with supported binary installs, bounded correct role proof and demonstrated
 benefit on independently classified cases. No model downloads are involved.
+
+[Dateparser](https://dateparser.readthedocs.io/en/latest/settings.html) was tested
+as a supplement to current admission. Strict automatic
+parsing reinterprets an invalid ISO-like month, and even a fixed strict order
+accepts excessive fractional-second precision. Its ability to recognize further
+numeric dates therefore needs separate whole-span, ambiguity and protection
+qualification; a successful parse alone must not override a DLP rejection.
+The current calendar fix uses one shared lexical grammar and stdlib calendar
+validation. Repeat corpus analysis includes residual calendar rejections before
+selecting any broader supplemental recognizer. The optional research probes keep
+both its demonstrated benefit and its admission counterexamples.
 
 Primary contracts: [Tree-sitter node errors](https://tree-sitter.github.io/py-tree-sitter/classes/tree_sitter.Node.html),
 [Pygments lexer API](https://pygments.org/docs/api/), and
@@ -446,7 +458,14 @@ work, hostile wire types and process-local inputs that can change an edge.
 Review the observed consumer result and remaining private artifacts, not only
 each producer's unit result.
 
-New runtime modules, classes, and functions need purpose-focused docstrings. Comments at non-obvious security, compatibility, ownership, and state-transition boundaries explain why the constraint exists rather than narrating the code. Do not add legacy namespace shims or historical integrations outside the public contract.
+New runtime modules, classes, and functions need purpose-focused docstrings.
+Inspect new and changed definitions during each logical self-review, including
+constructors, private/nested callbacks and new test helpers. Describe the contract
+or observable test intent; formatter, type and coverage success does not establish
+this documentation check. Comments at non-obvious security, compatibility,
+ownership, and state-transition boundaries explain why the constraint exists
+rather than narrating the code. Do not add legacy namespace shims or historical
+integrations outside the public contract.
 
 Apply the [cohesive-module invariant](engineering/project_principles.md#product-and-architecture) during self-review. Prefer an extract-and-delegate refactor that moves already characterized functions or classes intact, preserves the intentional package facade, and reruns the same contract suite before and after each move. Split on distinct responsibility and dependency direction, not an arbitrary line count; do not rewrite a working algorithm merely to make a file shorter. Architecture tests should protect required owners and forbidden upward dependencies without freezing every future helper-module name.
 
