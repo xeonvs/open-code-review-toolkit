@@ -1931,7 +1931,7 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(published, "")
         self.assertIn("rate-or-spending-limit", controlled_log)
         self.assertIn(
-            "Try lowering `OCR_REVIEW_CONCURRENCY` and/or "
+            "Try lowering native concurrency (`ocr-ci review ... -- --concurrency N`) and/or "
             "`OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline.",
             controlled_log,
         )

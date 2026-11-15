@@ -323,18 +323,12 @@ def test_public_docs_describe_current_context_and_federation_boundaries() -> Non
     assert "M5's foundation is established in v0.7.0" in strategy
     assert "Toolkit 0.9.0 advanced the then-current result boundary to receipt v8" in strategy
     assert "It is not protected-policy equivalence" in strategy
-    assert "M5 Bounded review-context enrichment<br/>established" in roadmap
-    assert "Toolkit 0.9.0 adds receipt-v8 source/target/protection binding" in roadmap
     assert "M7 supersedes the historical M3 direct-composition boundary" in strategy
-    assert "Registry v2" in roadmap
     assert "mandatory internal evidence" in strategy
-    assert "SDK-v2-primary independent protocol negotiation" in roadmap
-    assert "v1-v3 references remain parse-only" in roadmap
-    assert "The v0.8.0 release tree adds policy-v2 remediation selection" in roadmap
-    assert "The owner waived the separate enriched OCR+LLM qualification" in roadmap
-    assert "still-present/evidence-resolved scenarios" in roadmap
-    assert "Protected release publication" in roadmap
-    assert "independent external readback" in roadmap
+    assert "The owner waived the separate enriched OCR+LLM qualification" in strategy
+    assert "still-present/evidence-resolved scenarios" in strategy
+    assert "execution_history/README.md" in roadmap
+    assert "PLANS.md" in roadmap
     assert "complete BL-023 broker remains planned" not in roadmap
 
 
@@ -391,3 +385,35 @@ def test_test_modules_have_no_duplicate_test_methods() -> None:
                     seen[child.name] = child.lineno
 
     assert duplicates == []
+
+
+@pytest.mark.parametrize(
+    "labels, skipped",
+    [
+        ("", False),
+        ("no-ai-review", True),
+        ("bug,no-ai-review", True),
+        ("no-ai-review,bug", True),
+        ("bug,no-ai-review,docs", True),
+        ("no-ai-review-later", False),
+        ("prefix-no-ai-review", False),
+        ("NO-AI-REVIEW", False),
+        ("bug, no-ai-review", False),
+    ],
+)
+def test_documented_skip_rule_uses_complete_label_tokens_and_remains_opt_in(labels, skipped):
+    """Check supported label boundaries while keeping the distributed MR job enabled."""
+    guide = (PROJECT_ROOT / "docs/gitlab.md").read_text()
+    section = guide.split("## Optional automatic-review skip label\n", 1)[1].split("\n## ", 1)[0]
+    rules = list(re.finditer(r"^\s+- if: '(.*)'$", section, re.MULTILINE))
+    conditions = [rule[1] for rule in rules]
+    assert len(conditions) == 2
+    assert conditions[0].startswith('$CI_PIPELINE_SOURCE == "merge_request_event" && ')
+    pattern = re.search(r"=~ /(.+)/$", conditions[0])
+    assert pattern is not None
+    assert bool(re.search(pattern[1], labels)) is skipped
+    assert conditions[1] == '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    assert "when: never" in section[rules[0].end() : rules[1].start()]
+    example = (PROJECT_ROOT / "examples/gitlab/ocr-review.gitlab-ci.yml").read_text()
+    assert "no-ai-review" not in example
+    assert "when: manual" in example

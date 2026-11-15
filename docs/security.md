@@ -340,7 +340,7 @@ Numeric interpretation recognizes full single-dot decimals, correctly grouped
 fractional amounts and independent decimals separated by spaces or parentheses.
 A complete single-dot decimal without a leading `+` or explicit contact intent
 is treated as a decimal, including an otherwise ambiguous short telephone shape.
-National and multi-dot telephone forms retain conservative checks. A technical
+Other national and multi-dot telephone forms retain conservative checks. A technical
 span cannot cover a neighboring contact or combine independent fractions.
 
 One shared grammar recognizes ISO and `DD.MM.YYYY` calendar days and complete

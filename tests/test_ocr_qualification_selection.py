@@ -1,6 +1,7 @@
 """New native exclusion and tool-declaration proof must fail on inconsistent observations."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -97,3 +98,25 @@ def test_native_conveniences_cannot_replace_toolkit_execution_ownership(option, 
     args = [option + "=operator-value"] if attached else [option, "operator-value"]
     with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci review"):
         review_runner._reject_owned_review_options(args)
+
+
+def test_registered_reader_cannot_execute_in_restricted_native_grace(
+    tmp_path, qualified_native_ocr
+):
+    """Measure actual execution counts for a registered but unadvertised native read."""
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
+    module = load_script()
+    environment = module.execution._isolated_probe_environment(tmp_path / "git-home")
+    repository, base, head = module.execution._synthetic_repo(tmp_path, environment)
+    rounds, verdict = module.probes.numeric._effective_max_tools_probe(
+        Path(binary),
+        repository,
+        base,
+        head,
+        tmp_path,
+        value=50,
+        expected_diagnostic=None,
+        grace_task_done=False,
+    )
+    assert rounds == 50
+    assert verdict == {"completed": False, "limit_warning": True}

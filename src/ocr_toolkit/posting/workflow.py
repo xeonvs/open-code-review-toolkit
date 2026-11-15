@@ -1767,7 +1767,7 @@ def post_llm_provider_failure(
         ),
         ProviderFailureReason.RATE_OR_SPENDING_LIMIT: (
             "The LLM provider rejected the request under a rate or spending limit.",
-            "Try lowering `OCR_REVIEW_CONCURRENCY` and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline. If it still fails, check the provider's request and account limits.",
+            "Try lowering native concurrency (`ocr-ci review ... -- --concurrency N`) and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline. If it still fails, check the provider's request and account limits.",
         ),
         ProviderFailureReason.OVERLOADED: (
             "The LLM provider reported that it was overloaded.",

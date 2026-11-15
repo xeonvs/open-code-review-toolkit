@@ -1,94 +1,22 @@
 # Tasks Backlog
 
-This file contains implementation-ready future work derived from the [toolkit strategy](../engineering/toolkit_strategy.md) and ordered by the [roadmap](../../ROADMAP.md). Active repository work belongs in `PLANS.md`; roadmap outcomes are intentionally not repeated here.
+This file contains inactive work derived from the [toolkit strategy](../engineering/toolkit_strategy.md) and ordered by the [roadmap](../../ROADMAP.md). Active execution belongs in [PLANS.md](../../PLANS.md). Completed work belongs to the implemented strategy and [execution history](../engineering/execution_history/README.md), not this backlog.
 
-Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`; a temporary `promoted` entry points only to its active plan. Release classification is an expectation to be confirmed when work is activated. Completed work is reflected in the roadmap and stable execution-history archive rather than retained as future backlog.
+Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`; a temporary `promoted` slice points to its active plan. IDs are stable and never reused. Acceptance criteria are each item's exit gate; activation and the next safe action do not authorize implementation by themselves. Release classification is confirmed on activation.
 
-## Existing backlog reconciliation
+The [signal-ownership audit](../engineering/review_signal_ownership.md) remains the canonical BL-017 conclusion; model profiles do not introduce a telemetry layer. Existing governed federation, protected policy and scoped evidence contracts remain prerequisites for extensions.
 
-The qualified OCR capabilities do not complete any remaining conditional item:
-Objective-C++ routing is an OCR Rules change rather than a framework evidence pack;
-viewer fixed/ignored marks are browser state rather than forge lifecycle support;
-private failure arguments add no telemetry exporter or model-profile capability.
-
-| Previous item | Disposition | Result |
-| --- | --- | --- |
-| M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through shared evidence contracts. |
-| M2 framework selection (BL-009) | Completed and removed | Bounded static Jinja2, Go web, Symfony/Twig, and React/Next providers ship with synthetic cross-provider validation and no second MCP. |
-| M2 milestone closure | Completed | Stable 0.5.0 delivery and external readback establish M2; BL-010 remains a conditional M8 extension. |
-| M3 generic external-MCP qualification (BL-011) | Completed and removed | Checksum-verified OCR 1.9.5, the production `ocr-ci review` path, a local model peer, and a real stdio MCP peer establish the documented direct-composition safe-use envelope and its claim limits. |
-| M3 provider examples (BL-013) | Removed | Direct provider examples over model-selected unrestricted arguments are not the target architecture; valid synthetic adapter qualification moves behind the BL-023 broker boundary. |
-| Same-session external-MCP annotation enforcement (#103) | Removed / not planned | M7 removed the direct-provider path. Server annotations remain untrusted metadata; operator-owned registry assurance and gateway controls own the current decision. |
-| M4 accepted decisions (BL-014) | Completed and removed | Structured target-only decisions preserve deterministic identity, safe applicability, staleness, and bounded projections without suppression authority. |
-| M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
-| M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
-| OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
-| Native fuzzing campaign (BL-019) | Completed in the 0.14.0 implementation; maintained in current regression work | Bounded Hypothesis targets and minimized regressions remain in `tests/fuzz/` and component suites. Current work crosses original/decoded markup, complete serialization, persisted readback, composed local/GitLab output and bounded reference/URI work; the [test evidence matrix](../engineering/test_evidence_matrix.md#v0146-safe-prose-and-carrier-evidence) records boundaries and precision limits. |
-| File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
-| Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion, snapshot, and protected same-revision CI-outcome capabilities without blocking GitLab-first M5. |
-| M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
-| Review measurement gaps (BL-017) | Completed and removed | The toolkit 0.8.2 source-to-signal audit concludes `no-new-layer`: OCR retains provider/review telemetry ownership, while toolkit receipts and count-only DLP events retain deterministic lifecycle ownership. Group labels and path-derived keys are explicitly classified as untrusted, high-cardinality upstream telemetry. |
-
-## M3 External MCP hardening
-
-M3 is established. BL-011 is complete and recorded above rather than retained as future work. BL-012 is an authentication extension whose trigger is not met; authentication never substitutes for resource authorization and does not block M3 or BL-023.
-
-### BL-012: Define and validate managed OAuth for remote MCP
-
-- **Status:** conditional
-- **Priority:** low
-- **Roadmap theme:** M8 Later and conditional work — federation authentication
-- **Dependencies:** Established M7 registry-v2 federation gateway and its bounded HTTPS transport. Authentication must preserve gateway admission and upstream tenant/object authorization; the historical BL-011 direct-composition envelope is not a current fallback.
-- **Activation trigger:** A reviewed HTTPS upstream requires authorization-code OAuth rather than static environment-backed headers, and the existing gateway authentication contract is insufficient for pilot operations.
-- **Goal:** Add a provider-neutral authentication lifecycle without placing long-lived OAuth material in repository content or OCR config; object authorization remains server-owned and separate.
-- **Scoped deliverables:** Define authorization-code plus PKCE, browser callback ownership, refresh/revocation, secure token persistence, tenant/resource binding, dynamic-client-registration policy, sanitized audit events, and provider conformance fixtures before selecting an implementation boundary.
-- **Acceptance criteria:** Tokens never enter argv, repository files, generated context, or logs; refresh/revocation and tenant changes fail closed; synthetic static-header and browser-OAuth fixtures preserve registry-v2 gateway admission, bounded HTTPS transport, and upstream resource authorization without direct OCR passthrough.
-- **Exclusions:** Resource authorization by token presence, automatic reference discovery, writes, generic web access, or treating a permanent token as OAuth lifecycle support.
-- **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
-- **Release classification expectation:** `release-required` once public authorization behavior is selected.
-
-## M6 Profiles and quality measurement
-
-Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified internal evidence and content-free federation accounting, and carries deterministic stage-aware publication-DLP state in receipt v10, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint.
-
-### BL-016: Evaluate explicit run-level model profiles
-
-- **Status:** parked
-- **Priority:** medium
-- **Roadmap theme:** M6 Profiles and quality measurement
-- **Dependencies:** Established built-in MCP lifecycle and qualified OCR per-run model/provider overrides satisfy the capability dependency.
-- **Activation trigger:** Not met. Activate only after repeated operations show direct settings are insufficient and the owner approves a closed model/provider matrix plus precedence contract.
-- **Upstream overlap:** OCR supplies direct run-level selection; per-file and aggregate budgets remain explicit completeness controls, not profile defaults.
-- **Goal:** If need appears, offer `economy`, `standard`, and `strong` aliases for one OCR run without hiding aggregate, per-file, or tool controls.
-- **Scoped deliverables:** Define an owner-approved closed matrix and precedence contract; map an alias to one OCR run; publish effective non-secret identity; validate compatibility and environment precedence.
-- **Acceptance criteria:** One model remains active per run, `standard` preserves current behavior, explicit provider/model settings override profile aliases, aggregate/per-file/tool limits remain independent explicit operator inputs, secrets remain environment-only, and unavailable combinations fail before OCR execution.
-- **Exclusions:** Hidden budgets, per-file/per-tool routing, multi-agent orchestration, or full-repository scan profiles.
-- **Validation:** Profile matrix, precedence, preflight, rendering, and compatibility tests.
-- **Release classification expectation:** `release-required`.
-
-### BL-018: Evaluate conservative automatic profile routing
-
-- **Status:** conditional
-- **Priority:** low
-- **Roadmap theme:** M6 Profiles and quality measurement
-- **Dependencies:** BL-016, the completed BL-017 ownership audit, and an owner-approved quality/cost policy; M5 is not a dependency.
-- **Activation trigger:** Representative metrics demonstrate a stable deterministic rule that improves an explicit objective without reducing safety.
-- **Goal:** Select one run-level profile conservatively from trusted bounded inputs.
-- **Scoped deliverables:** Document the decision rule, inputs, fallback, observability, and opt-out; implement only after replay evaluation and owner approval.
-- **Acceptance criteria:** Routing is deterministic and explainable, never uses untrusted content as authority, cannot let merge-request-controlled inputs select below a repository-configured minimum profile, never selects `ocr scan`, and falls back to the policy minimum (default `standard`) on uncertainty.
-- **Exclusions:** Learned online routing, per-tool models, multiple agents, or silent policy changes.
-- **Validation:** Offline replay, adversarial boundaries, fallback tests, and quality thresholds.
-- **Release classification expectation:** `release-required`.
-
-## M8 Later and conditional work
+## Evidence packs
 
 ### BL-010: Add evidence packs from demonstrated use cases
 
 - **Status:** conditional
+- **Active slice:** .NET is promoted to [the active 0.15.0 plan](../../PLANS.md).
 - **Priority:** medium
-- **Roadmap theme:** M8 Later and conditional work
+- **Roadmap theme:** Evidence packs
 - **Dependencies:** Established evidence, snapshot/delta, scoped-completeness, static-plugin, and built-in MCP contracts.
 - **Activation trigger:** A real repository need identifies a missing ecosystem/framework and supplies safe synthetic fixtures and deterministic semantics.
+- **Next safe action:** Reproduce the next missing evidence need and define one bounded pack; the activated .NET slice belongs to the current plan.
 - **Goal:** Extend coverage without accumulating shallow detectors.
 - **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public operational examples using safe placeholders.
 - **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
@@ -97,29 +25,33 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; Handlebars/Mustache selection improves review coverage but does not supply a framework evidence contract or activate an evidence pack.
 - **Release classification expectation:** `release-required`.
 
-### BL-020: Design file-based non-secret configuration
+## External integrations
 
-- **Status:** parked
+### BL-012: Define and validate managed OAuth for remote MCP
+
+- **Status:** conditional
 - **Priority:** low
-- **Roadmap theme:** M8 Later and conditional work
-- **Dependencies:** Established MCP/evidence schemas. M5 owns only `.opencodereview/review-context-policy.json`; it neither activates nor depends on this general framework.
-- **Activation trigger:** Environment-only configuration is a demonstrated constraint and one coherent schema can cover affected non-secret settings.
-- **Goal:** Improve maintainability without weakening precedence, validation, or secret handling.
-- **Scoped deliverables:** Decide format/versioning, discovery/trust source, field-level environment precedence, migration, allowed non-secret fields, unknown/deprecated-key behavior, and redacted diagnostics before implementation.
-- **Acceptance criteria:** Environment precedence is explicit; secrets are rejected; source files cannot self-authorize; paths remain rooted; unknown/deprecated keys and rollback are documented/tested.
-- **Exclusions:** Credentials on disk, implicit configuration, overlapping formats, or implementation before design approval.
-- **Validation:** Threat model, schema/precedence, migration, and secret rejection.
-- **Release classification expectation:** `release-required`.
+- **Roadmap theme:** External integrations
+- **Dependencies:** Established M7 registry-v2 federation gateway and its bounded HTTPS transport. Authentication must preserve gateway admission and upstream tenant/object authorization; the historical BL-011 direct-composition envelope is not a current fallback.
+- **Activation trigger:** A reviewed HTTPS upstream requires authorization-code OAuth rather than static environment-backed headers, and the existing gateway authentication contract is insufficient for pilot operations.
+- **Next safe action:** Capture the concrete upstream OAuth requirement and credential/callback ownership before selecting an implementation.
+- **Goal:** Add a provider-neutral authentication lifecycle without placing long-lived OAuth material in repository content or OCR config; object authorization remains server-owned and separate.
+- **Scoped deliverables:** Define authorization-code plus PKCE, browser callback ownership, refresh/revocation, secure token persistence, tenant/resource binding, dynamic-client-registration policy, sanitized audit events, and provider conformance fixtures before selecting an implementation boundary.
+- **Acceptance criteria:** Tokens never enter argv, repository files, generated context, or logs; refresh/revocation and tenant changes fail closed; synthetic static-header and browser-OAuth fixtures preserve registry-v2 gateway admission, bounded HTTPS transport, and upstream resource authorization without direct OCR passthrough.
+- **Exclusions:** Resource authorization by token presence, automatic reference discovery, writes, generic web access, or treating a permanent token as OAuth lifecycle support.
+- **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
+- **Release classification expectation:** `release-required` once public authorization behavior is selected.
 
 ### BL-021: Add code-hosting and review-host adapters beyond GitLab
 
 - **Status:** conditional
 - **Priority:** low
-- **Roadmap theme:** M8 Later and conditional work
+- **Roadmap theme:** External integrations
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
 - **Upstream overlap:** OCR reusable GitHub Action checkpoint ranges and Action/plugin capabilities cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
 - **Local-provider distinction:** The local provider introduced in 0.10.0 shares pure reporting and supplies immutable local input plus Markdown delivery. It adds no forge authentication, discussion commands, threads, suppression or approval; it is not completion or activation of this second-forge item.
+- **Next safe action:** Write a capability and authorization matrix for the funded forge use case before adding an adapter.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
 - **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, protected same-revision CI outcomes, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.
@@ -132,7 +64,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Status:** conditional
 - **Priority:** low
 - **Source:** [Planning issue #265](https://github.com/xeonvs/open-code-review-toolkit/issues/265).
-- **Roadmap theme:** M8 Later and conditional work.
+- **Roadmap theme:** External integrations
 - **Dependencies and prerequisites:** Reuse established M1 evidence, M4 scoped policy/guidance, M5 bounded context/ownership, and M7 governed federation only where the selected product uses them. A protected-target-only experiment need not wait for automatic fallback. Any variant reviewing an unprotected target through protected default-branch policy depends on [single-MR foundation #264](https://github.com/xeonvs/open-code-review-toolkit/issues/264) and must reuse its independent code-target and policy-authority identities; it cannot recreate or bypass them. This planning item can close before #264 ships, and later runtime work does not block #264.
 - **Activation trigger:** An owner approves a demonstrated related-change review outcome, a supported graph shape, a reviewed request/authorization and publication contract, a resource budget, and a separate implementation issue and plan. A reopened #265 or a new comment is not activation or permission to execute.
 - **Goal:** Offer an explicit optional assessment of cross-layer behavior or combined delivery when ordinary single-MR review cannot make that coverage claim. Unchanged target code used as ordinary single-MR evidence is not a new related-MR review.
@@ -157,3 +89,51 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Exclusions:** No automatic traversal from target branch or prose; no merge, push, ref update, MR creation, unrelated pipeline start, protection/project-variable/policy edit, credential or external-tool expansion, direct external MCP passthrough, second model arbiter or default multiplication of full reviews. Candidate F may assess a strictly isolated toolkit-owned Git computation or verified forge snapshot, but must not execute repository content, hooks, filters, builds, credential helpers or submodules; conflicts and ordering ambiguity stop the candidate. Do not activate BL-020 configuration, BL-021 second forge, model-profile routing, managed OAuth or other conditional work. Do not reopen completed M1/M4/M5/M7 work, closed #168 or historical release facts.
 - **Validation:** Use synthetic/private-safe graph, mutation, force-push/retarget, stale-cache, privacy and publication fixtures across production forge, Git, context and write boundaries. Compare parent-only, child-only, interaction and intermediate-introduced/later-fixed defects; report coverage, provenance, duplicates and measured work/cost separately without invented savings. Separate mocked wiring, installed/integration proof and real-OCR qualification. Record engine or forge capability gaps instead of bypassing validation; absence of a test result or unmeasured layer remains unknown.
 - **Release classification expectation:** This #265 planning reconciliation is `no-release`. A later activated runtime implementation is expected `release-required`, subject to its own approved scope and final-diff classification. Retain the Source link after #265 closes; the merged planning PR should link this entry and record the recommended, deferred and rejected alternatives in the issue body. A later runtime implementation needs its own linked issue and plan.
+
+## Configuration and model profiles
+
+### BL-020: Design file-based non-secret configuration
+
+- **Status:** parked
+- **Priority:** low
+- **Roadmap theme:** Configuration and model profiles
+- **Dependencies:** Established MCP/evidence schemas. M5 owns only `.opencodereview/review-context-policy.json`; it neither activates nor depends on this general framework.
+- **Activation trigger:** Environment-only configuration is a demonstrated constraint and one coherent schema can cover affected non-secret settings.
+- **Next safe action:** Document the operational configuration constraint and one closed non-secret schema before adding discovery or runtime behavior.
+- **Goal:** Improve maintainability without weakening precedence, validation, or secret handling.
+- **Scoped deliverables:** Decide format/versioning, discovery/trust source, field-level environment precedence, migration, allowed non-secret fields, unknown/deprecated-key behavior, and redacted diagnostics before implementation.
+- **Acceptance criteria:** Environment precedence is explicit; secrets are rejected; source files cannot self-authorize; paths remain rooted; unknown/deprecated keys and rollback are documented/tested.
+- **Exclusions:** Credentials on disk, implicit configuration, overlapping formats, or implementation before design approval.
+- **Validation:** Threat model, schema/precedence, migration, and secret rejection.
+- **Release classification expectation:** `release-required`.
+
+### BL-016: Evaluate explicit run-level model profiles
+
+- **Status:** parked
+- **Priority:** medium
+- **Roadmap theme:** Configuration and model profiles
+- **Dependencies:** Established built-in MCP lifecycle and qualified OCR per-run model/provider overrides satisfy the capability dependency.
+- **Activation trigger:** Not met. Activate only after repeated operations show direct settings are insufficient and the owner approves a closed model/provider matrix plus precedence contract.
+- **Upstream overlap:** OCR supplies direct run-level selection; per-file and aggregate budgets remain explicit completeness controls, not profile defaults.
+- **Next safe action:** Collect operator cases where direct settings are insufficient, then approve the closed matrix and precedence contract.
+- **Goal:** If need appears, offer `economy`, `standard`, and `strong` aliases for one OCR run without hiding aggregate, per-file, or tool controls.
+- **Scoped deliverables:** Define an owner-approved closed matrix and precedence contract; map an alias to one OCR run; publish effective non-secret identity; validate compatibility and environment precedence.
+- **Acceptance criteria:** One model remains active per run, `standard` preserves current behavior, explicit provider/model settings override profile aliases, aggregate/per-file/tool limits remain independent explicit operator inputs, secrets remain environment-only, and unavailable combinations fail before OCR execution.
+- **Exclusions:** Hidden budgets, per-file/per-tool routing, multi-agent orchestration, or full-repository scan profiles.
+- **Validation:** Profile matrix, precedence, preflight, rendering, and compatibility tests.
+- **Release classification expectation:** `release-required`.
+
+### BL-018: Evaluate conservative automatic profile routing
+
+- **Status:** conditional
+- **Priority:** low
+- **Roadmap theme:** Configuration and model profiles
+- **Dependencies:** BL-016, the completed BL-017 ownership audit, and an owner-approved quality/cost policy; M5 is not a dependency.
+- **Activation trigger:** Representative metrics demonstrate a stable deterministic rule that improves an explicit objective without reducing safety.
+- **Next safe action:** Evaluate offline replay only after BL-016 and the owner-approved quality/cost policy exist.
+- **Goal:** Select one run-level profile conservatively from trusted bounded inputs.
+- **Scoped deliverables:** Document the decision rule, inputs, fallback, observability, and opt-out; implement only after replay evaluation and owner approval.
+- **Acceptance criteria:** Routing is deterministic and explainable, never uses untrusted content as authority, cannot let merge-request-controlled inputs select below a repository-configured minimum profile, never selects `ocr scan`, and falls back to the policy minimum (default `standard`) on uncertainty.
+- **Exclusions:** Learned online routing, per-tool models, multiple agents, or silent policy changes.
+- **Validation:** Offline replay, adversarial boundaries, fallback tests, and quality thresholds.
+- **Release classification expectation:** `release-required`.

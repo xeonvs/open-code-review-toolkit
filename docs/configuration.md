@@ -143,6 +143,12 @@ The inherited value is version-owned and may change with a qualified OCR upgrade
 
 ### Review effort
 
+Native concurrency is independent from effort and completion-token limits. Set
+it after the existing separator: `ocr-ci review ... -- --concurrency N`, with a
+positive `N`; the OCR default is 8. The toolkit continues to own the immutable
+repository/range, background and result paths, so caller `--repo`, `--resume`,
+background and output replacements are rejected.
+
 `OCR_REVIEW_EFFORT` defaults to `medium` and is written to OCR's root `effort` configuration key. OCR maps `low`, `medium`, and `high` to one, two, and three review rounds and scales its 15-minute subtask base to 15, 30, or 45 minutes. The environment is operator-owned; merge-request text cannot change it. An explicit caller `--effort` passed after `ocr-ci review --` has normal OCR CLI precedence over the generated config, while an unknown environment value fails configuration before preview or model execution.
 
 `OCR_REVIEW_PROGRESS=true` observes the same review in local and CI execution.
@@ -415,7 +421,11 @@ Historical v9/v10 retain their original policy-equals-target invariant; v11/v12
 retain their frozen diff/target/policy shapes. All four are readback-only for
 results and cannot publish a new current review. Pre-execution **v5/v6** keep
 their unchanged embedded **v11/v12 review tuples**, independently of the new
-result fields. v1-v8 results remain unsupported. A present malformed result or
+result fields. Pre-execution **v7** adds only the closed
+`evidence_budget_exceeded` reason, resource unit (`records`, `bytes`, `entries`)
+and actual/limit facts bound to the existing immutable review identity. It never
+contains a partial mandatory snapshot or authorizes approval or old-thread cleanup.
+v1-v8 results remain unsupported. A present malformed result or
 receipt is rejected atomically before prior review state is read; an absent
 receipt is accepted only for standalone direct posting outside GitLab CI.
 

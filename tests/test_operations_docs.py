@@ -306,9 +306,9 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
         "BL-020 retains",
     ):
         assert phrase in audit
-    assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
-    assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
-    assert "Receipt v9 adds federation and stage-aware DLP accounting" in roadmap
+    assert "review_signal_ownership.md" in backlog
+    assert "### BL-016:" in backlog and "### BL-018:" in backlog
+    assert "docs/codex/TASKS_BACKLOG.md#configuration-and-model-profiles" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:

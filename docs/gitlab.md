@@ -158,9 +158,38 @@ Remediation text is untrusted review history. It may locate a claim that OCR mus
 
 A protected CI pass is narrower than a general green-pipeline claim: it applies only to its exact reviewed head, exact protected job name, and declared path prefixes. It may challenge an unconditional claim about code that the job actually exercised, but it cannot suppress a finding, prove unrelated absence, change severity/lifecycle, or authorize approval. Stale, advisory, skipped, canceled, failed, unknown, incomplete, mutated, or ambiguous data cannot be treated as a required pass. The toolkit does not fetch job logs, artifacts, URLs, users, runners, variables, or raw IDs.
 
-Provider configuration is forge-neutral. Configure and preflight share one normalized absolute HTTPS API root, explicit protocol, headers, request-body controls, and optional models URL. A protocol-mismatched terminal endpoint, embedded credential, or fragment fails before OCR. A classified provider failure stays in the job because no completed v13 review identity can authorize an MR note; raw provider/model fields, response bodies, request IDs, paths, warnings, and stderr remain private. The review log may contain one toolkit-authored line of closed HTTP detail and non-zero aggregate retry counts from a fully validated retry report. `rate-or-spending-limit` job guidance suggests lowering `OCR_REVIEW_CONCURRENCY` and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, starting a new merge request pipeline, and then checking provider request/account limits without claiming either setting caused the failure. The previous successful review remains visible, no failed-result findings are posted, and approval is not attempted.
+Provider configuration is forge-neutral. Configure and preflight share one normalized absolute HTTPS API root, explicit protocol, headers, request-body controls, and optional models URL. A protocol-mismatched terminal endpoint, embedded credential, or fragment fails before OCR. A classified provider failure stays in the job because no completed v13 review identity can authorize an MR note; raw provider/model fields, response bodies, request IDs, paths, warnings, and stderr remain private. The review log may contain one toolkit-authored line of closed HTTP detail and non-zero aggregate retry counts from a fully validated retry report. `rate-or-spending-limit` job guidance suggests lowering native concurrency (`ocr-ci review ... -- --concurrency N`) and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, starting a new merge request pipeline, and then checking provider request/account limits without claiming either setting caused the failure. The previous successful review remains visible, no failed-result findings are posted, and approval is not attempted.
 
 When a merge request introduces a repository-owned OCR rules path absent from both selected protected policy baselines, `review` stops before OCR and `post` may publish only the static setup-pending message after hostile identity validation. The source file never becomes policy evidence for its own merge request. Under explicit `unprotected` with an actually unprotected target, target Rules are still mandatory but remain untrusted guidance; a missing target blob fails before OCR without promoting the source copy.
+
+## Optional automatic-review skip label
+
+The main example runs automatically for merge request pipelines. To opt into a
+`no-ai-review` label, override only `open_code_review.rules` after including the
+example. Keep this exclusion before the normal MR rule; the first match wins.
+
+```yaml
+open_code_review:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /(^|,)no-ai-review(,|$)/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - when: never
+```
+
+The expression matches a complete, case-sensitive label in GitLab's comma-separated
+label variable, so `no-ai-review-later` does not match. GitLab evaluates
+[job rules](https://docs.gitlab.com/ci/jobs/job_rules/) when creating the pipeline;
+changing a label does not update an existing pipeline. Start a new merge request
+pipeline to apply either adding or removing the label. The separate manual
+readiness job remains available.
+
+Skipping this job performs no review, posting, old-thread cleanup or approval
+action. It does not remove a previous review or approval. Allowing a label-based
+skip can weaken a required-review policy: the result depends on who can edit
+labels, pipeline/merge permissions and approval-reset rules. Enable it only as an
+explicit project policy; the distributed example does not enable it by default.
 
 ## Reviewer commands and no-commit reruns
 

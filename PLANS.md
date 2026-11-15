@@ -51,10 +51,10 @@ durable architectural limits and historical evidence at their existing owners.
 | REQ-006 | #313 shared container-build path recognition | WQ-03 | done |
 | REQ-007 | #314 all numeric/date cases and inverse material protection | WQ-04 | done |
 | REQ-008 | Structural Hypothesis, paired private audits, resource comparison and repeat | WQ-04, WQ-07 | in_progress |
-| REQ-009 | Exact OCR assets, excluded coverage and request-scoped tools qualification | WQ-05 | pending |
-| REQ-010 | Hosted qualification, promotion, local binary update and weekly schedule | WQ-05, WQ-10 | pending |
-| REQ-011 | #311 actual concurrency control and #316 opt-in skip example | WQ-06 | pending |
-| REQ-012 | Remove completed planning history; regroup inactive work and preserve unique limits | WQ-06 | pending |
+| REQ-009 | Exact OCR assets, excluded coverage and request-scoped tools qualification | WQ-05 | in_progress |
+| REQ-010 | Hosted qualification, promotion, local binary update and weekly schedule | WQ-05, WQ-10 | in_progress |
+| REQ-011 | #311 actual concurrency control and #316 opt-in skip example | WQ-06 | done |
+| REQ-012 | Remove completed planning history; regroup inactive work and preserve unique limits | WQ-06 | done |
 | REQ-013 | Focused/installed/integration tests and measured coverage floors | WQ-02, WQ-03, WQ-04, WQ-05, WQ-06, WQ-07 | pending |
 | REQ-014 | Aggregate self-review, one Security scan, real own-tool review and admitted PR diagram | WQ-07 | pending |
 | REQ-015 | Final quality, protected feature merge and development TestPyPI verification | WQ-07, WQ-08 | pending |
@@ -184,10 +184,10 @@ paths, credentials, internal chat identifiers or raw debug in public artifacts.
 | WQ-03 | Bounded .NET declarations/central links, project-scoped ASP.NET, shared container grammar and Git/store/stdio MCP handoffs accepted | REQ-004, REQ-005, REQ-006, REQ-013 | done |
 | WQ-04 | Numeric span/date corrections and initial authenticated paired audits accepted; final resource/repeat comparison remains at WQ-07 | REQ-007, REQ-008, REQ-013 | done |
 | WQ-05 | New OCR contracts, exact Linux assets, hosted chain qualification and promotion; logical commit | REQ-009, REQ-010, REQ-013 | in_progress |
-| WQ-06 | Operator guidance, label example, unified local diagnostics, workflow-cycle audit, roadmap/backlog and canonical owners; logical commits | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | in_progress |
+| WQ-06 | Shared local diagnostics, actual concurrency guidance, opt-in label, future-only roadmap/backlog and canonical documentation accepted locally | REQ-011, REQ-012, REQ-013, REQ-019, REQ-020 | done |
 | WQ-07 | Repeated corpus comparison, aggregate review, one Security scan, own-tool findings/diagram, final quality and installed gates | REQ-008, REQ-013, REQ-014, REQ-015, REQ-019, REQ-020, REQ-021 | pending |
 | WQ-08 | Final feature push with exact diagram, protected CI/merge and development TestPyPI verification | REQ-015 | pending |
-| WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins and lifecycle archive/reset; protected merge | REQ-016 | pending |
+| WQ-09 | Signed release/v0.15.0 PR with exact title, metadata/notes/pins, archive/reset and active roadmap/BL-010 pointer closure; protected merge | REQ-016 | pending |
 | WQ-10 | Stable external readback, CI-owned issue/milestone closure, site, local OCR update, synchronized main and cleanup | REQ-010, REQ-017, REQ-018 | pending |
 
 ### Locked Decisions
@@ -395,6 +395,20 @@ branches across 360 scoped checks. Clean wheel/sdist installation remains at the
 final gate; these are not installed-artifact claims. Remaining operator/planning
 documents are a separate WQ-06 slice.
 
+WQ-06 operator/planning slice: current provider guidance uses native concurrency;
+the historical changelog is unchanged. The label recipe is opt-in, precedes the
+ordinary MR rule, leaves manual readiness and the distributed default intact, and
+documents pipeline timing and merge/approval implications. Nine token-boundary
+controls pass. Scoped posting/docs/release-note checks preserve earlier behavior.
+Completed roadmap/backlog history is removed; all seven inactive IDs, unique
+dependencies, activation constraints and acceptance gates remain. New next actions
+and BL-010's active slice point to their owners. The absent historical enriched
+model qualification remains explicit at the strategy owner. The release PR must
+remove the active roadmap rows and BL-010 promotion pointer when archiving this
+plan. No closure PR is needed. Instruction review retained the existing execution
+rules and strengthened the concrete docstring check; no duplicate instruction or
+new orchestration framework was added.
+
 ### Risks And Recovery
 
 Dateparser 1.5.0 was qualified as a possible supplement on a synthetic 34-value
@@ -430,9 +444,11 @@ its final full repeat/resource comparison at WQ-07 after runtime work is complet
 WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
 purpose-focused descriptions are committed as a7004e2.
 The numeric slice is committed as 0d16bab and OCR qualification as a759d51.
-Unified diagnostic code/test changes passed scoped CLI/auth boundaries and are
-ready for semantic review and commit. Then finish concurrency/label guidance and
-roadmap/backlog cleanup before the final installed and aggregate gates.
+Unified diagnostics are committed as bdbaa34 after scoped CLI/auth boundaries.
+Concurrency/label guidance and future-only roadmap/backlog cleanup passed focused
+validation. Commit the reviewed slice, then aggregate self-review, one Security
+scan, own-tool review and final runtime/installed/corpus gates. WQ-05's final
+Linux TLS/strong-grace and hosted reconciliation remain explicit hard gates.
 Draft PR #317 remains at its signed plan commit; all development
 stays local until final feature acceptance.
 
