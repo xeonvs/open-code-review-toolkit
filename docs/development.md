@@ -28,7 +28,9 @@ thresholds on the Linux/Python 3.14 coverage owner; retain the measured margin
 in the release evidence rather than inferring it from the configured floor.
 A high combined result cannot hide a weak group. Individual DLP/audit, source
 syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
-local and hosted coverage gates. Hosted pull requests run source and contract
+local and hosted coverage gates. Structural evidence sizing, bounded store
+serialization and optional target admission each have an independent 90% floor.
+Hosted pull requests run source and contract
 tests on all six supported OS/Python combinations. The expensive
 clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python
 3.12 job; the separate required build job smoke-tests both distribution paths.
@@ -63,6 +65,8 @@ asset acquisition, the deterministic peer, numeric/selection/comment probes,
 candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
 shared qualification inputs; `core.py` owns bounded document/version primitives.
 `comparison.py` owns immutable old/new/default native code-tool observations;
+`exclusions.py` checks selection exclusions against terminal coverage, and
+`declarations.py` checks call/result admission and fresh-round tool inventories.
 `wire_controls.py` owns API request-control captures, `selection.py` owns language
 and unchanged-project-context probes, and `peer.py` binds their bounded synthetic
 exchanges, including exact tool-call identities for context-read evidence.
@@ -141,9 +145,9 @@ Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
-Evidence through OCR 1.13.7 is now frozen. Its 1.13.0–1.13.7 contract lives in
+Evidence through OCR 1.13.8 is now frozen. Its 1.13.0–1.13.8 contract lives in
 the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
-numeric defaults and language inventories. Fresh execution starts at 1.13.8.
+numeric defaults and language inventories. Fresh execution starts at 1.13.9.
 The live max-tools probe separately measures omitted and zero defaults, explicit
 50/75/100/125 overrides and 49 normalization, then checks the native manifest's
 effective limit against actual counted rounds. The same probe implementation
@@ -157,6 +161,11 @@ another side's content. Successful same-tool controls separate independent negat
 cases so OCR's repeated-failure guard cannot replace the rejection being tested.
 Extensionless build paths are recorded separately from actual extension suffixes.
 Similar ordinary names retain default Rules instead of acquiring Starlark Rules.
+Excluded coverage is checked independently from the selected terminal partition.
+Request-scoped tools retain declared reads across review rounds. The negative
+grace control requests a registered read that is absent from that request's tool
+declarations; it must neither execute nor complete the task. Unknown tool names
+alone do not prove that stronger boundary.
 Metadata/help/status paths remain usable with stdlib Python; import installed
 toolkit dependencies only inside the executable probe that consumes them.
 
@@ -174,6 +183,11 @@ from model-quality qualification in a configured external environment.
 Before a logical commit, update the plan and directly affected status-bearing documents to describe post-commit truth. A milestone closes only after current implementation and tests prove its own outcome; update roadmap, backlog, strategy, or README only when their recorded facts change. For a standalone completed `no-release` plan, close it through the installed lifecycle once its outcome and validation are retained in the commit or PR; an open PR alone does not imply pending implementation when PR creation is the requested endpoint. Keep genuinely unfinished work with its exact resume action. The [release guide](release.md#external-reconciliation-and-plan-archiving) owns when a stable plan can close; the installed lifecycle owns its checked state transition and the declared per-plan archive graph.
 
 Historical wording is evidence, not a specification. Rebuild a capability matrix from current code, tests, and published behavior before retaining backlog work or dependency edges. Keep implementation, safety, and rollout dependencies distinct so conditional future work does not block an independently safe capability.
+
+The resume point names only remaining work and the first safe action. Keep
+completed evidence separate. Before committing, compare both with the current
+queue and actual checks so recovery cannot instruct another agent to repeat a
+completed scan, implementation step or publication action.
 
 When a failure recurs, classify its cause before changing guidance: add or repair the canonical requirement when it is missing or conflicting, correct startup selection when it was not loaded, and otherwise add or repair the concrete subsystem control. Add a pitfalls entry only for a distinct reusable incident class with historical evidence; the catalogue itself does not own the correction.
 
@@ -203,14 +217,14 @@ When auditing session efficiency, distinguish tool-call counts, output volume, c
 
 For a PR-only task, finish the scoped local checks, review security-relevant changes and run the pinned secret gate before push, create the PR, and read its initial check state once. Report pending CI honestly. Wait for completion when merge, release, CI repair, or explicit monitoring is part of the task; otherwise PR creation is the handoff boundary. When waiting is needed, keep repeated watch output in the execution layer and return only meaningful changes or the terminal result.
 
-Wait for a long-running local command through one completion-driven waiter when the execution environment exposes a persistent process or session identity. The waiter stays attached until exit, cancellation, or the command's overall deadline and returns as soon as that terminal state occurs. Internal infrastructure waits must not yield periodic empty observations back to the model: repeated model-driven `status`, terminal, or process polls add tool results and task history without changing a decision. The waiter is a completion signal, never the only copy of command output or a required result: its transport or model-facing output can be truncated, discarded after completion, or lost with the session.
+Wait for a long-running local command through one completion-driven waiter when the execution environment exposes a persistent process or session identity. Use its native exit status and standard streams as ordinary completion evidence. Keep unchanged watch output in the execution layer. Preserve a private log or result only when output truncation, detachment/recovery, diagnosis or a required acceptance artifact makes durable output necessary.
 
 Keep the wait bounded and diagnosable:
 
 - assign an overall command deadline and preserve a cancellation path; terminate and clean up owned child processes when either is reached;
-- before starting the process, choose explicit ignored owner-only paths outside any transient directory that the command cleans up, remove or reject stale owned artifacts, and have the process atomically publish every result required for later validation;
-- redirect potentially large stdout and stderr to ignored private files and preserve them until their focused inspection is complete; return from the waiter only the exit status, elapsed time, artifact paths, digests, and a bounded diagnostic tail or structured summary;
-- validate the persisted artifact's type, ownership/permissions, size, completion marker or exact schema, and digest before trusting it; a missing or invalid artifact is a failed/inconclusive run, not permission to reconstruct the result from a truncated waiter transcript;
+- when durable output is needed, choose ignored owner-only paths outside directories the command cleans up, reject stale results, and preserve the command's exit status;
+- reduce large results before sending them to the model; report the terminal status, relevant diagnostics and any required artifact location;
+- validate required artifacts according to their existing consumer contract; a missing or invalid required artifact makes the run inconclusive, while routine commands need no extra receipt, digest or completion-marker protocol;
 - retain enough process or session identity to distinguish completion from a lost waiter, but do not expose credentials, inherited environment, unbounded logs, or result bodies through the waiter;
 - let the outer wait return immediately on process completion even when its maximum deadline is much longer; and
 - inspect full logs only after a concrete failure makes a focused range relevant.
@@ -233,6 +247,36 @@ Make each claimed behavior falsifiable at its owning boundary. When content,
 identity, location, provenance or completeness is promised, assert that property
 rather than only a success/failure flag. Identify an incorrect result that the
 positive oracle could still accept, and add a focused counterexample.
+
+Before each logical commit, the semantic reviewer must inspect the changed
+claims against their actual assertions and generated handoff, not just a green
+test summary. For each security, identity, completeness or resource claim, name
+the observable witness and a structurally different invalid case that its test
+rejects. Keep those references in existing tests or the active plan; do not add
+another report or a prose-presence test. A missing witness or counterexample
+leaves the claim unverified and blocks the commit until the implementation,
+assertion or claim is corrected. Independent reviewers apply the same gate.
+For a changed or removed shared interface, inspect its current runtime and test
+references before selecting focused checks. Reconcile every affected caller and
+rejection contract; update obsolete fixtures without restoring a removed API.
+
+Apply that gate across the affected dimensions:
+
+- Derive supported syntax, enum variants and representation rules from the
+  format owner or real producer. Vary grammar and composition in property
+  tests, rather than varying only values inside one convenient spelling.
+- Bind qualification to the expected external identity and membership, not only
+  an internally consistent result. A phase/freshness claim needs an observed
+  transition; a request index, elapsed time or counter alone is insufficient.
+- For derived associations, test a competing eligible source as well as an
+  unrelated source that must preserve the result. Audit the full input set
+  before claiming uniqueness, effective configuration or absence.
+- Check independent resource units and composed stages, including expanded
+  parser state and remaining optional capacity. Prove the mandatory result
+  survives an optional-domain overflow and that degraded coverage stays explicit.
+- Verify operational documentation's absolute claims against every affected
+  mode and consumer. Distinguish data admission, operator authorization,
+  publication and automatic approval instead of treating them as one permission.
 
 Before measuring bounded or concurrent work, define the counted unit and its
 start/end events. Distinguish work completion, consumer-visible delivery and
@@ -331,7 +375,8 @@ a detector precision or recall rate.
 `tests/research/test_dlp_parser_candidates.py` retains synthetic comparisons for
 optional parser additions. Run it separately in an isolated Python 3.14 environment
 with the built toolkit wheel and `pytest==9.2.0`, `tree-sitter==0.26.0`,
-`tree-sitter-c==0.24.2`, `pygments==2.21.0`, and `pii-extract-plg-regex==0.5.1`:
+`tree-sitter-c==0.24.2`, `pygments==2.21.0`, `pii-extract-plg-regex==0.5.1`,
+and `dateparser==1.5.0`:
 
 ```sh
 "$probe_env/bin/pytest" --confcutdir=tests/research -o addopts= \
@@ -349,6 +394,17 @@ absence. PIISA's full regional/context pipeline is not qualified by that lexical
 probe. Its plugin currently also lacks a wheel. Reconsider a focused addition
 only with supported binary installs, bounded correct role proof and demonstrated
 benefit on independently classified cases. No model downloads are involved.
+
+[Dateparser](https://dateparser.readthedocs.io/en/latest/settings.html) was tested
+as a supplement to current admission. Strict automatic
+parsing reinterprets an invalid ISO-like month, and even a fixed strict order
+accepts excessive fractional-second precision. Its ability to recognize further
+numeric dates therefore needs separate whole-span, ambiguity and protection
+qualification; a successful parse alone must not override a DLP rejection.
+The current calendar fix uses one shared lexical grammar and stdlib calendar
+validation. Repeat corpus analysis includes residual calendar rejections before
+selecting any broader supplemental recognizer. The optional research probes keep
+both its demonstrated benefit and its admission counterexamples.
 
 Primary contracts: [Tree-sitter node errors](https://tree-sitter.github.io/py-tree-sitter/classes/tree_sitter.Node.html),
 [Pygments lexer API](https://pygments.org/docs/api/), and
@@ -444,7 +500,14 @@ work, hostile wire types and process-local inputs that can change an edge.
 Review the observed consumer result and remaining private artifacts, not only
 each producer's unit result.
 
-New runtime modules, classes, and functions need purpose-focused docstrings. Comments at non-obvious security, compatibility, ownership, and state-transition boundaries explain why the constraint exists rather than narrating the code. Do not add legacy namespace shims or historical integrations outside the public contract.
+New runtime modules, classes, and functions need purpose-focused docstrings.
+Inspect new and changed definitions during each logical self-review, including
+constructors, private/nested callbacks and new test helpers. Describe the contract
+or observable test intent; formatter, type and coverage success does not establish
+this documentation check. Comments at non-obvious security, compatibility,
+ownership, and state-transition boundaries explain why the constraint exists
+rather than narrating the code. Do not add legacy namespace shims or historical
+integrations outside the public contract.
 
 Apply the [cohesive-module invariant](engineering/project_principles.md#product-and-architecture) during self-review. Prefer an extract-and-delegate refactor that moves already characterized functions or classes intact, preserves the intentional package facade, and reruns the same contract suite before and after each move. Split on distinct responsibility and dependency direction, not an arbitrary line count; do not rewrite a working algorithm merely to make a file shorter. Architecture tests should protect required owners and forbidden upward dependencies without freezing every future helper-module name.
 
@@ -456,7 +519,8 @@ receipt v14. Posting accepts the exact current form for each result route;
 automatic approval accepts only eligible v13 with verified native range.
 The frozen v9-v12 result readback rules, shared tuple parser, and pre-execution
 status v5/v6 with unchanged embedded v11/v12 tuples are separate
-version-specific contracts. When a new receipt version is introduced, preserve
+version-specific contracts. Evidence-budget status v7 also binds the existing
+v11 tuple and is not a completed review receipt. When a new receipt version is introduced, preserve
 prior wire meanings, implement its parser and nested-schema mapping explicitly,
 and version the private pre-execution status if its embedded review tuple changes. Verify
 old readback, new producer/readback, static-note handoff, normal publication,
@@ -516,6 +580,21 @@ Provider I/O and executable CLI claims require separate production-boundary test
 
 ## Extending ecosystem evidence
 
+The `.NET` pack lives under `ecosystems/dotnet/`: `xml.py` and `json.py` own
+bounded declaration parsing, and `linking.py` derives conservative central links
+from normalized records, immutable path names and source states. It imports no
+framework lifecycle or Git I/O. `ManifestParseResult.runtime_dependent` is the
+shared adapter signal for unsupported evaluation; orchestration preserves it as
+partial source coverage for any ecosystem. `ManifestFact.source_scoped` keeps
+source-local declaration identities separate across files and their deltas
+without a language-specific rule in core projection. The ASP.NET Core provider belongs to
+`frameworks/providers/dotnet.py`. The [current pack contract](review-context.md#static-net-evidence)
+owns supported inputs and non-claims.
+
+`container_paths.py` owns the common Dockerfile/Containerfile grammar used by
+categorization and infrastructure acquisition/parsing. File recognition does not
+alter generic confidentiality, policy or publication boundaries.
+
 Normalized source adapters live under `src/ocr_toolkit/evidence/ecosystems/`. Shared parser result contracts belong in `ecosystems/contracts.py`; Python, JavaScript, Go, and PHP package metadata each have one adapter module. Ansible keeps Galaxy requirements and topology/inventory analysis as separate modules under `ecosystems/ansible/`. These adapters consume text or already bounded metadata and return normalized facts: they do not own Git or filesystem reads, subprocesses, network access, framework derivation, persistence, or MCP lifecycle.
 
 The `evidence/collectors/` package is the bounded immutable acquisition boundary. `registry.py` owns path-to-adapter registration, `sources.py` owns small cross-ecosystem CI/container source projections, `graphs.py` owns local include-graph reads, `projections.py` owns record/coverage/delta projection, and `orchestration.py` coordinates one immutable ref. Pure helper modules must not import orchestration, persistence, MCP, or higher policy/framework lifecycles. The package `__init__.py` is the intentional runtime facade; do not recreate a flat compatibility module.
@@ -563,4 +642,4 @@ Performance evidence must separate cold-start validation from steady-state reque
 <!-- ew:invariant id="development.prepush-dependency-audit" -->
 ## Dependency Audit Before Push
 
-Before every push, run `scripts/dependency-audit.sh`. This is the same `pip-audit` entry point as the pull request's `dependency-audit` security job: it synchronizes the committed lock with `uv sync --locked`, then audits the installed environment with `uv run --no-sync pip-audit`. It uses a dedicated ignored environment under `.quality-logs/`, preserving the caller's active environment, and runs with the CI-pinned uv 0.13.7 (using `uvx` when the installed `uv` differs). A stale lock, unavailable tool, vulnerability, or failed audit blocks the push; do not treat an incomplete scan as clean. The stable-release job separately audits its installed release environment with `--skip-editable`.
+Before every push, run `scripts/dependency-audit.sh`. This is the same `pip-audit` entry point as the pull request's `dependency-audit` security job: it synchronizes the committed lock with `uv sync --locked`, then audits the installed environment with `uv run --no-sync pip-audit`. It uses a dedicated ignored environment under `.quality-logs/`, preserving the caller's active environment, and runs with the CI-pinned uv 0.13.8 (using `uvx` when the installed `uv` differs). A stale lock, unavailable tool, vulnerability, or failed audit blocks the push; do not treat an incomplete scan as clean. The stable-release job separately audits its installed release environment with `--skip-editable`.

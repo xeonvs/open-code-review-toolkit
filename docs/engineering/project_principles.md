@@ -108,7 +108,7 @@ Before staging or committing each complete logical slice, perform a bounded sema
 <!-- ew:invariant id="workflow.completion-driven-wait" -->
 ### Completion-driven wait
 
-For a long-running command, preserve its full result outside the waiter before execution and use the completion-driven, bounded-output contract in `docs/development.md`. A completion requires exit status and required output evidence. Use native terminal evidence when sufficient; retain a private log or durable result when output volume or recovery requires it. Avoid periodic empty polls when the environment can wait for process completion, and clean up task-owned processes.
+For a long-running command, use the completion-driven, bounded-output contract in `docs/development.md`; arrange durable private output before execution when truncation, recovery or an acceptance artifact requires it. A completion requires exit status and required output evidence. Use native terminal evidence when sufficient; retain a private log or durable result when output volume or recovery requires it. Avoid periodic empty polls when the environment can wait for process completion, and clean up task-owned processes.
 
 <!-- ew:invariant id="workflow.documentation-ownership" -->
 ## Documentation Ownership

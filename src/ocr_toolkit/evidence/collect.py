@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 from pathlib import Path, PurePosixPath
 
+from ocr_toolkit.evidence.budgets import (
+    INVOCATION_BYTE_RESERVE,
+    INVOCATION_RECORD_RESERVE,
+    MAX_TARGET_DEPENDENCY_RECORDS,
+    MAX_TARGET_FILE_RECORDS,
+    structural_budget,
+)
 from ocr_toolkit.evidence.categorize import categorize_paths
-from ocr_toolkit.evidence.collectors import collect_ref_facts, fact_deltas
+from ocr_toolkit.evidence.collectors import collect_ref_facts
+from ocr_toolkit.evidence.collectors.admission import admit_typed_facts
 from ocr_toolkit.evidence.coverage import coverage_deltas
 from ocr_toolkit.evidence.model import EvidenceRecord, EvidenceSnapshot, RefRole, TrustClass
 from ocr_toolkit.evidence.repository import (
@@ -15,11 +24,9 @@ from ocr_toolkit.evidence.repository import (
     build_file_snapshot,
     file_deltas,
 )
-from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError, EvidenceStoreLimits
 from ocr_toolkit.evidence.store.contracts import POLICY_KINDS, TARGET_CONTEXT_KINDS
 
-MAX_TARGET_FILE_RECORDS = 64
-MAX_TARGET_DEPENDENCY_RECORDS = 64
 MAX_TARGET_DIAGNOSTICS = 32
 
 
@@ -161,7 +168,29 @@ def collect_repository_evidence(
     )
     all_coverage = tuple((*base.coverage, *head.coverage))
     snapshot_deltas = file_deltas(base, head)
-    store = EvidenceStore(base=base, head=head, policy=policy)
+    categories = categorize_paths(list(changed))
+    structural_counts = Counter(
+        record.kind for record in (*base.records, *head.records, *policy.records)
+    )
+    structural_counts["repository.change_category"] = sum(
+        path in base_paths or path in head_paths for paths in categories.values() for path in paths
+    )
+    budget = structural_budget(
+        structural_counts, len(all_coverage), include_target=target_ref is not None
+    )
+    store = EvidenceStore(
+        base=base,
+        head=head,
+        policy=policy,
+        limits=EvidenceStoreLimits(
+            max_records=budget.max_records,
+            max_records_per_kind=budget.max_records_per_kind,
+            max_bytes=budget.max_bytes,
+        ),
+        optional_records=budget.optional_records,
+        reserved_records=INVOCATION_RECORD_RESERVE,
+        reserved_bytes=INVOCATION_BYTE_RESERVE,
+    )
     typed_facts = [*base_facts, *head_facts]
     rejected_snapshot_records = [
         record
@@ -198,43 +227,15 @@ def collect_repository_evidence(
             record.id,
         ),
     )
-    exhausted_kinds: set[str] = set()
-    incomplete_delta_kinds: set[str] = set()
-    for index, record in enumerate(ordered_typed_facts):
-        if record.kind in exhausted_kinds:
-            continue
-        if not store.add(record):
-            incomplete_delta_kinds.add(record.kind)
-            if record.component == "ansible" and record.kind.startswith("ansible."):
-                raise EvidenceStoreError(
-                    "Ansible topology facts exceed the atomic evidence store limits"
-                )
-            limit_state = store.record_limit_state(record.kind)
-            if limit_state == "global":
-                store.add_diagnostic("typed evidence was truncated by the global store limit")
-                incomplete_delta_kinds.update(
-                    candidate.kind for candidate in ordered_typed_facts[index:]
-                )
-                break
-            if limit_state == "kind":
-                # A per-kind omission must not suppress later independent domains.
-                store.add_diagnostic(f"typed {record.kind} evidence was truncated by store limits")
-                exhausted_kinds.add(record.kind)
-    for kind in sorted(incomplete_delta_kinds):
-        store.add_diagnostic(f"typed {kind} comparison incomplete; unsafe semantic deltas omitted")
-    # Deltas are projections of canonical accepted store records, never raw facts
-    # or references to values that redaction, deduplication, or a budget omitted.
     store.deltas = tuple(
         sorted(
             (
                 *snapshot_deltas,
-                *fact_deltas(store.records, incomplete_kinds=incomplete_delta_kinds),
                 *coverage_deltas(all_coverage),
             ),
             key=lambda item: (item.kind, item.component, item.identity),
         )
     )
-    categories = categorize_paths(list(changed))
     categories_truncated = False
     for category, paths in sorted(categories.items()):
         for path in paths:
@@ -270,6 +271,9 @@ def collect_repository_evidence(
         *policy_diagnostics,
     ):
         store.add_diagnostic(diagnostic)
+    # Typed facts and their semantic projections share the remaining byte pool.
+    # Validate complete B/H/P, categories, coverage and diagnostics before admission.
+    admit_typed_facts(store, ordered_typed_facts)
     if target_ref is not None:
         # The actual target may differ from both the historical diff base and
         # the protected policy branch. Its facts are optional code context and
@@ -333,9 +337,8 @@ def collect_repository_evidence(
             len(target_files.records) > MAX_TARGET_FILE_RECORDS
             or len(dependencies) > MAX_TARGET_DEPENDENCY_RECORDS
         )
-        for record in (*files, *selected_dependencies):
-            if not store.add_target_context(record):
-                omitted = True
+        if not store.add_target_context((*files, *selected_dependencies)):
+            omitted = True
         if omitted:
             _add_target_diagnostic(
                 store, "target code context is incomplete due to bounded evidence limits"

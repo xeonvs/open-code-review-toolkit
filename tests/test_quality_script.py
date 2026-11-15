@@ -64,8 +64,21 @@ def test_quality_script_enforces_combined_and_boundary_coverage(tmp_path: Path) 
         "audit_module in cli corpus scanner state limits worker_process report proof",
         "source_module in native_capabilities common/redaction common/value_boundaries common/literal_context context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/datetimes context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation context/dlp/projection context/dlp/result_prose diagrams/sources evidence/text_metadata evidence/text_contracts evidence/text_excerpts evidence/source_reader evidence/opaque_code posting/source_suggestions reporting/diagram_layout reporting/warnings",
     ):
-        assert f"for {modules}; do" in script
-        assert f"for {modules}; do" in workflow
+        variable, _, *required = modules.split()
+
+        def declared_modules(text: str) -> list[str]:
+            """Read the actual floor inventory while allowing additional guarded modules."""
+            prefix = f"for {variable} in "
+            line = next(
+                line.strip() for line in text.splitlines() if line.strip().startswith(prefix)
+            )
+            return line.removeprefix(prefix).removesuffix("; do").split()
+
+        local = declared_modules(script)
+        assert local == declared_modules(workflow)
+        assert set(required) <= set(local)
+        if variable == "source_module":
+            assert {"context/dlp/contact_labels", "evidence/collectors/admission"} <= set(local)
 
     binary_dir = tmp_path / "bin"
     binary_dir.mkdir()

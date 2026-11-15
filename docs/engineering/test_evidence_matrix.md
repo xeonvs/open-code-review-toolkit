@@ -2,6 +2,72 @@
 
 This matrix records what the repository test suite proves and, equally importantly, what it does not prove. The governing rule is [Test doubles and integration proof](project_principles.md#test-doubles-and-integration-proof): a double may replace a collaborator beyond the production owner under test, but it may not replace that owner and still be cited as integration evidence.
 
+## v0.15.0 atomic structural evidence budgets
+
+Real temporary Git repositories cross the production collector, complete
+snapshots/deltas, private store serialization/readback and MCP pagination at
+255/256/257/260/413/513/1000 changed files. Optional typed limits remain independent
+from structural growth. Unicode/escape properties compare the streamed encoder
+with canonical JSON and verify atomic failure; target batches retain consistent
+indexes with bounded incremental admission and a final real serializer guard.
+Optional-fact tests cross real Git snapshots and a controlled expanded fact
+producer, then actual persistence and scoped MCP queries. Record, composed-delta,
+diagnostic and invocation budgets are independent. Partial coverage survives a
+configured-secret collision that redacts the omission notice and a later readback
+without that environment value; no diagnostic phrase grants completeness.
+
+The CLI hard-budget tests replace only provider identity acquisition, keeping
+Git, collection, status persistence, cleanup and local failure delivery real.
+Budget-note tests use production freshness with real Git graphs and a controlled
+external snapshot collaborator, and preserve previous comments across target,
+policy and job drift. They establish note routing/freshness, not new HTTPS
+transport qualification; the shared provider transport suites own that boundary.
+Hostile v7 readback, stale identities and v5/v6 downgrade attempts are separate
+checks. New sizing, serializer and target owners each have a 90% branch-aware floor.
+
+## v0.15.0 static .NET and container evidence
+
+`test_evidence_dotnet.py` crosses real Git collection, central-version changes,
+project isolation, private persistence/readback and an actual stdio MCP child.
+It verifies source and range identities, distinct Web SDK/reference signals,
+framework-scoped locks and manifest/category recognition. Pure parser and provider
+tests exercise malformed/hostile XML/JSON, conditions, conflicts, overrides,
+imports, nested central files and construction/fact/project limits. Structural
+Hypothesis varies namespaces, attribute/child forms and escaped literal data.
+Each new parser/linker/provider has a 90% branch-aware floor. These checks prove
+static declarations and mechanical references, not an evaluated MSBuild build.
+
+The shared container grammar crosses category selection, production acquisition
+selection and FROM parsing for both naming directions, variants, case, platform
+arguments and stage aliases, with near-match negative controls. Existing ecosystem
+and framework suites preserve other project types through the same pipeline.
+
+## v0.15.0 numeric material and local diagnostics
+
+Numeric regressions and structural Hypothesis properties cover complete decimals,
+grouped amounts, independent fractions, ISO/dotted days and timestamps, Unicode
+digits, encoded/Markdown/Mermaid views and full token boundaries. Inverse controls
+retain contacts, credentials and configured protected values in adjacent material.
+Calendar semantics come from stdlib validation; optional Dateparser research
+records both extra recognition and counterexamples to using parse success as
+admission authority. Line/branch coverage is not a measure of detector precision.
+
+Initial corpus pairs authenticate identical files and units through the existing
+private audit contract. Changed admissions receive individual verdicts; discovered
+timestamp punctuation failures cross production proof, admission and publication
+in focused replay. Final repeated corpus/resource acceptance remains part of the
+release gate. Private source, identities, paths and statistics are not public
+fixtures or evidence. An annotation is not a runtime allowlist or a proof that all
+remaining conservative blocks are correct.
+
+The local diagnostic suites cross actual private files, callbacks, finalization,
+closed budget facts and native-store links. The controlled real-CLI matrix checks
+normal/debug/progress parity, safe and raw result separation, both diagram paths,
+and evidence capture before cleanup. The ChatGPT process fixture proves private
+HOME cleanup without exporting the native auth/config store; its native/model
+collaborator is synthetic. Clean wheel/sdist entrypoints and actual own-tool model
+acceptance are separate final gates.
+
 ## Evidence classes
 
 - **Unit or policy:** pure parsing, normalization, ordering, rendering, validation, or orchestration. A replaced boundary owner limits the claim to wiring.

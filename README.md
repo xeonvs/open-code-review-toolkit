@@ -115,7 +115,8 @@ The shipped Repository Evidence Engine reads immutable base/head Git objects, st
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Bounded review context](docs/review-context.md) - protected policy, GitLab discussions and same-revision CI outcomes, legacy reference migration, opaque handles, DLP, receipt, and cleanup contracts.
-- [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
+- [Static .NET evidence](docs/review-context.md#static-net-evidence) - project SDK/framework settings, declared and locked packages, and source-scoped central-version provenance through the same evidence MCP.
+- [Roadmap](ROADMAP.md) - nearest and conditional outcomes with activation signals.
 - [Backlog](docs/codex/TASKS_BACKLOG.md) - inactive implementation-ready work; active execution remains in `PLANS.md`.
 
 ## GitLab CI quick start

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.8",
-  "recommended_version": "1.13.8",
+  "monitoring_floor": "1.13.10",
+  "recommended_version": "1.13.10",
   "releases": [
     {
       "assets": [
@@ -3042,6 +3042,112 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.8",
       "status": "tested",
       "version": "1.13.8"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "2044f04f4195240ed0a70f54b8c1d5ff3a69a8ce2d14712dccffa7a4f4039e06",
+          "size": 58403280
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "a4e6fc65146475217450545d2ebc2e8ae2aab5ef0e609fc865c379235e1720c0",
+          "size": 55399826
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "2db294981624d6fae9bcfb4df7f9ebfd7f92c40b3a552873dff5887116931d3e",
+          "size": 56647842
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "76fcb0e5c6c40f5ac2c23537563de8ac3038831d5f54f800cc10896d9ee91d8c",
+          "size": 53346466
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "79bf317ea446c16a1b0bfa3fdf9725156095b8b2b7e1f538f17ab31126b02853",
+          "size": 58117632
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "323be3bf8afa90a0cef1c0ceb40e0994153c0f1b2d1b43adb8ccf16c64e31064",
+          "size": 54033408
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "494f552c00cb03d2c260bf4e34918142864d3162e578d020156f215857aa869b",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.9.json",
+      "evidence_sha256": "1943301fa8e0c2f4d6b9a79d93b54d2fbd6ad4a727bba3fb75274ad70c91dda8",
+      "human_conclusion": "Qualified official Linux amd64 and Darwin arm64 assets against the current immutable-range contracts. Excluded coverage remains outside selected terminal partitions; request-scoped tool admission rejects undeclared calls and preserves subsequent rounds. Existing MCP, diagram and federation consumer gates remain required before delivery. Upstream Action and session-list changes are not consumed.",
+      "published_at": "2026-11-13T09:47:57Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.9",
+      "status": "tested",
+      "version": "1.13.9"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "a8d1a38a6ed149201985f488ebe0707d0a503e3cc6e4eb945054452ec719760e",
+          "size": 63596096
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "d1613b376593c3dcec7fe2ea8348651fef9cb812fbcd6b69b0f3fb39212bfcbc",
+          "size": 60385506
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "8a0cbf6dfaa1d8681ad3d854971623e34b3f51c4585d2c4ae352f1ff5eee5cb8",
+          "size": 61755554
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "97c2ea9ce5afc9418cb9dc135ca42c03cedbd31d1be41318f73821d6239740ff",
+          "size": 58196130
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "7d0cf22e193ca78403426a23ef873ba22c0b8c48f627966eae312c559a6db77b",
+          "size": 63283200
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "7152849c5336e4c0e1557c1eb1b70363ab31b92fef25e26ebe20c39844f74081",
+          "size": 58924544
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "7c42e3f032256c528091abfe85590ab138593f4d31deb690922e12e47489f536",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.10.json",
+      "evidence_sha256": "247cc1a8f21f96924b0685f56eb5bed41c1536c960e9288c514cf8523fdb28cd",
+      "human_conclusion": "Qualified the adjacent release with explicit immutable from/head arguments. Native workspace, resume and default-HEAD conveniences remain unused; the toolkit retains immutable range ownership. No new public configuration or implicit worktree selection is introduced.",
+      "published_at": "2026-11-15T02:56:09Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.10",
+      "status": "tested",
+      "version": "1.13.10"
     }
   ],
   "runtime_support": {

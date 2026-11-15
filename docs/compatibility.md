@@ -40,7 +40,7 @@ Before selecting a lane, classify every upstream changelog item as a toolkit-con
 
 Classify a pin-only promotion and its machine or human qualification evidence as Maintenance. If the qualification exposes an existing toolkit incompatibility and the delivery corrects it, classify that outcome as a Bug Fix. If the toolkit begins exposing or consuming an upstream capability, classify that outcome as a Feature. Effective built-in rule or reviewable-file changes remain Rules even when they arrive with an otherwise maintenance-only OCR promotion.
 
-- `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence, runtime preflight version, and GitLab example version/checksum. It never writes directly to `main`.
+- `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence and runtime preflight version. GitLab example version/checksum pins move together in the release PR. It never writes directly to `main`.
 - `human-review-required`: every minor/major release, skipped or non-increasing patch, changed or failed contract, feature-bearing release, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
 
 Each OCR version owns one stable HTML marker and one qualification issue. The workflow performs a single upsert through bounded direct issue listing rather than GitHub's eventually consistent search index. Reuse requires the exact marker on the first line and a GitHub-reported author matching the repository's individual owner or the verified GitHub Actions bot identity. Marker copies, quoted mentions and membership associations confer no write authority. Other manually created issues require operator reconciliation. Historical issues closed with the `duplicate` label remain as incident evidence but do not compete for canonical identity. Any other duplicate among eligible issues fails closed instead of creating another issue; after operators select and reconcile the canonical issue, reruns update it in place.
@@ -490,6 +490,33 @@ a separate release gate; deterministic peers establish protocol behavior only.
 Hosted exact-tag baseline run 43215747102 created canonical qualification tracker
 [#308](https://github.com/xeonvs/open-code-review-toolkit/issues/308). Final
 current-contract hosted qualification is reconciled with feature delivery.
+
+### OCR 1.13.9–1.13.10 — toolkit 0.15.0 qualification
+
+Official Linux amd64 and Darwin arm64 assets pass the current controlled-peer
+contracts. OCR 1.13.9 adds `coverage.excluded`: reasons and unique item identities
+remain separate from selected files and their completed/reused/failed/waived
+partition. Exclusions have no source fingerprint and do not turn a complete
+selected review into a partial one. The list covers files reaching native
+selection, rather than every path the native diff provider may ignore earlier.
+
+Request-scoped tool declarations preserve normal evidence, diagram and federation
+calls. An undeclared tool is rejected; a registered read absent from the restricted
+grace declaration must not execute or complete the task. Later review rounds
+retain the consumed capabilities. The existing MCP SDK and local native auth
+ownership are unchanged in the adjacent source changes. Actual controlled peers
+exercise both diagram variants, grouping, federation, concurrency and gitlinks.
+
+OCR 1.13.10 adds native workspace, default-HEAD and resume conveniences. Toolkit
+review continues to resolve explicit immutable base/head before evidence;
+caller-selected `--repo` and `--resume` are rejected. No workspace review or
+resume ownership is exposed. Evidence through 1.13.8 remains frozen readback;
+fresh probes start at 1.13.9. Historical evidence bytes are unchanged.
+
+Canonical Actions trackers are [#318](https://github.com/xeonvs/open-code-review-toolkit/issues/318)
+and [#319](https://github.com/xeonvs/open-code-review-toolkit/issues/319). Baseline
+hosted qualification created both; current-contract hosted reconciliation remains
+part of feature delivery. The weekly discovery schedule is unchanged.
 
 ## Promotion and rollback
 

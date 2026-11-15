@@ -15,10 +15,33 @@ from ocr_toolkit.evidence.model import (
     EvidenceRecord,
     RefRole,
 )
-from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError, EvidenceStoreLimits
 from tests.fuzz.strategies import json_values
 from tests.test_evidence_mcp import _store
 from tests.test_evidence_model import coverage, record
+
+
+@given(st.text(alphabet='safe é漢😀"\\\n', max_size=1500), st.integers(1024, 4096))
+def test_streaming_store_uses_exact_canonical_utf8_budget_and_atomic_failure(value, byte_limit):
+    """Compare bounded streaming output with canonical JSON and preserve prior files on failure."""
+    store = EvidenceStore(EvidenceStoreLimits(max_bytes=byte_limit))
+    assert store.add(record(value))
+    expected = (
+        json.dumps(store.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
+    )
+    with TemporaryDirectory(prefix="ocr-streamed-store-") as directory:
+        target = Path(directory) / "evidence.json"
+        target.write_text("previous")
+        if len(expected.encode("utf-8")) > byte_limit:
+            with pytest.raises(EvidenceStoreError):
+                store.write(target)
+            assert target.read_text() == "previous"
+        else:
+            store.write(target)
+            assert target.read_bytes() == expected.encode("utf-8")
+            assert EvidenceStore.read(target).to_dict() == store.to_dict()
+        assert list(Path(directory).iterdir()) == [target]
 
 
 @given(

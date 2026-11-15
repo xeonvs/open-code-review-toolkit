@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ocr_toolkit.evidence.budgets import (
+    MAX_EVIDENCE_BYTES,
+    MAX_EVIDENCE_RECORDS,
+    EvidenceBudgetExceeded,
+)
+
 SCHEMA_VERSION = 5
 SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, SCHEMA_VERSION}
 POLICY_KINDS = frozenset({"repository.accepted_decision", "repository.guidance"})
 TARGET_CONTEXT_KINDS = frozenset({"repository.file", "dependency.declared", "dependency.locked"})
-MAX_SERIALIZED_BYTES = 20_000_000
+MAX_SERIALIZED_BYTES = MAX_EVIDENCE_BYTES
 KNOWN_KINDS = frozenset(
     {
         "repository.file",
@@ -26,6 +32,11 @@ KNOWN_KINDS = frozenset(
         "review.merge_request_context",
         "dependency.declared",
         "dependency.locked",
+        "dotnet.source",
+        "dotnet.property",
+        "dotnet.sdk",
+        "dotnet.package_version",
+        "dotnet.central_version",
         "runtime.declared",
         "runtime.detected",
         "container.image",
@@ -40,6 +51,10 @@ KNOWN_KINDS = frozenset(
 
 class EvidenceStoreError(ValueError):
     """Report an invalid, unsafe, or over-limit evidence store operation."""
+
+
+class EvidenceStoreBudgetError(EvidenceStoreError, EvidenceBudgetExceeded):
+    """Preserve the store-error API and provide a closed budget diagnostic."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +79,7 @@ class EvidenceStoreLimits:
             )
         ):
             raise EvidenceStoreError("evidence store limits must be integers")
-        if not 1 <= self.max_records <= 100_000:
+        if not 1 <= self.max_records <= MAX_EVIDENCE_RECORDS:
             raise EvidenceStoreError("max_records must be between 1 and 100000")
         if not 1 <= self.max_records_per_kind <= self.max_records:
             raise EvidenceStoreError(

@@ -17,6 +17,7 @@ class ManifestFact:
     component: str
     identity: str
     value: EvidenceValue
+    source_scoped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,3 +27,4 @@ class ManifestParseResult:
     facts: tuple[ManifestFact, ...]
     notices: tuple[str, ...] = ()
     include_paths: tuple[str, ...] = ()
+    runtime_dependent: bool = False

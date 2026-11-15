@@ -169,7 +169,7 @@ Disabled mode emits a prominent private warning and bounded Technical-details
 warning, records the effective state in current receipt v13/v14, and is always comment-only.
 It may expose sensitive material through service/model egress, local Markdown or
 GitLab publication, and later re-enablement cannot retract prior disclosure.
-Operators should diagnose locally with `--preserve-private-artifacts` before this
+Operators should use the complete [local debug invocation](../local.md#private-debug-bundle) before this
 escape hatch. Local and GitLab use the same resolved value and formatter.
 
 ## Acceptance

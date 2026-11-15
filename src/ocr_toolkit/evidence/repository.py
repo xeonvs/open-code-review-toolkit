@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
+from ocr_toolkit.evidence.budgets import MAX_CHANGED_PATHS, MAX_TREE_ENTRIES, EvidenceBudgetExceeded
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceDelta,
@@ -61,6 +62,10 @@ def _git_prefix(root: Path) -> list[str]:
 
 class RepositoryEvidenceError(ValueError):
     """Report an invalid ref, path, object type, or bounded Git read."""
+
+
+class RepositoryEvidenceBudgetError(RepositoryEvidenceError, EvidenceBudgetExceeded):
+    """Keep a genuine immutable-tree budget failure distinct from corruption."""
 
 
 class RepositoryReadBudget(RepositoryEvidenceError):
@@ -351,7 +356,9 @@ class GitRepositoryReader:
             raise RepositoryEvidenceError(f"Git commit is unavailable locally: {ref}")
         return sha
 
-    def list_objects(self, ref: str, *, max_entries: int = 20_000) -> tuple[RepositoryObject, ...]:
+    def list_objects(
+        self, ref: str, *, max_entries: int = MAX_TREE_ENTRIES
+    ) -> tuple[RepositoryObject, ...]:
         """List bounded tree entries without following symlinks or submodules."""
 
         sha = self.resolve_commit(ref)
@@ -363,7 +370,12 @@ class GitRepositoryReader:
         if records and records[-1] == b"":
             records.pop()
         if len(records) > max_entries:
-            raise RepositoryEvidenceError("repository tree exceeds the bounded entry limit")
+            raise RepositoryEvidenceBudgetError(
+                len(records),
+                max_entries,
+                "entries",
+                message="repository tree exceeds the bounded entry limit",
+            )
         entries = []
         for record in records:
             match = OBJECT_RECORD_RE.fullmatch(record)
@@ -726,7 +738,7 @@ class GitRepositoryReader:
         return BoundedBlobRead(blobs, tuple(diagnostics))
 
     def changed_paths(
-        self, base_ref: str, head_ref: str, *, max_paths: int = 10_000
+        self, base_ref: str, head_ref: str, *, max_paths: int = MAX_CHANGED_PATHS
     ) -> tuple[str, ...]:
         """Return deterministic changed paths, including both sides of renames."""
 
@@ -757,7 +769,12 @@ class GitRepositoryReader:
                     raise RepositoryEvidenceError("changed path is not valid UTF-8") from exc
                 paths.add(normalize_repo_path(decoded_path))
                 if len(paths) > max_paths:
-                    raise RepositoryEvidenceError("changed path count exceeds the bounded limit")
+                    raise RepositoryEvidenceBudgetError(
+                        len(paths),
+                        max_paths,
+                        "entries",
+                        message="changed path count exceeds the bounded limit",
+                    )
             index += path_count
         return tuple(sorted(paths))
 

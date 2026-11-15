@@ -18,6 +18,7 @@ from ocr_toolkit.evidence.frameworks.contracts import (
 )
 from ocr_toolkit.evidence.frameworks.detection import coverage_observation
 from ocr_toolkit.evidence.frameworks.providers import (
+    ASPNET_CORE_PLUGIN,
     GO_WEB_PLUGIN,
     JINJA2_PLUGIN,
     REACT_PLUGIN,
@@ -31,6 +32,7 @@ BUILTIN_FRAMEWORK_PLUGINS: tuple[FrameworkPlugin, ...] = (
     GO_WEB_PLUGIN,
     SYMFONY_PLUGIN,
     REACT_PLUGIN,
+    ASPNET_CORE_PLUGIN,
 )
 
 

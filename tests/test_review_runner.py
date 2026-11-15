@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import shutil
 import signal
 import stat
 import subprocess
@@ -2126,8 +2125,6 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert projected is safe_payload
     assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
-    decisions = review_runner._private_dlp_decisions(safe_payload, forbidden=())
-    assert decisions["decisions"] == []
 
     tab_secret = "synthetic\ttab-bearing\tsecret"
     monkeypatch.setenv("SYNTHETIC_SECRET", tab_secret)
@@ -2191,11 +2188,10 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert blocked is True
 
 
-@pytest.mark.parametrize("private_diagnostics", [False, True])
 def test_publication_dlp_retains_only_safe_local_findings_without_provider_receipt(
     tmp_path: Path,
-    private_diagnostics: bool,
 ) -> None:
+    """Apply ordinary DLP to local output without preserving rejected finding text."""
     result = tmp_path / "result.json"
     result.write_text(
         json.dumps(
@@ -2250,7 +2246,6 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         forbidden=("private discussion sentence",),
         report_consumer=local_state.admit_report,
         state=local_state,
-        private_diagnostics=private_diagnostics,
     )
 
     assert usage == {"ocr_toolkit_evidence": 1}
@@ -2279,17 +2274,10 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
             "content": "Validate the safe branch before returning.",
         },
     ]
-    if private_diagnostics:
-        assert persisted[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY] == {
-            "reason": "private-retention"
-        }
-        assert persisted["comments"][1]["content"] == "Copied private discussion sentence."
-        assert ocr_result.TOOLKIT_RESULT_KEY not in persisted
-    else:
-        assert persisted["status"] == "completed_with_errors"
-        assert persisted["comments"] == safe_comments
-        assert persisted["warnings"] == ["Safe bounded warning."]
-        assert "_ocr_toolkit" not in persisted
+    assert persisted["status"] == "completed_with_errors"
+    assert persisted["comments"] == safe_comments
+    assert persisted["warnings"] == ["Safe bounded warning."]
+    assert "_ocr_toolkit" not in persisted
     assert persisted["tool_calls"] == {
         "total": 2,
         "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
@@ -2422,7 +2410,7 @@ def test_raw_ocr_result_cannot_supply_the_reserved_toolkit_advisory(tmp_path: Pa
             forbidden=(),
         )
 
-    assert ocr_result.TOOLKIT_ADVISORY_KEY in result.read_text(encoding="utf-8")
+    assert not result.exists()
 
 
 def test_raw_ocr_result_rejects_duplicate_reserved_advisory_keys(tmp_path: Path) -> None:
@@ -3202,70 +3190,6 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     assert persisted["comments"][0]["content"].startswith("Guard the empty")
     assert persisted["locations"] == [{"diagnostic": "ocr-redacted-000001"}]
     assert "synthetic@example.invalid" not in result.read_text(encoding="utf-8")
-
-
-@pytest.mark.parametrize(
-    "technical_id,rejected",
-    (
-        ("12345678-1234-5678-1234-123456789012", False),
-        ("RUN-1234567/8901", True),
-    ),
-)
-def test_private_dlp_sidecar_attributes_ambiguous_identifiers_without_raw_value(
-    tmp_path: Path,
-    technical_id: str,
-    rejected: bool,
-) -> None:
-    result = tmp_path / "result.json"
-    sidecar = tmp_path / "private-dlp-decisions.json"
-    result.write_text(
-        json.dumps(
-            {
-                "session_id": technical_id,
-                "manifest": {"run_id": technical_id},
-                "status": "complete",
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    review_runner._write_private_dlp_decisions(result, sidecar, forbidden=())
-
-    payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    decisions = payload["decisions"]
-    assert payload["schema_version"] == "ocr.private-dlp-decisions/v1"
-    if rejected:
-        assert [item["path"] for item in decisions] == [["manifest", "run_id"], ["session_id"]]
-        assert {item["reason"] for item in decisions} == {"pii"}
-        assert {item["detector"] for item in decisions} == {"phone:normalized"}
-        assert len({item["sha256"] for item in decisions}) == 1
-        assert {item["action"] for item in decisions} == {"reject-value"}
-    else:
-        assert decisions == []
-    assert payload["truncated"] is False
-    assert payload["omitted_decisions"] == 0
-    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
-    assert technical_id not in sidecar.read_text(encoding="utf-8")
-
-
-def test_private_dlp_sidecar_bounds_hostile_paths_and_decision_count() -> None:
-    """Bound local diagnostics even when a hostile result rejects every value."""
-
-    technical_id = "RUN-1234567/8901"
-    nested: dict[str, object] = {
-        str(index): technical_id for index in range(review_runner.PRIVATE_DLP_MAX_DECISIONS + 5)
-    }
-    for _index in range(review_runner.PRIVATE_DLP_MAX_PATH_DEPTH + 5):
-        nested = {"bounded": nested}
-    payload = review_runner._private_dlp_decisions(nested, forbidden=())
-
-    decisions = payload["decisions"]
-    assert isinstance(decisions, list)
-    assert len(decisions) == review_runner.PRIVATE_DLP_MAX_DECISIONS
-    assert payload["truncated"] is True
-    assert payload["omitted_decisions"] == 5
-    assert all(len(item["path"]) <= review_runner.PRIVATE_DLP_MAX_PATH_DEPTH for item in decisions)
-    assert any("<truncated-path>" in item["path"] for item in decisions)
 
 
 def test_resolve_ocr_binary_rejects_relative_and_repository_owned_path_entries(
@@ -4746,14 +4670,12 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
 
 
 @pytest.mark.parametrize(
-    ("preserve_private_artifacts", "ocr_exit_code", "target_protection"),
+    ("ocr_exit_code", "target_protection"),
     [
-        (False, 0, "local"),
-        (False, 0, "protected"),
-        (False, 1, "local"),
-        (True, 0, "local"),
-        (True, 1, "local"),
-        (False, 0, "unprotected"),
+        (0, "local"),
+        (0, "protected"),
+        (1, "local"),
+        (0, "unprotected"),
     ],
 )
 @pytest.mark.parametrize("progress_on", [False, True])
@@ -4761,12 +4683,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    preserve_private_artifacts: bool,
     ocr_exit_code: int,
     target_protection: str,
     progress_on: bool,
 ) -> None:
-    """Clean ordinary success/failure while retaining requested local diagnostics."""
+    """Clean every execution while preserving immutable input and terminal attribution."""
 
     monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true" if progress_on else "false")
     monkeypatch.setenv("CI_PROJECT_ID", "1")
@@ -4784,8 +4705,6 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     review_runner.prepare_artifact_directory(artifacts)
     artifacts.pre_execution_status.write_text("stale", encoding="utf-8")
     artifacts.pre_execution_status.chmod(0o600)
-    artifacts.dlp_decisions.write_text("stale", encoding="utf-8")
-    artifacts.dlp_decisions.chmod(0o600)
 
     class Store:
         head = SimpleNamespace(commit_sha="b" * 40)
@@ -4947,7 +4866,6 @@ def test_evidence_review_prepares_internal_context_before_ocr(
                 "--max-tools",
                 "30",
             ],
-            preserve_private_artifacts=preserve_private_artifacts,
         )
 
     output = capsys.readouterr()
@@ -4959,7 +4877,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1
-    assert session_homes[0].exists() is preserve_private_artifacts
+    assert not session_homes[0].exists()
     assert os.environ.get("HOME") == original_home
     assert events[0] == (
         "collect",
@@ -5010,49 +4928,13 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     ]
     assert events[8][0] == "ocr"  # type: ignore[index]
     assert events[8][3] == events[7][1][2:-1]  # type: ignore[index]
-    if preserve_private_artifacts:
-        assert ("ocr-usage" in events) is (ocr_exit_code == 0)
-        if ocr_exit_code == 0:
-            assert finalized[0]["private_diagnostics"] is True
-        assert artifacts.store.exists()
-        assert artifacts.bootstrap.exists()
-        if ocr_exit_code == 0:
-            sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
-            assert sidecar == {
-                "schema_version": "ocr.private-dlp-decisions/v1",
-                "truncated": False,
-                "omitted_decisions": 0,
-                "decisions": [],
-            }
-        else:
-            retained = ocr_result.load_ocr_result(tmp_path / "result.json")
-            assert (
-                retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "execution-failed"
-            )
-            assert retained["result"]["status"] == "failed"
-            assert ocr_result.TOOLKIT_RESULT_KEY not in retained
-            monkeypatch.setattr(workflow, "post_review_note_bounded", lambda *_args: {"id": 1})
-            monkeypatch.setattr(workflow, "finalize_posting", lambda *_args: True)
-            monkeypatch.setattr(
-                workflow,
-                "collect_previous_bot_comment_refs",
-                lambda *_args: pytest.fail("private result must not inspect previous comments"),
-            )
-            # A private execution diagnostic cannot be a successful posting job.
-            assert workflow.post_results(gitlab_config(), retained) == 1
-            assert "not publication-eligible" in capsys.readouterr().err
-        # Authorized retention may include cache subdirectories on Linux.
-        # This fixture owns the temporary HOME and removes its complete tree.
-        shutil.rmtree(session_homes[0])
+    if ocr_exit_code == 0:
+        assert events[9] == "ocr-usage"
+        assert finalized[0]["toolkit_advisory"] is None
     else:
-        if ocr_exit_code == 0:
-            assert events[9] == "ocr-usage"
-            assert finalized[0]["toolkit_advisory"] is None
-        else:
-            assert "ocr-usage" not in events
-        assert not artifacts.store.exists()
-        assert not artifacts.bootstrap.exists()
-        assert not artifacts.dlp_decisions.exists()
+        assert "ocr-usage" not in events
+    assert not artifacts.store.exists()
+    assert not artifacts.bootstrap.exists()
 
 
 def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
@@ -5069,7 +4951,6 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
         artifacts.context_store,
         artifacts.action_receipt,
         artifacts.action_receipt_lock,
-        artifacts.dlp_decisions,
         artifacts.diagram,
         artifacts.diagram_lock,
     )
@@ -5084,83 +4965,3 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
     assert all(not path.exists() for path in ephemeral)
     assert artifacts.pre_execution_status.read_text(encoding="utf-8") == "private"
     assert artifacts.review_run_lock.is_file()
-
-
-def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:
-    """Reject diagnostic retention for a validated GitLab merge-request review."""
-
-    with pytest.raises(review_runner.ReviewRunnerError, match="local reviews only"):
-        review_runner._authorize_private_artifact_preservation(
-            review_runner.ReviewIdentity(
-                "a" * 40, "b" * 40, 41, "off", None, "b" * 40, "protected"
-            ),
-            requested=True,
-        )
-
-    assert (
-        review_runner._authorize_private_artifact_preservation(
-            LOCAL_IDENTITY,
-            requested=True,
-        )
-        is True
-    )
-
-
-def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Path) -> None:
-    """Reject GitLab diagnostic retention, skip OCR, and unwind the private home."""
-
-    artifacts = review_runner.repository_artifacts(tmp_path)
-    review_runner.prepare_artifact_directory(artifacts)
-    session_homes: list[Path] = []
-    ocr_called = False
-
-    def capture_config() -> None:
-        session_homes.append(Path(os.environ["HOME"]))
-
-    def run(*_args: object, **_kwargs: object) -> int:
-        nonlocal ocr_called
-        ocr_called = True
-        return 0
-
-    with (
-        patched_env(
-            CI_PROJECT_ID="1",
-            CI_MERGE_REQUEST_IID="2",
-            CI_MERGE_REQUEST_EVENT_TYPE="detached",
-            CI_COMMIT_SHA="b" * 40,
-            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
-        ),
-        patched_attr(
-            review_runner,
-            "_immutable_review_refs",
-            lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
-        ),
-        patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
-        patched_attr(review_runner, "_write_isolated_runtime_config", capture_config),
-        patched_attr(
-            review_runner,
-            "_resolve_ocr_binary",
-            lambda: pytest.fail("retention denial must precede optional binary probing"),
-        ),
-        patched_attr(
-            review_runner,
-            "_prepare_policy_context",
-            lambda *_args: (
-                review_runner.ReviewIdentity(
-                    "b" * 40, "a" * 40, 41, "off", None, "a" * 40, "protected"
-                ),
-                ["--from", "base", "--to", "head"],
-            ),
-        ),
-        patched_attr(review_runner, "run_review", run),
-    ):
-        with pytest.raises(review_runner.ReviewRunnerError, match="local reviews only"):
-            review_runner.run_evidence_review(
-                tmp_path / "result.json",
-                tmp_path / "stderr.log",
-                ["--from", "base", "--to", "head"],
-                preserve_private_artifacts=True,
-            )
-
-    assert not ocr_called
-    assert len(session_homes) == 1 and not session_homes[0].exists()

@@ -8,7 +8,9 @@ One runner-owned immutable B/H range is proved before range-dependent evidence
 and independently matched to native requested/resolved/exact-range fields at
 admission. Complete coverage does not prove range identity. Current result
 receipts v13/v14 bind that claim; frozen v9-v12 remain historical readback and
-pre-execution v5/v6 keep their unchanged embedded review tuples.
+pre-execution v5/v6 keep their unchanged embedded review tuples. The v7 hard-evidence
+budget status uses the existing v11 review tuple and carries only closed numeric
+resource facts, without a review result or approval authority.
 
 The optional [typed diagram](diagrams.md) has a separate run-bound private output
 collector. It accepts no destination or provider-write authority. Whole-unit DLP
@@ -75,6 +77,30 @@ The main trust transitions are:
    authority. Generated promotion outputs reject conflicting existing content
    before any pin is changed; exclusive creation protects new destinations.
 
+### Static declaration parsing
+
+Static .NET inputs are hostile repository data. XML construction rejects DTDs,
+entity declarations and external entities, with independent 1 MB input, 32-level,
+4096-element, 32-attribute and 4096-character scalar bounds. Fact construction is
+capped at 512 per source. Composed XML locations use fixed-size semantic digests;
+all .NET parsers enforce a cumulative UTF-8 fact-payload budget before retention:
+at most 1 MB and 16 times source bytes, with 1 KiB headroom for small inputs.
+A non-expanding Expat prepass enforces the per-element attribute bound, including
+namespace declarations, before the namespace-aware parser can multiply URI copies
+across attribute names. Both passes refuse DTD/entity features. The second pass
+preserves namespace validation and charges expanded names, attributes and text
+before tree retention. These limits bound retained construction and namespace
+fanout; Expat's temporary raw dictionaries still consume input-proportional memory,
+so the construction budget is not a total-process memory limit.
+Exhaustion explicitly degrades completeness rather than proving absence or a
+unique central version. These are construction bounds, independent of the later
+store admission and persistence limits. JSON has independent duplicate-key, type, nesting,
+scalar and traversal checks. MSBuild expressions/imports remain unevaluated;
+no build, restore, configuration-file credential read or network resolution is
+available. Ambiguous central declarations do not become effective versions.
+These parser bounds supplement the shared immutable Git, optional fact, private
+store and DLP controls; file type supplies no confidentiality exception.
+
 ### Operator and execution assumptions
 
 The operator selects model/metadata endpoints, credentials, the installed OCR
@@ -105,6 +131,16 @@ publishing environments and OIDC policy remain deployment prerequisites. Source
 review establishes the toolkit's checks, not that those external settings are
 currently enabled. External services still own object authorization. See the
 [GitLab prerequisites](gitlab.md) and [release contract](release.md).
+
+Mandatory evidence snapshots and category indexes scale with the exact immutable
+range inside absolute record/byte bounds. Optional typed facts have a separate
+bounded pool; actual-target facts are admitted afterward. Serialization checks
+UTF-8 bytes during construction, and target batches account incremental cost
+before a final atomic validation. A genuine record, byte or entry overflow stops
+before the model. Its private v7 status binds B/H/T/P; a GitLab diagnostic note
+requires fresh identity, contains no paths or source text, and preserves old
+findings without approval or thread cleanup. Corruption and unknown failures do
+not become budget diagnoses.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
 For an exact capability-qualified OCR version, the toolkit compares complete before/after Git
@@ -312,10 +348,25 @@ delimiters, including on internal hostnames. Ordinary path/query data does not
 acquire userinfo authority. Scheme near-matches are searched once per contiguous
 scheme-character run, avoiding repeated suffix scans on long unrelated text.
 
-Numeric interpretation recognizes a complete bounded calendar timestamp around
-the entire phone candidate, including its clock, optional fractional seconds
-and timezone. It validates calendar and offset components, rejects continued or
-malformed tokens, and preserves explicit contact priority. Unicode decimal digits
+Numeric interpretation recognizes full single-dot decimals, correctly grouped
+fractional amounts and independent decimals separated by spaces or parentheses.
+A complete single-dot decimal without a leading `+` or explicit contact intent
+is treated as a decimal, including an otherwise ambiguous short telephone shape.
+Other national and multi-dot telephone forms retain conservative checks. A technical
+span cannot cover a neighboring contact or combine independent fractions.
+
+Explicit contact intent includes adjacent human labels and closed literal/bare
+keys bound by `=` or `:`, with numeric ordinal postfixes. A shared bounded lexical
+reader recognizes those targets without evaluating source-language expressions.
+Computed keys, completed calls, comparisons and terminal non-contact members do
+not borrow a preceding contact label. Source proof does not exempt contact data.
+
+One shared grammar recognizes ISO and `DD.MM.YYYY` calendar days and complete
+bounded timestamps, including their clock, optional fractional seconds and
+timezone. Calendar validation uses the standard library rather than enumerating
+months and leap years in regular expressions. Complete timestamps may precede
+prose punctuation; incomplete clocks and numeric zone continuations do not gain
+that boundary. The checks preserve explicit contact priority. Unicode decimal digits
 have the same calendar meaning as ASCII digits; no surrounding keyword, filename
 or source proof grants an exception. Other contacts, credentials and configured
 values in the original and derived material remain independently checked.
@@ -467,7 +518,7 @@ Schema, byte/item/time/origin, identity, evidence, cleanup and posting-transacti
 gates remain active. Disabling DLP can expose sensitive data to an upstream MCP,
 the model, local Markdown, or GitLab. Re-enabling it cannot retract prior egress
 or publication. Operators should diagnose locally with
-`--preserve-private-artifacts` before using this escape hatch and must keep those
+`--debug-dir PATH` before using this escape hatch and must keep those
 owner-only artifacts off shared storage.
 
 Publication accounting keeps OCR coverage, DLP projection and provider posting
@@ -521,7 +572,8 @@ projects supply neither executable code nor exclusion policy to the audit.
   `suggestion_code`. HTML-like syntax in those fields additionally requires
   exact immutable reviewed-head source proof and safe code rendering. All
   other sensitive-data checks still run on the original text; unproved code
-  and prose retain the HTML restriction.
+  retains the literal-code HTML restriction. Prose uses the shared inert HTML
+  and comment projection after original-material checks.
 - The mandatory evidence MCP requires reconciled attempted/completed action
   accounting and a completed summary. Federation cannot satisfy or replace it.
 - Built-in evidence search reads only the already DLP-admitted store and exposes

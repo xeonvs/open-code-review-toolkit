@@ -8,7 +8,7 @@ from typing import Any
 
 import ocr_compat_history as history
 
-from . import core, settings
+from . import core, declarations, exclusions, settings
 
 
 def _numeric_contract_for_version(version: str) -> dict[str, object]:
@@ -43,6 +43,8 @@ def _validate_current_contracts(value: object, version: str) -> None:
     language_paths = _language_rules_for_version(version)
     extensions = sorted({Path(path).suffix for path in language_paths if Path(path).suffix})
     expected = {
+        "excluded_coverage_probe": exclusions.EXPECTED,
+        "tool_declarations_probe": declarations.EXPECTED,
         "numeric_cli_probe": _numeric_contract_for_version(version),
         "review_budget_probe": {
             "budget": 30_000,

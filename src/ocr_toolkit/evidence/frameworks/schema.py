@@ -11,8 +11,8 @@ from ocr_toolkit.evidence.model import EvidenceValue
 
 FRAMEWORK_SCHEMA = "repository.framework-evidence/v1"
 TEMPLATE_SCHEMA = "repository.template-evidence/v1"
-PLUGIN_IDS = {"jinja2", "go-web", "symfony-php", "react-typescript"}
-ECOSYSTEMS = {"python", "go", "php", "javascript"}
+PLUGIN_IDS = {"jinja2", "go-web", "symfony-php", "react-typescript", "aspnet-core"}
+ECOSYSTEMS = {"python", "go", "php", "javascript", "dotnet"}
 CATEGORIES = {"framework", "template-engine"}
 VERSION_STATES = {"declared-only", "resolved", "conflicting", "local-override"}
 CONFIGURATION_STATES = {"complete", "partial"}
@@ -20,12 +20,14 @@ TEMPLATE_ENGINES = {"jinja2", "twig"}
 TEMPLATE_DETECTIONS = {"jinja-extension", "ansible-role-template", "twig-extension"}
 OBJECT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PLUGIN_FRAMEWORKS = {
+    "aspnet-core": {"aspnet-core"},
     "jinja2": {"jinja2"},
     "go-web": {"echo", "fiber"},
     "symfony-php": {"symfony", "twig"},
     "react-typescript": {"react", "next"},
 }
 PLUGIN_ECOSYSTEMS = {
+    "aspnet-core": "dotnet",
     "jinja2": "python",
     "go-web": "go",
     "symfony-php": "php",

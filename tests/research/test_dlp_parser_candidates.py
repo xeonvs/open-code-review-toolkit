@@ -73,3 +73,49 @@ def test_piisa_international_lexical_candidate_omission_is_not_contact_absence()
         assert check_text(
             technical, budgets=TextBudgets(1000, 4000, 10), publication=True, enabled=True
         ).admitted
+
+
+def test_dateparser_strict_success_is_not_sufficient_for_supplemental_admission():
+    """Show why a successful supplemental parse cannot override calendar admission bounds."""
+    dateparser = pytest.importorskip("dateparser")
+    from ocr_toolkit.context.contracts import TextBudgets
+    from ocr_toolkit.context.dlp import check_text
+
+    settings = {
+        "STRICT_PARSING": True,
+        "REQUIRE_PARTS": ["day", "month", "year"],
+        "PARSERS": ["absolute-time"],
+        "TIMEZONE": "UTC",
+    }
+    # A fallback would rescue a value already rejected by the primary contract.
+    value = "2026-13-01"
+    assert not check_text(value, budgets=TextBudgets(1000, 4000, 10), enabled=True).admitted
+    assert dateparser.parse(value, settings=settings).isoformat() == "2026-01-13T00:00:00"
+    strict = {
+        **settings,
+        "DATE_ORDER": "DMY",
+        "PREFER_LOCALE_DATE_ORDER": False,
+        "STRICT_DATE_ORDER": "all",
+    }
+    value = "2026-01-01 12:30:00.1234567890"
+    assert not check_text(value, budgets=TextBudgets(1000, 4000, 10), enabled=True).admitted
+    assert dateparser.parse(value, languages=["en"], settings=strict).microsecond == 123456
+
+
+def test_dateparser_can_recognize_additional_unambiguous_numeric_dates():
+    """Retain the supplemental parser's useful capability separately from bypass authority."""
+    dateparser = pytest.importorskip("dateparser")
+    settings = {
+        "STRICT_PARSING": True,
+        "REQUIRE_PARTS": ["day", "month", "year"],
+        "PARSERS": ["absolute-time"],
+        "TIMEZONE": "UTC",
+        "DATE_ORDER": "DMY",
+        "PREFER_LOCALE_DATE_ORDER": False,
+        "STRICT_DATE_ORDER": "all",
+    }
+    # This positive capability is distinct from authority to bypass a DLP result.
+    assert (
+        dateparser.parse("13/10/2026", languages=["en"], settings=settings).date().isoformat()
+        == "2026-10-13"
+    )

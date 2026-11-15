@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from ocr_toolkit.evidence.budgets import OPTIONAL_RECORDS, OPTIONAL_RECORDS_PER_KIND
 from ocr_toolkit.evidence.frameworks.schema import validate_plugin_record
 from ocr_toolkit.evidence.model import (
     CoverageRecord,
@@ -40,9 +40,12 @@ from ocr_toolkit.evidence.store.contracts import (
     EvidenceStoreLimits,
 )
 from ocr_toolkit.evidence.store.readback import read_store
+from ocr_toolkit.evidence.store.serialization import bounded_json
+from ocr_toolkit.evidence.store.target import add_target_records
 from ocr_toolkit.evidence.store.values import (
     EvidenceValueRedactionError,
-    safe_delta_metadata,
+    delta_payload,
+    safe_deltas,
     safe_diagnostic,
     safe_value,
 )
@@ -53,6 +56,9 @@ class EvidenceStore:
     """Own bounded snapshots, typed deltas, and explicit coverage diagnostics."""
 
     limits: EvidenceStoreLimits = field(default_factory=EvidenceStoreLimits)
+    optional_records: int = field(default=OPTIONAL_RECORDS, kw_only=True)
+    reserved_bytes: int = field(default=0, kw_only=True)
+    reserved_records: int = field(default=0, kw_only=True)
     base: EvidenceSnapshot | None = None
     head: EvidenceSnapshot | None = None
     policy: EvidenceSnapshot | None = None
@@ -63,6 +69,37 @@ class EvidenceStore:
     _records: dict[str, EvidenceRecord] = field(default_factory=dict, init=False, repr=False)
     _coverage: dict[str, CoverageRecord] = field(default_factory=dict, init=False, repr=False)
     _kind_counts: Counter[str] = field(default_factory=Counter, init=False, repr=False)
+    _optional_count: int = field(default=0, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Validate runtime headroom independently of persisted store limits."""
+        if (
+            type(self.optional_records) is not int
+            or not 0 <= self.optional_records <= OPTIONAL_RECORDS
+            or type(self.reserved_bytes) is not int
+            or not 0 <= self.reserved_bytes < self.limits.max_bytes
+            or type(self.reserved_records) is not int
+            or not 0 <= self.reserved_records < self.limits.max_records
+        ):
+            raise EvidenceStoreError("invalid evidence invocation/optional reserve")
+
+    def add_optional(self, record: EvidenceRecord) -> bool:
+        """Admit typed facts without borrowing the structural snapshot allowance."""
+
+        if record.id in self._records:
+            return self.add(record)
+        state = self.record_limit_state(record.kind, optional=True)
+        if state is not None:
+            self._diagnose_once(
+                "global evidence record limit reached"
+                if state == "global"
+                else f"per-kind evidence record limit reached for {record.kind}"
+            )
+            return False
+        before = len(self._records)
+        admitted = self.add(record)
+        self._optional_count += len(self._records) - before
+        return admitted
 
     def add(self, record: EvidenceRecord) -> bool:
         """Redact and add one current-schema record within deterministic bounds."""
@@ -195,57 +232,28 @@ class EvidenceStore:
         self._kind_counts[redacted.kind] += 1
         return True
 
-    def record_limit_state(self, kind: str) -> Literal["global", "kind"] | None:
+    def record_limit_state(
+        self, kind: str, *, optional: bool = False
+    ) -> Literal["global", "kind"] | None:
         """Explain whether a failed admission exhausted a shared or kind budget."""
 
-        if len(self._records) + len(self._coverage) >= self.limits.max_records:
+        if len(self._records) + len(self._coverage) >= self.limits.max_records or (
+            optional and self._optional_count >= self.optional_records
+        ):
             return "global"
-        if self._kind_counts[kind] >= self.limits.max_records_per_kind:
+        kind_limit = (
+            min(self.limits.max_records_per_kind, OPTIONAL_RECORDS_PER_KIND)
+            if optional
+            else self.limits.max_records_per_kind
+        )
+        if self._kind_counts[kind] >= kind_limit:
             return "kind"
         return None
 
-    def add_target_context(self, record: EvidenceRecord) -> bool:
-        """Admit optional target context atomically, including the serialized byte bound."""
+    def add_target_context(self, records: tuple[EvidenceRecord, ...]) -> bool:
+        """Admit a bounded optional target batch without reserializing per record."""
 
-        if self.target is None or record.ref is not RefRole.TARGET:
-            raise EvidenceStoreError("target context requires its target snapshot")
-        if record.commit_sha != self.target.commit_sha:
-            raise EvidenceStoreError("target context commit does not match its snapshot")
-        previous_ids = set(self._records)
-        previous_diagnostics = list(self.diagnostics)
-        if not self.add(record):
-            try:
-                self.to_json()
-            except EvidenceStoreError as exc:
-                self.diagnostics = previous_diagnostics
-                if str(exc) != "serialized evidence store exceeds its byte budget":
-                    raise
-            return False
-        added_ids = set(self._records) - previous_ids
-        if not added_ids:
-            return True
-        admitted = self._records[added_ids.pop()]
-        previous_target = self.target
-        self.target = EvidenceSnapshot(
-            RefRole.TARGET,
-            previous_target.commit_sha,
-            (*previous_target.records, admitted),
-            diagnostics=previous_target.diagnostics,
-        )
-        try:
-            serialized = self.to_json()
-            # Leave room for an explicit degradation notice if a later target
-            # record reaches the shared byte ceiling.
-            if len(serialized.encode("utf-8")) > self.limits.max_bytes - 256:
-                raise EvidenceStoreError("serialized evidence store exceeds its byte budget")
-        except EvidenceStoreError as exc:
-            self.target = previous_target
-            self._records.pop(admitted.id)
-            self._kind_counts[admitted.kind] -= 1
-            if str(exc) != "serialized evidence store exceeds its byte budget":
-                raise
-            return False
-        return True
+        return add_target_records(self, records)
 
     def _validate_policy_snapshot_bindings(self, schema_version: int = SCHEMA_VERSION) -> None:
         """Bind structured policy to its schema-owned immutable snapshot."""
@@ -349,30 +357,7 @@ class EvidenceStore:
             for delta in self.deltas
         ):
             raise EvidenceStoreError("evidence delta kind is unregistered")
-        normalized = (
-            EvidenceDelta(
-                kind=delta.kind,
-                component=safe_delta_metadata(delta.component, name="component", max_chars=256),
-                identity=safe_delta_metadata(delta.identity, name="identity", max_chars=4096),
-                change=delta.change,
-                before=safe_value(delta.before, self.limits.max_value_chars),
-                after=safe_value(delta.after, self.limits.max_value_chars),
-            )
-            for delta in self.deltas
-        )
-        unique = {delta.id: delta for delta in normalized}
-        return tuple(
-            sorted(
-                unique.values(),
-                key=lambda item: (
-                    item.kind,
-                    item.component,
-                    item.identity,
-                    item.change,
-                    item.id,
-                ),
-            )
-        )
+        return safe_deltas(self.deltas, self.limits.max_value_chars)
 
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
@@ -428,17 +413,7 @@ class EvidenceStore:
             "records": [record.to_dict() for record in self.records],
             "coverage": [record.to_dict() for record in self.coverage],
             "snapshots": snapshots,
-            "deltas": [
-                {
-                    "kind": delta.kind,
-                    "component": delta.component,
-                    "identity": delta.identity,
-                    "change": delta.change,
-                    "before": delta.to_mcp_dict()["before"],
-                    "after": delta.to_mcp_dict()["after"],
-                }
-                for delta in self.safe_deltas
-            ],
+            "deltas": [delta_payload(delta) for delta in self.safe_deltas],
             "diagnostics": sorted(safe_diagnostic(item) for item in self.diagnostics),
             "limits": {
                 "max_records": self.limits.max_records,
@@ -451,12 +426,9 @@ class EvidenceStore:
     def to_json(self) -> str:
         """Serialize the store canonically while enforcing its byte budget."""
 
-        serialized = json.dumps(
-            self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        return bounded_json(
+            self.to_dict(), max_bytes=self.limits.max_bytes, reserved_bytes=self.reserved_bytes
         )
-        if len((serialized + "\n").encode("utf-8")) > self.limits.max_bytes:
-            raise EvidenceStoreError("serialized evidence store exceeds its byte budget")
-        return serialized + "\n"
 
     def write(self, path: Path) -> None:
         """Atomically write a private store without exposing a partial file."""

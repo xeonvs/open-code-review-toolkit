@@ -31,6 +31,11 @@ diagrams leave findings, coverage and approval unchanged. `local` is reserved
 for standalone private reports and is invalid in GitLab. See the
 [mode table, examples and bounds](../../docs/diagrams.md).
 
+Automatic review remains enabled by default. An optional exact `no-ai-review`
+label rule is documented in the
+[GitLab guide](../../docs/gitlab.md#optional-automatic-review-skip-label), including
+pipeline timing and merge-policy implications. It does not replace manual readiness.
+
 | Mode | Recipe | MR text admitted | External access | Automatic approval |
 | --- | --- | --- | --- | --- |
 | Identity only | [`modes/identity-only.gitlab-ci.yml`](modes/identity-only.gitlab-ci.yml) | None | None | May remain enabled |

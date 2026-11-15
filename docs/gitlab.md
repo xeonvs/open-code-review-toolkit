@@ -105,7 +105,7 @@ GitLab Code Owners and code-owner approval rules are separate project merge poli
 
 Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the selected reads, notes, drafts, discussion management, and optional approval. GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative.
 
-Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, gateway state, and OCR sessions private to the runner and out of public artifacts. The local-only `ocr-ci review --preserve-private-artifacts` diagnostic is rejected by the validated GitLab merge-request profile and must not be added to a CI job.
+Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, gateway state, and OCR sessions private to the runner and out of public artifacts. For local diagnosis use `ocr-ci review --local --debug-dir PATH` with a private physical directory; do not publish its bundle as a CI artifact.
 
 Before treating the advisory job as a required gate, run `ocr llm test` manually with the same generated OCR configuration and protected credential path. The manual self-test in the example independently installs OCR and the toolkit, runs preflight and configure, and deliberately makes no model call; use it to diagnose readiness first. `ocr-ci preflight` always requires URL, token, and model before network access and can optionally validate model metadata through `/models`. Disabling that metadata read does not remove the required inputs; a metadata read is not a full review request. Neither a green preflight nor `/models` success proves that a gateway credential, protocol, deployment, spending policy, or requested output cap will accept an inference conversation. The toolkit never derives `OCR_LLM_MAX_COMPLETION_TOKENS` from `/models.max_completion_tokens`. Keep `allow_failure` only when a missing review is intentionally advisory; a green pipeline with an allowed-to-fail OCR job is not evidence that OCR produced a usable review.
 
@@ -152,15 +152,44 @@ The provider validates same-project ownership, the current MR diff base/start/he
 
 `enriched` loads the protected policy and may add one stable GitLab discussion snapshot, verified toolkit-owned remediation threads, and exact same-revision CI outcomes. Generic discussion and remediation projections are mutually exclusive for a toolkit-owned root. Remediation roots require both the authenticated live bot ID and a valid toolkit marker/fingerprint. Raw GitLab IDs, usernames, provider objects, and rejected values are not stored or returned. The model sees only opaque local handles; it cannot search GitLab or submit an arbitrary provider ID or URL.
 
-`OCR_DLP_ENABLED` defaults to enabled. A parsed false value disables context/federation and publication DLP, emits a prominent GitLab warning, and makes the run comment-only. Service egress and GitLab publication may then expose sensitive data, and the toolkit cannot retract it. Diagnose locally with `--preserve-private-artifacts` before considering this escape hatch; invalid values fail before OCR.
+`OCR_DLP_ENABLED` defaults to enabled. A parsed false value disables context/federation and publication DLP, emits a prominent GitLab warning, and makes the run comment-only. Service egress and GitLab publication may then expose sensitive data, and the toolkit cannot retract it. Diagnose locally with `ocr-ci review --local --debug-dir PATH` before considering this escape hatch; invalid values fail before OCR.
 
 Remediation text is untrusted review history. It may locate a claim that OCR must re-check against current code and tests, but it cannot change severity, prove a fix, suppress or resolve a finding, issue a lifecycle command, or authorize approval. Any admitted remediation record therefore makes the review comment-only. DLP-clean non-remediation context does not independently disable an otherwise eligible receipt; a DLP rejection cannot make approval easier.
 
 A protected CI pass is narrower than a general green-pipeline claim: it applies only to its exact reviewed head, exact protected job name, and declared path prefixes. It may challenge an unconditional claim about code that the job actually exercised, but it cannot suppress a finding, prove unrelated absence, change severity/lifecycle, or authorize approval. Stale, advisory, skipped, canceled, failed, unknown, incomplete, mutated, or ambiguous data cannot be treated as a required pass. The toolkit does not fetch job logs, artifacts, URLs, users, runners, variables, or raw IDs.
 
-Provider configuration is forge-neutral. Configure and preflight share one normalized absolute HTTPS API root, explicit protocol, headers, request-body controls, and optional models URL. A protocol-mismatched terminal endpoint, embedded credential, or fragment fails before OCR. A classified provider failure stays in the job because no completed v13 review identity can authorize an MR note; raw provider/model fields, response bodies, request IDs, paths, warnings, and stderr remain private. The review log may contain one toolkit-authored line of closed HTTP detail and non-zero aggregate retry counts from a fully validated retry report. `rate-or-spending-limit` job guidance suggests lowering `OCR_REVIEW_CONCURRENCY` and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, starting a new merge request pipeline, and then checking provider request/account limits without claiming either setting caused the failure. The previous successful review remains visible, no failed-result findings are posted, and approval is not attempted.
+Provider configuration is forge-neutral. Configure and preflight share one normalized absolute HTTPS API root, explicit protocol, headers, request-body controls, and optional models URL. A protocol-mismatched terminal endpoint, embedded credential, or fragment fails before OCR. A classified provider failure stays in the job because no completed v13 review identity can authorize an MR note; raw provider/model fields, response bodies, request IDs, paths, warnings, and stderr remain private. The review log may contain one toolkit-authored line of closed HTTP detail and non-zero aggregate retry counts from a fully validated retry report. `rate-or-spending-limit` job guidance suggests lowering native concurrency (`ocr-ci review ... -- --concurrency N`) and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, starting a new merge request pipeline, and then checking provider request/account limits without claiming either setting caused the failure. The previous successful review remains visible, no failed-result findings are posted, and approval is not attempted.
 
 When a merge request introduces a repository-owned OCR rules path absent from both selected protected policy baselines, `review` stops before OCR and `post` may publish only the static setup-pending message after hostile identity validation. The source file never becomes policy evidence for its own merge request. Under explicit `unprotected` with an actually unprotected target, target Rules are still mandatory but remain untrusted guidance; a missing target blob fails before OCR without promoting the source copy.
+
+## Optional automatic-review skip label
+
+The main example runs automatically for merge request pipelines. To opt into a
+`no-ai-review` label, override only `open_code_review.rules` after including the
+example. Keep this exclusion before the normal MR rule; the first match wins.
+
+```yaml
+open_code_review:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /(^|,)no-ai-review(,|$)/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - when: never
+```
+
+The expression matches a complete, case-sensitive label in GitLab's comma-separated
+label variable, so `no-ai-review-later` does not match. GitLab evaluates
+[job rules](https://docs.gitlab.com/ci/jobs/job_rules/) when creating the pipeline;
+changing a label does not update an existing pipeline. Start a new merge request
+pipeline to apply either adding or removing the label. The separate manual
+readiness job remains available.
+
+Skipping this job performs no review, posting, old-thread cleanup or approval
+action. It does not remove a previous review or approval. Allowing a label-based
+skip can weaken a required-review policy: the result depends on who can edit
+labels, pipeline/merge permissions and approval-reset rules. Enable it only as an
+explicit project policy; the distributed example does not enable it by default.
 
 ## Reviewer commands and no-commit reruns
 

@@ -11,6 +11,11 @@ from ocr_toolkit.evidence.ecosystems.contracts import (
     ManifestFact,
     ManifestParseResult,
 )
+from ocr_toolkit.evidence.ecosystems.dotnet import (
+    parse_global_json,
+    parse_msbuild,
+    parse_packages_lock,
+)
 from ocr_toolkit.evidence.ecosystems.go import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.ecosystems.javascript import (
     parse_package_json,
@@ -88,6 +93,21 @@ def _is_pylock(path: str) -> bool:
 
 
 MANIFEST_COLLECTORS = (
+    ManifestCollector(
+        "dotnet",
+        ("declaration",),
+        lambda path: (
+            PurePosixPath(path).suffix.casefold() in {".csproj", ".fsproj", ".vbproj"}
+            or _name_is(
+                "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"
+            )(path)
+        ),
+        parse_msbuild,
+    ),
+    ManifestCollector("dotnet", ("declaration",), _name_is("global.json"), parse_global_json),
+    ManifestCollector(
+        "dotnet", ("resolution",), _name_is("packages.lock.json"), parse_packages_lock
+    ),
     ManifestCollector("python", ("declaration",), _name_is("pyproject.toml"), parse_pyproject),
     ManifestCollector("python", ("declaration",), is_python_requirements, parse_requirements),
     ManifestCollector("python", ("resolution",), _name_is("uv.lock"), parse_uv_lock),

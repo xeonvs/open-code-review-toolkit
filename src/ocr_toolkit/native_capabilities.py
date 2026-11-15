@@ -16,6 +16,8 @@ _QUALIFIED_HANDOFFS = {
     "1.13.6": frozenset({"diagram_output", "gitlink_projection"}),
     "1.13.7": frozenset({"diagram_output", "gitlink_projection"}),
     "1.13.8": frozenset({"diagram_output", "gitlink_projection"}),
+    "1.13.9": frozenset({"diagram_output", "gitlink_projection"}),
+    "1.13.10": frozenset({"diagram_output", "gitlink_projection"}),
 }
 
 

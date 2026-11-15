@@ -1648,7 +1648,8 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         artifacts.context_store,
         artifacts.action_receipt,
         artifacts.action_receipt_lock,
-        artifacts.dlp_decisions,
+        artifacts.diagram,
+        artifacts.diagram_lock,
     ):
         assert not path.exists()
     for path in (result, stderr):

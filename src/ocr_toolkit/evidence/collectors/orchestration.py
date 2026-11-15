@@ -29,6 +29,7 @@ from ocr_toolkit.evidence.ecosystems.ansible.topology import (
     topology_coverage,
 )
 from ocr_toolkit.evidence.ecosystems.contracts import ManifestFact, ManifestParseResult
+from ocr_toolkit.evidence.ecosystems.dotnet.linking import central_links
 from ocr_toolkit.evidence.frameworks import (
     FrameworkPluginContext,
     PluginSourceStatus,
@@ -367,6 +368,14 @@ def collect_ref_facts(
                             "partial",
                             "source-item-limit",
                         )
+                elif parsed.runtime_dependent and source_status is not None:
+                    source_statuses[path] = PluginSourceStatus(
+                        source_status.path,
+                        source_status.ecosystem,
+                        source_status.roles,
+                        "partial",
+                        "runtime-dependent",
+                    )
                 elif source_status is not None and source_status.state != "partial":
                     source_statuses[path] = PluginSourceStatus(
                         source_status.path,
@@ -474,7 +483,10 @@ def collect_ref_facts(
                 topology_kind_counts[fact.kind] = count + 1
             identity = (
                 f"{path}:{fact.identity}"
-                if fact.kind.startswith(("dependency.", "runtime.", "ci.", "container."))
+                if (
+                    fact.source_scoped
+                    or fact.kind.startswith(("dependency.", "runtime.", "ci.", "container."))
+                )
                 and not fact.identity.startswith(f"{path}:")
                 else fact.identity
             )
@@ -498,6 +510,13 @@ def collect_ref_facts(
     plugin_observations = ()
     template_observations = ()
     if ref is not RefRole.POLICY:
+        linked_records, link_notices = central_links(
+            tuple(records),
+            frozenset(entries_by_path),
+            {path: status.state for path, status in source_statuses.items()},
+        )
+        records.extend(linked_records)
+        diagnostics.extend(f"{ref.value}:{notice}" for notice in link_notices)
         plugin_context = FrameworkPluginContext(
             records=tuple(records),
             entries=entries,

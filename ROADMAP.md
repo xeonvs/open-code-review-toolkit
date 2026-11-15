@@ -1,108 +1,37 @@
 # Roadmap
 
-This roadmap describes ordered outcomes rather than release dates. Architecture direction lives in the [toolkit strategy](docs/engineering/toolkit_strategy.md); implementation-ready inactive work lives in the [backlog](docs/codex/TASKS_BACKLOG.md); current execution lives in [PLANS.md](PLANS.md).
+This roadmap describes the nearest and conditional outcomes, without calendar
+commitments. [PLANS.md](PLANS.md) owns active execution. The
+[toolkit strategy](docs/engineering/toolkit_strategy.md) owns implemented
+architecture; [execution history](docs/engineering/execution_history/README.md)
+owns completed milestones and releases. The [backlog](docs/codex/TASKS_BACKLOG.md)
+keeps stable task IDs, dependencies, activation signals, next actions and exit
+criteria.
 
-Status vocabulary: **established** means the documented foundation exists,
-**in progress** is active implementation, **next** is the nearest implementation
-horizon, **planned** has defined dependencies, and **conditional** requires its
-activation signal.
-The diagram uses green for established, blue for in-progress or next work, gray
-for planned work, and amber for conditional work.
-A milestone spanning two statuses uses the earliest actionable status color while
-retaining both statuses in its label.
+**In progress** identifies active implementation and acceptance. **Conditional**
+requires a demonstrated need and an approved bounded scope; **parked** has no
+current activation signal. A qualified upstream capability alone does not activate
+a new toolkit product or expand trust.
 
-```mermaid
-flowchart LR
-    M0["M0 Foundation<br/>established"] --> M1["M1 Evidence architecture<br/>established"]
-    M0 --> M3["M3 External MCP hardening<br/>established"]
-    M1 --> M2["M2 Ecosystem and framework coverage<br/>established"]
-    M1 --> M4["M4 Policy and project guidance<br/>established"]
-    M1 --> M5["M5 Bounded review-context enrichment<br/>established"]
-    M3 --> M5
-    M4 --> M5
-    M1 --> M6["M6 Profiles and quality measurement<br/>established / conditional"]
-    M1 --> M7["M7 Governed MCP federation<br/>established"]
-    M7 --> M8["M8 Later and conditional work<br/>conditional"]
-
-    classDef established fill:#1f883d,stroke:#116329,color:#ffffff
-    classDef next fill:#0969da,stroke:#0550ae,color:#ffffff
-    classDef planned fill:#57606a,stroke:#424a53,color:#ffffff
-    classDef conditional fill:#9a6700,stroke:#7d4e00,color:#ffffff
-
-    class M0,M1,M2,M3,M4,M5,M6,M7 established
-    class M8 conditional
-```
-
-| Milestone | Status | Intended outcome | Major dependency | Completion signal |
-| --- | --- | --- | --- | --- |
-| M0 Foundation | Established | Durable planning sources, high-signal repository security checks, and repeatable OCR compatibility policy. | Existing CI and the current recommended/tested OCR baseline. | Strategy, roadmap, and backlog agree; Bandit is a bounded repository gate; every unseen stable OCR release receives checksum-verified machine evidence with adjacent comparison identity; only a wholly safe contiguous patch chain may receive one protected bot-ready update patch, while material or ambiguous changes require human qualification and no path writes directly to `main`. |
-| M1 Evidence architecture | Established | One bounded evidence model supplies a compact bootstrap and built-in read-only MCP. | Machine-readable OCR capabilities and current context contracts. | Stable v0.4.0 publishes the model, immutable snapshots, typed deltas, bounded private storage, compact bootstrap, built-in MCP, semantic parity/removal, verified real-OCR use, reporting outcomes, and security hardening; TestPyPI/PyPI artifacts, provenance, hashes, annotated tag, immutable GitHub Release, and supported-Python smoke installs are independently verified. |
-| M2 Ecosystem and framework coverage | Established | Supply framework and template evidence selected from demonstrated use without creating framework-specific review engines. | Established evidence, snapshot/delta, scoped-completeness, and built-in MCP contracts. | Selected static plugins and template review rules have deterministic fixtures, bounds, provenance, component ownership, completeness, first-class source/target delta queries, installed-artifact validation, verified use through the existing built-in MCP, and independently read-back stable delivery. |
-| M3 External MCP hardening | Established / superseded | Preserve the historical qualification of OCR's former direct-composition boundary. | BL-011 real-OCR qualification. | Historical evidence remains readable, while M7 removes direct passthrough and executable adapters from the current product contract. |
-| M4 Policy and project guidance | Established | Supply relevant target-branch decisions and guidance without allowing self-whitelisting. | Evidence scoping and target/source snapshots. | Stable delivery independently proves backward-compatible structured decisions, bounded target-derived guidance, one read-only MCP lifecycle, and closure of the tracked release work. |
-| M5 Bounded review-context enrichment | Established | Extend invocation evidence with bounded forge discussions, verified remediation history, protected same-revision CI outcomes, and optional external records through one provider-neutral, capability-constrained context lifecycle, without a second review engine. | Established M1, M3, and M4 boundaries plus the v0.7.0 BL-023 delivery. | v0.7.0 establishes bounded discussion/reference acquisition. The v0.8.0 release tree adds policy-v2 remediation selection, context-store v2 and fixed MCP projection, live bot-root/mention identity, DLP isolation, comment-only remediation, and provider-neutral reuse boundaries. v0.8.7 adds policy-v3 exact-head CI outcomes as scoped review evidence without suppression or approval authority. Toolkit 0.9.0 adds receipt-v8 source/target/protection binding and a separate comment-only path for explicitly allowed unprotected targets; that path rejects protected policy, enrichment, adapters, external MCP, accepted decisions, and structured target guidance rather than claiming protected-policy equivalence. The owner waived the separate enriched OCR+LLM qualification, so no receipt proves model-time `context_list`/`context_get`, still-present/evidence-resolved scenarios, or receipt-level raw-data leakage inspection. Protected release publication and independent external readback remain mandatory delivery evidence but do not replace that absent qualification. |
-| M6 Profiles and quality measurement | Established / conditional | Keep the completed review-signal ownership audit current; add model-profile aliases only after demonstrated operational need. | The BL-017 audit establishes OCR/provider telemetry and toolkit lifecycle-signal ownership; a demonstrated alias need and owner-approved matrix are required only for profile implementation. | The audit concludes `no-new-layer`; any later model profiles remain conditional and independent from explicit coverage and budget controls. |
-| M7 Governed MCP federation | Established | Replace direct passthrough and executable context adapters with one bounded registry-v2 federation gateway while preserving mandatory internal evidence and OCR as the sole model loop. | Established evidence/context contracts plus issues #188-#193 and #203. | Registry v2, SDK-v2-primary independent protocol negotiation, legacy policy parse-only migration, receipt v9 accounting, stage-aware DLP, strict DLP mode, local/GitLab parity and OCR 1.12.7 qualification pass. |
-| M8 Later and conditional work | Conditional | Activate routing, more ecosystems, fuzzing, configuration, forge providers, or further governance work only from demonstrated need. | Milestone-specific activation signals and stable preceding contracts, including M7 where federation is involved. | Each item meets its own trigger and ships as a coherent validated slice without weakening core invariants. |
+| Outcome | State | Scope and activation | Owner |
+| --- | --- | --- | --- |
+| Complete immutable evidence for large changes | In progress | Atomic B/H/P snapshots remain bounded without an artificial file-count ceiling; genuine hard limits stop before the model with a closed identity-bound diagnosis. | [Active plan](PLANS.md) |
+| Bounded static .NET evidence and numeric precision | In progress | Declared project/package/framework facts, conservative source-scoped central links and shared MCP; full-span numeric DLP with inverse controls and private corpus replay. | [Active plan](PLANS.md), BL-010 slice |
+| Further ecosystem/framework evidence | Conditional | One demonstrated missing pack with deterministic semantics, provenance, scoped completeness and common MCP validation. | [BL-010](docs/codex/TASKS_BACKLOG.md#bl-010-add-evidence-packs-from-demonstrated-use-cases) |
+| Federation authentication and more forges | Conditional | A real upstream OAuth requirement or funded forge use case, preserving resource authorization and provider-neutral lifecycle boundaries. | [External integrations](docs/codex/TASKS_BACKLOG.md#external-integrations), BL-012 and BL-021 |
+| Related-change or combined-delivery review | Conditional | An explicitly approved product/graph, immutable revision and publication contract, bounded resources and a separate implementation plan. | [BL-025](docs/codex/TASKS_BACKLOG.md#bl-025-evaluate-optional-review-of-related-mrs-and-delivery-sets) |
+| File configuration and explicit model profiles | Parked | Repeated operational evidence must show direct settings are insufficient; choose one closed schema or matrix before implementation. | [Configuration and model profiles](docs/codex/TASKS_BACKLOG.md#configuration-and-model-profiles), BL-020 and BL-016 |
+| Automatic profile routing | Conditional | Depends on explicit profiles, an owner-approved quality/cost policy and representative offline replay. | [BL-018](docs/codex/TASKS_BACKLOG.md#bl-018-evaluate-conservative-automatic-profile-routing) |
 
 ## Ordering notes
 
-- The repository-complete 0.11.0 release candidate implements M7 governed
-  federation, policy-v4 migration, receipt-v9 accounting, stage-aware DLP and the
-  explicit default-on DLP control. It does not reopen established milestones or
-  activate conditional second-forge, model-profile, routing or evidence-pack work.
-  Stable publication and external reconciliation completed on 2026-09-19 through
-  the protected release and no-release closure lifecycles.
-
-- The v0.11.1 release repairs hash-locked runtime installation and qualifies
-  OCR through 1.12.9. Stable delivery and external reconciliation completed.
-
-- The v0.11.2 release preserves established M7 while repairing dependency-update
-  consistency and rejected-review diagnostics, and qualifying OCR 1.12.11.
-  Stable delivery and external reconciliation completed on 2026-10-01.
-
-- The v0.11.3 release recommends OCR 1.12.13 and requires reviewed
-  provider/model and timeout/deadline compatibility signals. M7 remains established.
-  Stable delivery and external reconciliation completed on 2026-10-09.
-
-- The v0.12.0 release adds optional native ChatGPT authentication for
-  explicit local review while retaining default/custom API providers and strict
-  GitLab separation. It qualifies OCR1.13.0–1.13.2, preserves MR-context navigation
-  for optional governed tools, and refreshes compatible dependency/security pins.
-  M7 remains established. Protected stable publication and external
-  reconciliation completed on 2026-10-21.
-
-- The v0.12.1 release repairs bounded DLP, gitlink and review-outcome behavior,
-  qualifies OCR 1.13.3, and keeps documentation-only CI classification on a
-  trusted base. Protected stable publication, external readback, and live site
-  refresh completed on 2026-10-22.
-
-- The published v0.13.0 release separates the current GitLab MR diff and actual
-  target from protected policy authority. The absent protection setting selects
-  `auto`; an unprotected target can use its same-project protected default policy
-  for single-MR review while remaining comment-only. Receipt v11 and publication
-  freshness checks bind these identities. The immutable GitHub Release was
-  published and #264 closed on 2026-10-23. Optional related-MR review remains
-  inactive planning in BL-025.
-
-- OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
-- The v0.14.0 release introduced independently admitted immutable range identity,
-  optional typed flow/sequence summaries in the existing OCR loop, a bounded
-  Hypothesis campaign and Python 3.15. The release PR archives repository work;
-  protected publication and external reconciliation follow the immutable
-  release receipt.
-- The v0.14.4 source tree strengthens shared DLP across bounded text
-  representations, preserves explicit source/sink authority, and extends the
-  local private audit's grouping and resource evidence. Optional diagram source
-  validation uses independent bounded Git metadata, while pure rendering selects
-  flowchart orientation. The release PR closes repository work; immutable
-  publication and independent external readback remain separate delivery steps.
-- M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
-- M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M8 and do not reopen M2.
-- M4 is established through independently verified v0.6.0 artifacts and later protected-target identity improvements. M5 consumes but does not reopen its policy boundary.
-- M5's foundation remains established for GitLab discussions, remediation, CI outcomes and local handles. M7 policy v4 removes new references; v1-v3 references remain parse-only migration input and never execute.
-- The completed M6 BL-017 audit maps the versioned toolkit receipt, privacy-safe normalized token buckets, reconciled MCP/evidence/federation counts, and OCR grouping/round telemetry to their existing owners and concludes `no-new-layer`. Receipt v9 adds federation and stage-aware DLP accounting without creating telemetry.
-- Versioned documentation remains a separate MCP integration: the toolkit supplies package/version evidence but does not store documentation.
-- Additional code-hosting adapters remain conditional and GitLab-first M5 does not depend on them.
-- Historical roadmap names, release plans, changelog entries, closed issues/PRs, and receipts retain their original identities. BL-022 is historical and is not reused.
-- Calendar commitments belong in release or project management systems when work is funded; they are intentionally absent here.
+- Finish and externally verify the active release before activating an unrelated
+  conditional product. Keep completed work out of future-work tables.
+- Extend the existing evidence, framework, policy and federation owners. A new
+  language rule does not supply a framework evidence pack; authentication does
+  not supply object authorization.
+- Versioned documentation remains a separate integration: the toolkit supplies
+  package/version evidence and does not store documentation.
+- Conditional profiles retain the existing signal-ownership conclusion and
+  explicit budget/completeness controls. No new telemetry layer follows from
+  upstream viewer, session or diagnostic changes.
