@@ -10,7 +10,18 @@ from pathlib import Path
 from typing import Any
 
 from . import comments as comment_checks
-from . import comparison, core, execution, numeric, peer, selection, settings, wire_controls
+from . import (
+    comparison,
+    core,
+    declarations,
+    exclusions,
+    execution,
+    numeric,
+    peer,
+    selection,
+    settings,
+    wire_controls,
+)
 from . import contracts as contract_rules
 
 
@@ -166,6 +177,8 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts["comment_arguments_probe"] = comment_checks._comment_arguments_probe(
         binary, directory
     )
+    contracts["excluded_coverage_probe"] = exclusions.exclusion_probe(binary, directory)
+    contracts["tool_declarations_probe"] = declarations.declaration_probe(binary, directory)
     contracts["comment_thinking_probe"] = thinking_probe
     contract_rules._validate_contracts_for_version(version, contracts)
     return contracts

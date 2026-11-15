@@ -1,4 +1,4 @@
-"""Frozen OCR 1.13.0–1.13.6 readback; no live settings, I/O or execution."""
+"""Frozen OCR 1.13.0–1.13.8 readback; no live settings, I/O or execution."""
 
 from __future__ import annotations
 
@@ -493,11 +493,66 @@ PATCH_7 = {
 }
 
 
+PATCH_8 = {
+    "numeric_cli_probe": {
+        "grace_rounds": {
+            "no_task_done": {"completed": False, "limit_warning": True},
+            "task_done": {"completed": True, "limit_warning": True},
+        },
+        "max_tokens_budget": {
+            "cases": {
+                "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+                "minimum": {"effective": 1, "input": 1, "outcome": "accepted"},
+                "omitted": {"effective": "unlimited", "input": None, "outcome": "accepted"},
+                "representative": {"effective": 30000, "input": 30000, "outcome": "accepted"},
+                "sentinel": {"effective": "unlimited", "input": 0, "outcome": "accepted"},
+            },
+            "maximum": None,
+            "owner": "ocr-cli",
+        },
+        "max_tools": {
+            "cases": {
+                "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+                "lower_override": {"effective": 75, "input": 75, "outcome": "accepted"},
+                "minimum": {"effective": 50, "input": 50, "outcome": "accepted"},
+                "minimum_minus_one": {
+                    "effective": 50,
+                    "input": 49,
+                    "outcome": "normalized",
+                    "reported_normalization": 50,
+                },
+                "omitted": {"effective": 100, "input": None, "outcome": "accepted"},
+                "representative": {"effective": 125, "input": 125, "outcome": "accepted"},
+                "sentinel": {"effective": 100, "input": 0, "outcome": "accepted"},
+                "template_value": {"effective": 100, "input": 100, "outcome": "accepted"},
+            },
+            "manifest_limit_verified": True,
+            "maximum": None,
+            "owner": "ocr-cli-or-template-default",
+            "reported_minimum": 50,
+        },
+        "result": "passed",
+    },
+    "comparison_sides_probe": {
+        "default_side": "new",
+        "deleted_paths": "old-only",
+        "invalid_sides_rejected": True,
+        "new_ref": "resolved-head",
+        "old_ref": "resolved-base",
+        "renamed_paths": "side-relative",
+        "result": "passed",
+        "target_tip": "not-used",
+        "tools": ["file_read", "file_find", "code_search"],
+        "worktree": "preserved",
+    },
+}
+
+
 def validate_contracts(
     version: tuple[int, int, int], value: Any, fail: Callable[[str], NoReturn]
 ) -> None:
     """Apply exactly the frozen consumed epoch without live interpretation."""
-    if not (1, 13, 0) <= version < (1, 13, 8):
+    if not (1, 13, 0) <= version < (1, 13, 9):
         fail("evidence does not belong to the frozen 1.13 epoch")
     if not isinstance(value, dict):
         fail("historical qualification contracts are missing")
@@ -517,8 +572,10 @@ def validate_contracts(
         expected.update(copy.deepcopy(PATCH_5))
     if version >= (1, 13, 6):
         expected.update(copy.deepcopy(PATCH_6))
-    if version == (1, 13, 7):
+    if version >= (1, 13, 7):
         expected.update(copy.deepcopy(PATCH_7))
+    if version >= (1, 13, 8):
+        expected.update(copy.deepcopy(PATCH_8))
     if version < (1, 13, 2):
         expected["language_rule_probe"] = EARLY_LANGUAGE
     if version == (1, 13, 0):

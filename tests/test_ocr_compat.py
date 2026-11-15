@@ -111,6 +111,8 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
         "result": "passed",
         "tracked_provider_directory": ("reported"),
     }
+    contracts["excluded_coverage_probe"] = dict(module.contracts.exclusions.EXPECTED)
+    contracts["tool_declarations_probe"] = dict(module.contracts.declarations.EXPECTED)
     return contracts
 
 
@@ -179,6 +181,7 @@ def manifest_before_1_11_7(module: ModuleType) -> dict[str, Any]:
 
 
 def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> None:
+    """Keep qualified history and exact rolling runtime admission synchronized."""
     module = load_script()
     manifest = module.core.load_json(MANIFEST)
 
@@ -253,6 +256,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.6", "tested"),
         ("1.13.7", "tested"),
         ("1.13.8", "tested"),
+        ("1.13.9", "tested"),
+        ("1.13.10", "tested"),
     ]
 
     assert module.contracts.qualified_runtime_versions(manifest) == (
@@ -280,6 +285,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.6",
             "1.13.7",
             "1.13.8",
+            "1.13.9",
+            "1.13.10",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
@@ -2963,8 +2970,8 @@ def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -
 
 
 @pytest.mark.parametrize("task_done", [True, False])
-def test_exhaustion_peer_emits_only_the_requested_grace_verdict(task_done: bool) -> None:
-    """The controlled HTTP peer leaves non-completion to the production OCR loop."""
+def test_exhaustion_peer_distinguishes_completion_from_unadvertised_read(task_done: bool) -> None:
+    """Exercise a registered but undeclared read instead of a trivial empty response."""
 
     module = load_script()
     mode = "exhaust-tools" if task_done else "exhaust-tools-incomplete"
@@ -2983,7 +2990,9 @@ def test_exhaustion_peer_emits_only_the_requested_grace_verdict(task_done: bool)
     if task_done:
         assert message["tool_calls"][0]["function"] == {"name": "task_done", "arguments": "{}"}
     else:
-        assert "tool_calls" not in message
+        function = message["tool_calls"][0]["function"]
+        assert function["name"] == "file_read"
+        assert json.loads(function["arguments"]) == {"file_path": "example.py"}
 
 
 @pytest.mark.parametrize(

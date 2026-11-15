@@ -2259,8 +2259,14 @@ def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
 
 
 def _reject_owned_review_options(args: list[str]) -> None:
-    """Reject caller attempts to compete with toolkit-owned review artifacts."""
+    """Reject caller attempts to replace toolkit-owned inputs, execution or outputs."""
 
+    for option in ("--repo", "--resume"):
+        if _option_values(args, option):
+            raise ReviewRunnerError(
+                f"{option} is managed by ocr-ci review; the immutable repository and "
+                "current execution cannot be replaced by caller-selected state"
+            )
     background_files = _option_values(args, "--background-file")
     backgrounds = _option_values(args, "--background")
     if background_files or backgrounds:

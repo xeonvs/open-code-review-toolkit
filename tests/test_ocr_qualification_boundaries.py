@@ -15,8 +15,9 @@ from tests.support import PROJECT_ROOT
 from tests.test_ocr_compat import current_contracts, load_script
 
 
-@pytest.mark.parametrize("version", ("1.13.5", "1.13.7"))
+@pytest.mark.parametrize("version", ("1.13.5", "1.13.7", "1.13.8"))
 def test_frozen_readback_does_not_follow_new_live_inputs(monkeypatch, version):
+    """Keep already published contracts independent of current executable probe inputs."""
     module = load_script()
     evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
     original = deepcopy(evidence)
@@ -46,8 +47,9 @@ def test_metadata_cli_does_not_import_runtime_packages(tmp_path, arguments):
     assert "metadata command imported the runtime" not in completed.stderr
 
 
-@pytest.mark.parametrize("version", ("1.13.5", "1.13.6", "1.13.7"))
+@pytest.mark.parametrize("version", ("1.13.5", "1.13.6", "1.13.7", "1.13.8"))
 def test_frozen_fresh_execution_is_refused_before_a_probe(version):
+    """Reject fresh execution before acquiring or launching a frozen-epoch binary."""
     module = load_script()
     with pytest.raises(module.core.CompatibilityError, match="frozen readback-only"):
         module.contracts._require_live_qualification_version(version)

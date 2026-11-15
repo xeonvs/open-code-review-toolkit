@@ -78,6 +78,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         return None
 
     def do_POST(self) -> None:
+        """Serve a bounded synthetic exchange and record only the consumed wire facts."""
         allowed_paths = {"/v1/chat/completions"}
         if type(self).capture_reasoning or type(self).capture_controls:
             allowed_paths.add("/v1/responses")
@@ -226,6 +227,14 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                     stage = "main"
                 else:
                     function = {"name": "task_done", "arguments": "{}"}
+                    if type(self).main_mode == "exhaust-tools-incomplete":
+                        # This provider exists in normal rounds but is absent
+                        # from grace declarations. Rejection must not count as
+                        # an executed read or complete the task.
+                        function = {
+                            "name": "file_read",
+                            "arguments": json.dumps({"file_path": "example.py"}),
+                        }
                     call_id = "call-grace-verdict"
                     stage = "grace"
             else:
@@ -281,9 +290,6 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 ],
             }
             finish_reason = "tool_calls"
-            if stage == "grace" and type(self).main_mode == "exhaust-tools-incomplete":
-                message = {"role": "assistant", "content": "No completion verdict."}
-                finish_reason = "stop"
         type(self).request_stages.append(stage)
         usage_tokens = (
             type(self).grouping_tokens_per_request

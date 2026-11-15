@@ -491,6 +491,33 @@ Hosted exact-tag baseline run 43215747102 created canonical qualification tracke
 [#308](https://github.com/xeonvs/open-code-review-toolkit/issues/308). Final
 current-contract hosted qualification is reconciled with feature delivery.
 
+### OCR 1.13.9–1.13.10 — toolkit 0.15.0 qualification
+
+Official Linux amd64 and Darwin arm64 assets pass the current controlled-peer
+contracts. OCR 1.13.9 adds `coverage.excluded`: reasons and unique item identities
+remain separate from selected files and their completed/reused/failed/waived
+partition. Exclusions have no source fingerprint and do not turn a complete
+selected review into a partial one. The list covers files reaching native
+selection, rather than every path the native diff provider may ignore earlier.
+
+Request-scoped tool declarations preserve normal evidence, diagram and federation
+calls. An undeclared tool is rejected; a registered read absent from the restricted
+grace declaration must not execute or complete the task. Later review rounds
+retain the consumed capabilities. The existing MCP SDK and local native auth
+ownership are unchanged in the adjacent source changes. Actual controlled peers
+exercise both diagram variants, grouping, federation, concurrency and gitlinks.
+
+OCR 1.13.10 adds native workspace, default-HEAD and resume conveniences. Toolkit
+review continues to resolve explicit immutable base/head before evidence;
+caller-selected `--repo` and `--resume` are rejected. No workspace review or
+resume ownership is exposed. Evidence through 1.13.8 remains frozen readback;
+fresh probes start at 1.13.9. Historical evidence bytes are unchanged.
+
+Canonical Actions trackers are [#318](https://github.com/xeonvs/open-code-review-toolkit/issues/318)
+and [#319](https://github.com/xeonvs/open-code-review-toolkit/issues/319). Baseline
+hosted qualification created both; current-contract hosted reconciliation remains
+part of feature delivery. The weekly discovery schedule is unchanged.
+
 ## Promotion and rollback
 
 Preparation validates all generated destinations before writing. Existing evidence

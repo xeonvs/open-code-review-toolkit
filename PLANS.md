@@ -364,6 +364,22 @@ descriptions for new runtime and test definitions. They were added and executabl
 AST equality verified; the existing development self-review requirement now
 explicitly includes constructors, callbacks and observable test intent.
 
+WQ-05: both official Linux amd64 candidates passed the expanded live suite
+(20 executable probes plus CLI and optional-capability inventories)
+in isolated Linux containers; both Darwin assets passed the same current suite.
+Actual Darwin consumer suites passed 44 checks per candidate; the seven
+Linux-only native TLS cases remain assigned to the final installed/native gate.
+The federation control separately passed with each candidate. Its redundant
+digest environment gate was removed because the shared fixture already checks
+the exact official asset and reported identity. Current readback/native/negative
+contract tests passed, with affected corrections checked separately. Semantic
+review additionally strengthened the existing incomplete grace control: request
+a registered but unadvertised read, requiring no extra executed read and no task
+completion. This passed installed 1.13.10; repeat it on Linux at WQ-07.
+Upstream latest is v1.13.10. The local executable now matches its official Darwin
+SHA-256; the former installed executable and temporary candidate copies were
+removed. Historical evidence through 1.13.8 is frozen without rewriting bytes.
+
 ### Risks And Recovery
 
 Dateparser 1.5.0 was qualified as a possible supplement on a synthetic 34-value
@@ -391,8 +407,9 @@ calendar causes in the required corpus analysis before selecting broader support
 
 ### Resume Point
 
-WQ-05: finish expanded OCR 1.13.9/1.13.10 platform qualification and promotion,
-then WQ-06 operator guidance and unified debug lifecycle. The numeric slice has
+WQ-06: operator guidance and unified debug lifecycle. The OCR promotion is
+implemented; retain hosted reconciliation, Linux TLS and the strengthened grace
+control in the final native gate. The numeric slice has
 passed scoped checks, initial paired audits and focused correction replay; retain
 its final full repeat/resource comparison at WQ-07 after runtime work is complete.
 WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
