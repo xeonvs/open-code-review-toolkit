@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape, quoteattr
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ocr_toolkit.evidence.ecosystems.dotnet import parse_msbuild
+from ocr_toolkit.evidence.ecosystems.dotnet import parse_global_json, parse_msbuild
 from ocr_toolkit.evidence.ecosystems.dotnet.limits import ConstructionBudget
 
 
@@ -94,3 +94,27 @@ def test_composed_xml_facts_stay_within_output_bounds(depth, leaves, scalar, att
         ensure_ascii=False,
     ).encode()
     assert len(encoded) < 2 * ConstructionBudget.for_text(body).limit
+
+
+@given(
+    st.text(max_size=100),
+    st.sampled_from(["/* note */", "// note\n", "// note\r\n"]),
+    st.booleans(),
+)
+def test_sdk_comments_preserve_arbitrary_json_string_content(value, comment, bom):
+    """Vary JSON escapes and comment placement without altering declared values."""
+    import json
+
+    body = (
+        ("\ufeff" if bom else "")
+        + comment
+        + '{"sdk":'
+        + comment
+        + '{"version":'
+        + json.dumps(value)
+        + "}"
+        + comment
+        + "}"
+    )
+    result = parse_global_json(body)
+    assert result.facts[0].value["version"] == value

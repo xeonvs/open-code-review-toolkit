@@ -10,7 +10,7 @@ from ocr_toolkit.common.redaction import (
     SENSITIVE_NAMED_KEY_PATTERN,
     redact_sensitive,
 )
-from ocr_toolkit.evidence.model import EvidenceValue
+from ocr_toolkit.evidence.model import EvidenceDelta, EvidenceValue
 from ocr_toolkit.evidence.store.contracts import EvidenceStoreError
 
 
@@ -70,3 +70,38 @@ def safe_delta_metadata(value: str, *, name: str, max_chars: int) -> str:
     if not redacted or len(redacted) > max_chars:
         raise EvidenceStoreError(f"evidence delta {name} exceeds its metadata budget")
     return redacted
+
+
+def safe_deltas(deltas: tuple[EvidenceDelta, ...], max_chars: int) -> tuple[EvidenceDelta, ...]:
+    """Normalize and deduplicate one bounded set of semantic projections."""
+    normalized = (
+        EvidenceDelta(
+            kind=delta.kind,
+            component=safe_delta_metadata(delta.component, name="component", max_chars=256),
+            identity=safe_delta_metadata(delta.identity, name="identity", max_chars=4096),
+            change=delta.change,
+            before=safe_value(delta.before, max_chars),
+            after=safe_value(delta.after, max_chars),
+        )
+        for delta in deltas
+    )
+    unique = {delta.id: delta for delta in normalized}
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda item: (item.kind, item.component, item.identity, item.change, item.id),
+        )
+    )
+
+
+def delta_payload(delta: EvidenceDelta) -> dict[str, object]:
+    """Project the exact persisted delta fields for serialization and byte accounting."""
+    value = delta.to_mcp_dict()
+    return {
+        "kind": delta.kind,
+        "component": delta.component,
+        "identity": delta.identity,
+        "change": delta.change,
+        "before": value["before"],
+        "after": value["after"],
+    }

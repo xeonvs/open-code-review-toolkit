@@ -73,6 +73,18 @@ from ocr_toolkit.evidence.store import EvidenceStore
         ),
         ("Directory.Build.targets", '<Project><Import Project="unknown.targets"/></Project>'),
         ("src/Directory.Packages.props", "<Project>"),
+        (
+            "Directory.Build.props",
+            '<Project><ItemGroup><PackageVersion Include="Example.Package" Version="2.0"/></ItemGroup></Project>',
+        ),
+        (
+            "Directory.Build.targets",
+            '<Project><ItemGroup><PackageVersion Include="Example.Package" Version="2.0"/></ItemGroup></Project>',
+        ),
+        (
+            "src/web.csproj",
+            '<Project><ItemGroup><PackageVersion Include="Example.Package" Version="2.0"/><PackageReference Include="Example.Package"/></ItemGroup></Project>',
+        ),
     ],
 )
 def test_unproven_central_version_is_never_effective(
@@ -213,6 +225,25 @@ def test_nested_and_colocated_projects_keep_distinct_central_scopes(dotnet_repo:
     categories = categorize_paths(["src/nested/other.fsproj", "Program.cs", "script.csx"])
     assert categories["dependency_manifests"] == ("src/nested/other.fsproj",)
     assert categories["csharp"] == ("Program.cs", "script.csx")
+
+
+def test_unrelated_build_package_does_not_hide_an_unambiguous_central_link(
+    dotnet_repo: Path,
+) -> None:
+    """Limit competing-declaration checks to the referenced package identity."""
+    write(
+        dotnet_repo,
+        "Directory.Build.props",
+        '<Project><ItemGroup><PackageVersion Include="Other.Package" Version="2.0"/></ItemGroup></Project>',
+    )
+    base = commit(dotnet_repo)
+    write(dotnet_repo, "README.md", "synthetic change")
+    head = commit(dotnet_repo)
+    store = collect_repository_evidence(dotnet_repo, base_ref=base, head_ref=head)
+    assert any(
+        record.kind == "dotnet.central_version" and record.ref is RefRole.HEAD
+        for record in store.records
+    )
 
 
 @pytest.mark.parametrize(

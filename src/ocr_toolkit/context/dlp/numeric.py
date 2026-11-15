@@ -9,6 +9,7 @@ import uuid
 
 import regex
 
+from ocr_toolkit.context.dlp.contact_labels import _contact_context, _explicit_context
 from ocr_toolkit.context.dlp.datetimes import (
     CALENDAR_DAY_PATTERN,
     _word_part,
@@ -70,48 +71,6 @@ IP_CONTEXT_RE = re.compile(
 )
 
 
-_CONTACT_HINT = re.compile(r"phone|tel|contact|call", re.IGNORECASE)
-_CONTACT_WORDS = frozenset({"call", "phone", "telephone", "tel", "contact"})
-
-
-def _contact_context(prefix: str) -> bool:
-    """Recognize contact words in human labels and identifier components."""
-
-    prefix = prefix[-64:].rstrip(" \t")
-    if not prefix or not prefix[-1].isalnum() or _CONTACT_HINT.search(prefix) is None:
-        return False
-    # Split naming structure, not repository-specific key names. Operators stay
-    # outside the accepted suffix so unrelated addition never supplies intent.
-    parts: list[str] = []
-    word = ""
-    for index, char in enumerate(prefix):
-        if not char.isalnum():
-            if word:
-                parts.append(word.casefold())
-                word = ""
-            continue
-        previous = prefix[index - 1] if index else ""
-        camel_boundary = (
-            bool(word)
-            and char.isupper()
-            and (
-                not previous.isupper() or (index + 1 < len(prefix) and prefix[index + 1].islower())
-            )
-        )
-        if camel_boundary:
-            parts.append(word.casefold())
-            word = ""
-        word += char
-    parts.append(word.casefold())
-    last = parts[-1]
-    if last in {"number", "no"} and len(parts) > 1:
-        return parts[-2] in _CONTACT_WORDS
-    return last in _CONTACT_WORDS or any(
-        last.endswith(suffix) and last[: -len(suffix)] in _CONTACT_WORDS
-        for suffix in ("number", "no")
-    )
-
-
 _VERSION = r"(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){1,3}"
 _DATE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
 _TECHNICAL_BLOCK = re.compile(
@@ -125,25 +84,6 @@ _TECHNICAL_BLOCK = re.compile(
     rf")(?!\w)",
     re.IGNORECASE,
 )
-
-
-def _explicit_context(value: str, start: int) -> bool:
-    """Bind a numeric candidate to an adjacent contact label, excluding unrelated operators."""
-    cursor = start
-    while cursor:
-        char = value[cursor - 1]
-        # Human label punctuation is independent of programming-language syntax.
-        # Operators, statement separators and closed expressions terminate label
-        # adjacency; assignment remains a supported label/value separator.
-        category = unicodedata.category(char)
-        if (
-            char in "+-/*%&\\!,;?"
-            or category == "Pe"
-            or not (char in "\t=" or category.startswith("P") or category == "Zs")
-        ):
-            break
-        cursor -= 1
-    return _contact_context(value[max(0, cursor - 64) : cursor])
 
 
 def _complete_technical_block(value: str, start: int, end: int) -> bool:

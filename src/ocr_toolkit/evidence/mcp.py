@@ -31,6 +31,7 @@ from ocr_toolkit.diagrams.mcp import (
     optional_diagram_tool_definition,
 )
 from ocr_toolkit.evidence.actions import UNATTRIBUTED_ACTION, record_action
+from ocr_toolkit.evidence.coverage import coverage_domains, record_in_coverage
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord, RefRole
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
@@ -460,17 +461,17 @@ def _coverage_query(store: EvidenceStore, arguments: dict[str, object]) -> dict[
     matching_records = [
         record
         for record in store.records
-        if record.kind == kind
+        if record_in_coverage(record, kind, source_path)
         and record.ref.value == ref
         and (component is None or record.component == component)
-        and (source_path is None or record.source_path == source_path)
     ]
     exact_scope = component is not None and source_path is not None
+    domains = coverage_domains(kind)
     applicable = (
         [
             record
             for record in store.coverage
-            if record.domain == kind
+            if record.domain in domains
             and record.ref.value == ref
             and record.component == component
             and record.scope == source_path
@@ -486,6 +487,7 @@ def _coverage_query(store: EvidenceStore, arguments: dict[str, object]) -> dict[
         diagnostic
         in {
             "global evidence record limit reached",
+            "typed evidence was truncated by store byte limit",
             f"per-kind evidence record limit reached for {kind}",
             f"omitted ambiguous {kind} evidence value",
             f"omitted oversized {kind} evidence value",
@@ -724,7 +726,7 @@ def _coverage_tool_definition() -> dict[str, object]:
                     "type": "string",
                     "maxLength": 256,
                     "description": (
-                        "Exact record source path and coverage scope required for "
+                        "Exact manifest source path or plugin semantic coverage scope required for "
                         "authoritative absence."
                     ),
                 },

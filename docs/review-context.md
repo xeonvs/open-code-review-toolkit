@@ -57,9 +57,13 @@ The `dotnet` pack uses the existing immutable collector, store and evidence MCP.
 It reads `*.csproj`, `*.fsproj`, `*.vbproj`, `Directory.Build.props/targets`,
 `Directory.Packages.props`, `packages.lock.json` and `global.json`. It retains SDK,
 TFM(s), language/nullable settings, package/framework declarations and conditions,
-central package declarations, framework-scoped direct/transitive lock versions,
+central package declarations, framework-scoped direct/transitive/central-transitive lock versions,
 and declared SDK selection/roll-forward. It never reads `nuget.config`, evaluates
 MSBuild, follows imports, restores packages, builds or resolves dependencies online.
+SDK `global.json` accepts its documented line/block comments and preserves quoted
+comment markers. NuGet lock JSON remains strict; UTF-8 BOMs do not become content.
+See the [SDK format](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+and [NuGet lock producer](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Commands/PackagesLockFileBuilder.cs).
 
 These are declarations, not the evaluated build configuration. Conditional,
 expression-based, imported, updated or overridden values remain explicit and
@@ -71,6 +75,8 @@ enablement and declaration are unambiguous and relevant project/build sources
 contain no unsupported evaluation. The link records both sources and explicitly
 does not assert an effective version. Missing, malformed, omitted, conflicting or
 noncanonical-case automatic-discovery inputs cannot prove that association.
+Competing package-version declarations in the project or applicable shared-build
+files withhold the affected package's central link while preserving raw facts.
 Nested central files and colocated projects remain separate scopes.
 
 Constructed .NET fact payloads have a shared UTF-8 byte budget before collector

@@ -221,7 +221,7 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 When required evidence use is not confirmed, the review is rejected before publication or automatic approval. The console emits `Review rejected:` with the stable reason `evidence-use-unconfirmed`, an explicitly reported zero or `unavailable`, and validated outcome/manifest coverage counts where present. A positive primary count with unconfirmed completed summary attribution uses `evidence-action-attribution-invalid`. Malformed telemetry remains a separate integrity error. These facts do not establish whether the model omitted a call or OCR omitted attribution; successful MCP preflight establishes readiness and never supplies model-use evidence.
 
-Safe rejection facts appear before result cleanup in local and CI execution. An advisory green job does not mean the review was accepted. Local `--debug-dir PATH` captures bounded raw diagnostics separately from any admitted result and report; it does not bypass evidence, DLP or result admission. Ephemeral evidence and native HOME are cleaned up even in debug mode. Debug files cannot authorize posting. The reader still refuses hostile historical private-diagnostic markers. Inspect the owner-only bundle locally and do not upload it as a public CI artifact.
+Safe rejection facts appear before result cleanup in local and CI execution. An advisory green job does not mean the review was accepted. Local `--debug-dir PATH` captures bounded raw diagnostics separately from any admitted result and report; it does not bypass evidence, DLP or result admission. Ephemeral evidence and native HOME are cleaned up even in debug mode. Raw diagnostics are not admitted posting input. The bundle’s `safe-result.json` is an ordinary admitted receipt-less result: explicitly configured standalone posting can consume it, while it supplies neither GitLab CI receipt authority nor automatic-approval eligibility. The reader still refuses hostile historical private-diagnostic markers. Inspect the owner-only bundle locally and do not upload it as a public CI artifact.
 
 
 OCR's optional failed-tool `arguments` are validated only for type and bounds and
@@ -274,7 +274,10 @@ The `ocr.pre-execution-status/v5` records a closed stage and `model_execution=no
 
 Mandatory repository evidence uses adaptive structural capacity for the actual
 B/H/P file snapshots, indexes, categories and coverage. Optional typed-fact budgets
-remain separate. The absolute 100,000-record and 20 MB serialized-store limits,
+remain separate. Typed records, semantic deltas and omission notices share the
+remaining byte pool after mandatory validation and invocation headroom. A typed
+overflow preserves B/H/P, omits unsafe comparisons and lowers affected complete
+coverage to partial, independently of diagnostic redaction. The absolute 100,000-record and 20 MB serialized-store limits,
 plus bounded Git tree/blob acquisition, still apply. Genuine hard-limit refusal
 stops before the model and emits `ocr.pre-execution-status/v7` with the closed
 `evidence_budget_exceeded` reason, `records`/`bytes`/`entries` unit and actual/limit.

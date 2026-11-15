@@ -44,7 +44,8 @@ from ocr_toolkit.evidence.store.serialization import bounded_json
 from ocr_toolkit.evidence.store.target import add_target_records
 from ocr_toolkit.evidence.store.values import (
     EvidenceValueRedactionError,
-    safe_delta_metadata,
+    delta_payload,
+    safe_deltas,
     safe_diagnostic,
     safe_value,
 )
@@ -356,30 +357,7 @@ class EvidenceStore:
             for delta in self.deltas
         ):
             raise EvidenceStoreError("evidence delta kind is unregistered")
-        normalized = (
-            EvidenceDelta(
-                kind=delta.kind,
-                component=safe_delta_metadata(delta.component, name="component", max_chars=256),
-                identity=safe_delta_metadata(delta.identity, name="identity", max_chars=4096),
-                change=delta.change,
-                before=safe_value(delta.before, self.limits.max_value_chars),
-                after=safe_value(delta.after, self.limits.max_value_chars),
-            )
-            for delta in self.deltas
-        )
-        unique = {delta.id: delta for delta in normalized}
-        return tuple(
-            sorted(
-                unique.values(),
-                key=lambda item: (
-                    item.kind,
-                    item.component,
-                    item.identity,
-                    item.change,
-                    item.id,
-                ),
-            )
-        )
+        return safe_deltas(self.deltas, self.limits.max_value_chars)
 
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
@@ -435,17 +413,7 @@ class EvidenceStore:
             "records": [record.to_dict() for record in self.records],
             "coverage": [record.to_dict() for record in self.coverage],
             "snapshots": snapshots,
-            "deltas": [
-                {
-                    "kind": delta.kind,
-                    "component": delta.component,
-                    "identity": delta.identity,
-                    "change": delta.change,
-                    "before": delta.to_mcp_dict()["before"],
-                    "after": delta.to_mcp_dict()["after"],
-                }
-                for delta in self.safe_deltas
-            ],
+            "deltas": [delta_payload(delta) for delta in self.safe_deltas],
             "diagnostics": sorted(safe_diagnostic(item) for item in self.diagnostics),
             "limits": {
                 "max_records": self.limits.max_records,

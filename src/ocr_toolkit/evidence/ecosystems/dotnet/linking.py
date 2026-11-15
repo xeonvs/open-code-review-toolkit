@@ -81,10 +81,18 @@ def central_links(
         if settings(project) and [str(value).casefold() for value in settings(project)] != ["true"]:
             continue
         versions: dict[str, list[EvidenceRecord]] = {}
-        for record in grouped[central]:
-            value = fact_value(record)
-            if record.kind == "dotnet.package_version":
-                versions.setdefault(str(value.get("name")).casefold(), []).append(record)
+        competing: set[str] = set()
+        for source in (central, project, *build_files):
+            if source is None:
+                continue
+            for record in grouped.get(source, ()):
+                value = fact_value(record)
+                if record.kind == "dotnet.package_version":
+                    name = str(value.get("name")).casefold()
+                    if source == central:
+                        versions.setdefault(name, []).append(record)
+                    else:
+                        competing.add(name)
         references = [
             record
             for record in grouped[project]
@@ -99,7 +107,12 @@ def central_links(
             value = fact_value(record)
             name = str(value.get("name")).casefold()
             candidates = versions.get(name, [])
-            if counts[name] != 1 or value.get("version") is not None or len(candidates) != 1:
+            if (
+                name in competing
+                or counts[name] != 1
+                or value.get("version") is not None
+                or len(candidates) != 1
+            ):
                 continue
             central_value = fact_value(candidates[0])
             version = central_value.get("version")

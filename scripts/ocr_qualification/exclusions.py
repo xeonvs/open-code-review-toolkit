@@ -19,7 +19,9 @@ EXPECTED = {
 }
 
 
-def validate_exclusions(result: dict[str, Any], expected: dict[str, str]) -> None:
+def validate_exclusions(
+    result: dict[str, Any], expected: dict[str, str], *, expected_selected: frozenset[str]
+) -> None:
     """Bind every exclusion to selection while preserving the terminal denominator."""
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
@@ -43,6 +45,12 @@ def validate_exclusions(result: dict[str, Any], expected: dict[str, str]) -> Non
         if not isinstance(path, str) or not path:
             core._fail("exclusion probe lost selected path identity")
         selected_paths.add(path)
+    if (
+        selected_paths != expected_selected
+        or len(coverage["selected"]) != len(expected_selected)
+        or {item["item_id"] for item in coverage["completed"]} != selected
+    ):
+        core._fail("exclusion probe changed the expected selected/completed fixture")
     for item in excluded:
         if not isinstance(item, dict):
             core._fail("exclusion probe returned a malformed item")
@@ -118,5 +126,5 @@ def exclusion_probe(binary: Path, directory: Path) -> dict[str, object]:
     from ocr_toolkit.review_range import ReviewRange, admit_native_range
 
     admit_native_range(result, ReviewRange(base, head))
-    validate_exclusions(result, expected)
+    validate_exclusions(result, expected, expected_selected=frozenset({"example.py"}))
     return dict(EXPECTED)

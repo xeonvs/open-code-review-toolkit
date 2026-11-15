@@ -27,9 +27,47 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _load(text: str) -> dict[str, Any]:
+def _without_comments(text: str) -> str:
+    """Replace SDK JSON comments with whitespace without altering strings or token boundaries."""
+    output = list(text)
+    quoted = escaped = False
+    cursor = 0
+    while cursor < len(text):
+        char = text[cursor]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif text[cursor : cursor + 2] in {"//", "/*"}:
+            if text[cursor + 1] == "/":
+                end = cursor + 2
+                while end < len(text) and text[end] not in "\r\n":
+                    end += 1
+            else:
+                closing = text.find("*/", cursor + 2)
+                if closing < 0:
+                    raise ValueError("unterminated .NET SDK JSON comment")
+                end = closing + 2
+            for index in range(cursor, end):
+                if text[index] not in "\r\n":
+                    output[index] = " "
+            cursor = end
+            continue
+        cursor += 1
+    return "".join(output)
+
+
+def _load(text: str, *, comments: bool = False) -> dict[str, Any]:
     """Decode one bounded JSON object and validate its nesting, scalars and traversal cost."""
     bounded_text(text)
+    text = text.removeprefix("\ufeff")
+    if comments:
+        text = _without_comments(text)
     try:
         data = json.loads(text, object_pairs_hook=_pairs, parse_constant=_invalid_constant)
     except RecursionError as exc:
@@ -60,7 +98,7 @@ def _invalid_constant(value: str) -> None:
 def parse_global_json(text: str) -> ManifestParseResult:
     """Keep SDK selection as declared settings, never as an installed SDK claim."""
 
-    sdk = _load(text).get("sdk", {})
+    sdk = _load(text, comments=True).get("sdk", {})
     if not isinstance(sdk, dict):
         raise ValueError("invalid .NET SDK declaration")
     values = {
@@ -115,7 +153,7 @@ def parse_packages_lock(text: str) -> ManifestParseResult:
                 not name
                 or not isinstance(entry, dict)
                 or not isinstance(entry.get("type"), str)
-                or entry.get("type") not in {"Direct", "Transitive", "Project"}
+                or entry.get("type") not in {"Direct", "Transitive", "CentralTransitive", "Project"}
             ):
                 raise ValueError("invalid NuGet lock package")
             if entry["type"] == "Project":

@@ -12,6 +12,55 @@ from ocr_toolkit.evidence.ecosystems.dotnet import (
 
 
 @pytest.mark.parametrize(
+    "comment", ["/* SDK pin */", "// SDK pin\n", "// SDK pin\r\n", "/* SDK\npin */"]
+)
+def test_sdk_json_accepts_documented_comments_without_changing_strings(comment):
+    """Read comments as whitespace while preserving literal delimiters and escaped quotes."""
+    version = '9.0.100/http://host/*literal*/"quoted"\\tail'
+    text = comment + '{"sdk":' + comment + '{"version":' + json.dumps(version) + "}" + comment + "}"
+    result = parse_global_json(text)
+    assert result.facts[0].value["version"] == version
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"sdk":{} /* missing',
+        '{"sdk":{},}',
+        '{,"sdk":{}}',
+        '{"sdk":{"version":1/* gap */2}}',
+        '{"sdk":{"version":"1",/* duplicate */"version":"2"}}',
+    ],
+)
+def test_sdk_comments_do_not_relax_json_shape_or_duplicate_checks(body):
+    """Do not join tokens, invent trailing-comma support or hide conflicting keys."""
+    with pytest.raises(ValueError):
+        parse_global_json(body)
+
+
+def test_lock_json_keeps_strict_comment_policy_and_preserves_central_transitives():
+    """Keep NuGet's distinct scopes and validate comments only for the SDK document."""
+    value = {
+        "version": 2,
+        "dependencies": {
+            "net9.0": {
+                "Pinned": {"type": "CentralTransitive", "resolved": "2.0"},
+                "Ordinary": {"type": "Direct", "resolved": "1.0"},
+            }
+        },
+    }
+    result = parse_packages_lock(json.dumps(value))
+    assert {fact.value["scope"] for fact in result.facts} == {"centraltransitive", "direct"}
+    with pytest.raises(ValueError):
+        parse_packages_lock("/* unsupported */" + json.dumps(value))
+    assert len(parse_packages_lock("\ufeff" + json.dumps(value)).facts) == 2
+    assert (
+        parse_global_json('\ufeff{"sdk":{"version":"9.0.100"}}').facts[0].value["version"]
+        == "9.0.100"
+    )
+
+
+@pytest.mark.parametrize(
     "identity", ["First;Second", "Microsoft%2EAspNetCore%2EApp", "First*", "First?"]
 )
 @pytest.mark.parametrize("element", ["PackageReference", "FrameworkReference", "PackageVersion"])

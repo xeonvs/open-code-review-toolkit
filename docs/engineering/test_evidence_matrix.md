@@ -10,6 +10,11 @@ snapshots/deltas, private store serialization/readback and MCP pagination at
 from structural growth. Unicode/escape properties compare the streamed encoder
 with canonical JSON and verify atomic failure; target batches retain consistent
 indexes with bounded incremental admission and a final real serializer guard.
+Optional-fact tests cross real Git snapshots and a controlled expanded fact
+producer, then actual persistence and scoped MCP queries. Record, composed-delta,
+diagnostic and invocation budgets are independent. Partial coverage survives a
+configured-secret collision that redacts the omission notice and a later readback
+without that environment value; no diagnostic phrase grants completeness.
 
 The CLI hard-budget tests replace only provider identity acquisition, keeping
 Git, collection, status persistence, cleanup and local failure delivery real.

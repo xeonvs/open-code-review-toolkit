@@ -434,41 +434,62 @@ calendar causes in the required corpus analysis before selecting broader support
 - Never mutate published tags/distributions/receipt bytes for recovery. Use the
   protected release recovery lifecycle and preserve originals/audit keys.
 
+### Current Acceptance Evidence
+
+Implementation commits through 5e46d49 completed WQ-02/03/04/06/11.
+Independent aggregate review corrections are committed as 731d932.
+The single Security scan covered 80eebd6..731d932 and reported one medium
+pre-store XML allocation issue. Commit 9b2d316 addresses constructed identities,
+.NET output payloads and the namespace-tree bypass found in its one independent
+patch-review cycle. Its focused acceptance passed 136 tests with 99.38% .NET
+branch-aware coverage. This does not replace the final runtime quality gate.
+
+Initial Linux TLS, exclusion and restricted-grace controls passed nine cases
+for each OCR candidate. Current own-tool findings strengthen fixture membership
+and fresh-round proof further; qualify those changed probes before promotion.
+The first real own-tool run reviewed 80eebd6..9b2d316: 90 selected/completed files,
+seven findings, generated diagram and no DLP omissions. Its raw material remains
+private. All seven findings are confirmed and corrected: fixture membership,
+fresh-round evidence, SDK comments, central-transitive lock scopes, scoped central
+conflicts, resume state and standalone debug-result wording. Focused acceptance
+passed 177 tests (three opt-in cases separately passed on the installed native
+binary), and independent review passed 47 narrow checks without residual defects.
+The failed guessed example path was followed by a complete successful read of
+the actual 120-line file. Bootstrap is retained whole; the length recommendation
+is advisory, with no token/tool/context exhaustion. The optional debug trace hit
+its explicit cap; raw findings and stderr remain complete. No additional
+aggregate Security scan is required.
+
+The second own-tool run reviewed 80eebd6..3f2e174: all 90 selected files,
+two findings, an admitted diagram and no DLP omissions. Its corrections bound
+optional records and composed deltas after the mandatory envelope, and recognize
+closed contact-label bindings without evaluating source-language expressions.
+Independent patch review added computed-key/call/window counterexamples and
+structural partial coverage that survives redacted diagnostics, including plugin
+domains distinct from record kinds. Retained-fact controls verify semantic plugin
+scopes through MCP. The 20 new optional-byte regressions pass; the earlier focused
+handoff suite passed 725 checks. Final quality acceptance remains separate.
+
+Canonical pre-commit instructions now require observable witnesses and distinct
+counterexamples for security, identity, completeness and resource claims. Missing
+proof blocks the commit. Format-owner variants, competing sources, composed
+budgets, affected-mode documentation and an exact remaining-work resume point
+are mandatory checklist dimensions; the OCR route includes the selection guard.
+
 ### Resume Point
 
-WQ-06: operator guidance and unified debug lifecycle. The OCR promotion is
-implemented; retain hosted reconciliation, Linux TLS and the strengthened grace
-control in the final native gate. The numeric slice has
-passed scoped checks, initial paired audits and focused correction replay; retain
-its final full repeat/resource comparison at WQ-07 after runtime work is complete.
-WQ-02 is committed as a031c1c, dependencies as e37bf90 and .NET as 2f4ee21;
-purpose-focused descriptions are committed as a7004e2.
-The numeric slice is committed as 0d16bab and OCR qualification as a759d51.
-Unified diagnostics are committed as bdbaa34 after scoped CLI/auth boundaries.
-Concurrency/label guidance and future-only roadmap/backlog cleanup are committed
-as 5e46d49. Independent aggregate review identified contact-label punctuation,
-selected/excluded path overlap and unevaluated MSBuild item/escape semantics;
-correct them with production handoff and property regressions. Current-document
-audit also found stale debug migration, policy identity and process guidance;
-reconcile the canonical owners without rewriting history. Then perform one
-Security scan, own-tool review and final runtime/installed/corpus gates.
-Aggregate corrections are committed as 731d932. The single Security scan of
-80eebd6..731d932 reviewed all 50 changed source files and confirmed one medium
-pre-store XML allocation issue. Its correction bounds composed identities and
-shared .NET fact payload construction. Its independent patch review also found
-namespace-expanded XML tree amplification; construction callbacks now enforce a
-separate aggregate bound before retention. Confirm both paths with focused
-regressions before own-tool acceptance; no repeat aggregate scan is planned.
-Focused fix acceptance passed 136 tests including expanded Hypothesis, real
-Git/readback and central-link omission controls; .NET branch-aware coverage is
-99.38%, and the new construction-bound owner is fully covered. The one fresh
-patch-review cycle is complete and its namespace finding is addressed.
-Linux TLS, exclusion identity and strong-grace controls passed for both native
-candidates (nine cases each); an earlier installer-only failed attempt supplied
-no acceptance evidence. Hosted reconciliation remains a hard gate after the
-final feature push and before merge. Native ChatGPT model discovery succeeded.
-Draft PR #317 remains at its signed plan commit; all development
-stays local until final feature acceptance.
+Complete the pending logical commit by amend, then WQ-07 quality/installed checks.
+The owner has authorized a third real own-tool review because the optional
+admission/MCP correction is substantial. Use the frozen candidate, unlimited
+aggregate token budget, private debug and an admitted diagram; inspect raw
+findings, omissions, warnings and auxiliary reads. No further aggregate Security
+scan is planned. Complete candidate corpus comparisons,
+resource checks and the current-checkout scan. All seven repeated baseline
+scans are authenticated and complete. Reuse completed proof for unchanged
+inputs. WQ-05 still requires current-contract
+hosted reconciliation after the final feature push, before merge. The feature
+PR remains draft at its signed plan commit; WQ-08/09/10 delivery and external
+readback have not occurred.
 
 ### Plan Fidelity Check
 

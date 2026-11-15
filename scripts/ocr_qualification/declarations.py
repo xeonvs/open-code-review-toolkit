@@ -43,6 +43,18 @@ class DeclarationConversation:
         elif self.index == 4:
             if names != self.tools:
                 core._fail("the second review round changed consumed capabilities")
+            messages = request.get("messages")
+            if (
+                not isinstance(messages, list)
+                or not messages
+                or not all(
+                    isinstance(message, dict)
+                    and message.get("role") in {"system", "developer", "user"}
+                    for message in messages
+                )
+                or not any(message.get("role") == "user" for message in messages)
+            ):
+                core._fail("the second review round did not rebuild fresh message history")
         elif self.previous is not None:
             comparison.validate_tool_result(
                 request.get("messages"), self.previous, f"declaration-{self.index - 1}"

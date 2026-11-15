@@ -351,6 +351,12 @@ is treated as a decimal, including an otherwise ambiguous short telephone shape.
 Other national and multi-dot telephone forms retain conservative checks. A technical
 span cannot cover a neighboring contact or combine independent fractions.
 
+Explicit contact intent includes adjacent human labels and closed literal/bare
+keys bound by `=` or `:`, with numeric ordinal postfixes. A shared bounded lexical
+reader recognizes those targets without evaluating source-language expressions.
+Computed keys, completed calls, comparisons and terminal non-contact members do
+not borrow a preceding contact label. Source proof does not exempt contact data.
+
 One shared grammar recognizes ISO and `DD.MM.YYYY` calendar days and complete
 bounded timestamps, including their clock, optional fractional seconds and
 timezone. Calendar validation uses the standard library rather than enumerating

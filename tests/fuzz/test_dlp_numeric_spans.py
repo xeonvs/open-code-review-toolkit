@@ -120,6 +120,25 @@ def test_contact_identifier_components_keep_intent_under_arbitrary_prefixes(pref
 
 
 @given(
+    st.text(alphabet="abcdefghijklmnopqrstuvwxyz_", min_size=1, max_size=20),
+    st.sampled_from([('["', '"]'), ("['", "']"), ("[", "]")]),
+    st.lists(st.integers(0, 999), max_size=4),
+    st.sampled_from([" = ", ": ", "\u00a0=\u3000"]),
+    ENCODING,
+)
+def test_structured_labels_vary_closing_delimiters_and_terminal_members(
+    receiver, quotes, indexes, binding, encoding
+):
+    """Vary closed-key grammar and its noncontact counterpart rather than only label values."""
+    opening, closing = quotes
+    target = receiver + opening + "phone" + closing + "".join(f"[{index}]" for index in indexes)
+    value = encode(target + binding + '"202555.0114"', encoding)
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    ordinary = encode(target + ".version" + binding + '"202555.0114"', encoding)
+    assert check_text(ordinary, budgets=BUDGETS, publication=True).admitted
+
+
+@given(
     st.dates(),
     st.integers(0, 23),
     st.integers(0, 59),

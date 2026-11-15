@@ -184,6 +184,11 @@ Before a logical commit, update the plan and directly affected status-bearing do
 
 Historical wording is evidence, not a specification. Rebuild a capability matrix from current code, tests, and published behavior before retaining backlog work or dependency edges. Keep implementation, safety, and rollout dependencies distinct so conditional future work does not block an independently safe capability.
 
+The resume point names only remaining work and the first safe action. Keep
+completed evidence separate. Before committing, compare both with the current
+queue and actual checks so recovery cannot instruct another agent to repeat a
+completed scan, implementation step or publication action.
+
 When a failure recurs, classify its cause before changing guidance: add or repair the canonical requirement when it is missing or conflicting, correct startup selection when it was not loaded, and otherwise add or repair the concrete subsystem control. Add a pitfalls entry only for a distinct reusable incident class with historical evidence; the catalogue itself does not own the correction.
 
 ## Task coordination and recovery
@@ -242,6 +247,33 @@ Make each claimed behavior falsifiable at its owning boundary. When content,
 identity, location, provenance or completeness is promised, assert that property
 rather than only a success/failure flag. Identify an incorrect result that the
 positive oracle could still accept, and add a focused counterexample.
+
+Before each logical commit, the semantic reviewer must inspect the changed
+claims against their actual assertions and generated handoff, not just a green
+test summary. For each security, identity, completeness or resource claim, name
+the observable witness and a structurally different invalid case that its test
+rejects. Keep those references in existing tests or the active plan; do not add
+another report or a prose-presence test. A missing witness or counterexample
+leaves the claim unverified and blocks the commit until the implementation,
+assertion or claim is corrected. Independent reviewers apply the same gate.
+
+Apply that gate across the affected dimensions:
+
+- Derive supported syntax, enum variants and representation rules from the
+  format owner or real producer. Vary grammar and composition in property
+  tests, rather than varying only values inside one convenient spelling.
+- Bind qualification to the expected external identity and membership, not only
+  an internally consistent result. A phase/freshness claim needs an observed
+  transition; a request index, elapsed time or counter alone is insufficient.
+- For derived associations, test a competing eligible source as well as an
+  unrelated source that must preserve the result. Audit the full input set
+  before claiming uniqueness, effective configuration or absence.
+- Check independent resource units and composed stages, including expanded
+  parser state and remaining optional capacity. Prove the mandatory result
+  survives an optional-domain overflow and that degraded coverage stays explicit.
+- Verify operational documentation's absolute claims against every affected
+  mode and consumer. Distinguish data admission, operator authorization,
+  publication and automatic approval instead of treating them as one permission.
 
 Before measuring bounded or concurrent work, define the counted unit and its
 start/end events. Distinguish work completion, consumer-visible delivery and

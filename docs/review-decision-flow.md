@@ -210,7 +210,10 @@ flowchart TD
 Recognized stops record an identity-bound `ocr.pre-execution-status/v5` or
 gitlink-specific v6, or hard-evidence-budget v7, with a closed stage and
 `model_execution=not_started`. Mandatory snapshot/category capacity scales with
-the immutable inputs while optional typed facts retain separate limits. The
+the immutable inputs while optional typed facts retain separate limits. Optional
+record/delta byte overflow retains mandatory evidence, withholds unsafe
+comparisons and persists partial coverage; only a genuine mandatory overflow
+selects the hard-budget stop. The
 absolute store bounds are 100000 records and 20 MB serialized evidence; Git trees
 remain limited to 20000 entries and changed paths to 10000. A v7 note contains
 only unit/count/limit and the authenticated review identity. It never authorizes
