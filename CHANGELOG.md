@@ -1,3 +1,10 @@
+## 0.15.1 - 2026-11-16
+
+### 🐛 Bug Fixes
+
+- Distinguish missing OCR telemetry from zero reported evidence use, expose safe result and summary-action facts in CI, and preserve rejection cleanup when diagnostic output fails. ([#321](https://github.com/xeonvs/open-code-review-toolkit/issues/321))
+
+
 ## 0.15.0 - 2026-11-16
 
 ### 🚀 Features
