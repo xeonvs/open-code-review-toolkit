@@ -1,14 +1,7 @@
 {
   "schema_version": "ocr-toolkit.release-authorization/v1",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "issues": [
-    311,
-    312,
-    313,
-    314,
-    315,
-    316,
-    318,
-    319
+    321
   ]
 }

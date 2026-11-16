@@ -17,4 +17,5 @@ Each new repository plan archived through the engineering-workflow lifecycle is 
 - [2026-11-10-toolkit-0-14-7-ocr-1-13-7-recoverable-diagrams-and-private-diagnostics.md](2026-11-10-toolkit-0-14-7-ocr-1-13-7-recoverable-diagrams-and-private-diagnostics.md)
 - [2026-11-12-toolkit-0-14-8-ocr-1-13-8-provider-http-and-first-integration.md](2026-11-12-toolkit-0-14-8-ocr-1-13-8-provider-http-and-first-integration.md)
 - [2026-11-16-toolkit-0-15-0-complete-evidence-net-and-numeric-dlp.md](2026-11-16-toolkit-0-15-0-complete-evidence-net-and-numeric-dlp.md)
+- [2026-11-16-toolkit-0-15-1-evidence-diagnostics-and-rejection-cleanup.md](2026-11-16-toolkit-0-15-1-evidence-diagnostics-and-rejection-cleanup.md)
 <!-- engineering-workflow:index:end -->
