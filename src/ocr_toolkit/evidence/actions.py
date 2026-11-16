@@ -54,6 +54,14 @@ def _validated_counts(value: Any) -> dict[str, dict[str, int]] | None:
     actions = value.get("actions")
     if value.get("schema_version") != ACTION_RECEIPT_SCHEMA or not isinstance(actions, dict):
         return None
+    return validate_action_counts(actions)
+
+
+def validate_action_counts(actions: object) -> dict[str, dict[str, int]] | None:
+    """Validate count-only facts independently of OCR's attribution totals."""
+
+    if not isinstance(actions, dict):
+        return None
     if set(actions) != set(ACTION_RECEIPT_STATES):
         return None
     if any(not isinstance(actions[state], dict) for state in ACTION_RECEIPT_STATES):

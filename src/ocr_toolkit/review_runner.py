@@ -203,6 +203,7 @@ from ocr_toolkit.reporting.model import (
 )
 from ocr_toolkit.repository_coverage import RepositoryCoverage, coverage_from_projection
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
+from ocr_toolkit.result_diagnostics import ResultDiagnostic, result_diagnostic
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_identity import validate_detached_merge_request_pipeline
@@ -276,6 +277,20 @@ class ReviewRunnerNoHandoff(ReviewRunnerError):
 
 class ReviewRunnerBusy(ReviewRunnerNoHandoff):
     """Another review owns this checkout's fixed private review artifacts."""
+
+
+class UnexpectedResultContract(ReviewRunnerError):
+    """A review-work result omitted required aggregate telemetry."""
+
+    reason = "unexpected-result-contract"
+    detail = "missing-tool-calls"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "OCR result has an unexpected result contract "
+            "(reason=unexpected-result-contract; detail=missing-tool-calls). "
+            "Result not accepted for publication or automatic approval."
+        )
 
 
 class ReviewRejected(ReviewRunnerError):
@@ -651,7 +666,7 @@ def _review_receipt(
     if tool_calls is None and "tool_calls" in payload:
         raise ReviewRunnerError("OCR result has malformed MCP usage telemetry")
     if tool_calls is None and outcome.requires_evidence_mcp:
-        raise ReviewRejected("evidence-use-unconfirmed", outcome, None)
+        raise UnexpectedResultContract()
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     total_calls = tool_calls.get("total") if isinstance(tool_calls, dict) else None
     if tool_calls is None and outcome.kind == "failed":
@@ -714,8 +729,7 @@ def _review_receipt(
     }
     evidence_calls = sum(evidence_by_tool.values())
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
-        reported = 0 if total_calls == 0 else by_tool.get(TOOL_NAME)
-        raise ReviewRejected("evidence-use-unconfirmed", outcome, reported)
+        raise ReviewRejected("evidence-use-unconfirmed", outcome, evidence_by_tool[TOOL_NAME])
     try:
         action_attribution = verified_evidence_actions(
             evidence_by_tool,
@@ -1775,6 +1789,7 @@ def _finalize_ocr_result(
     selected_diff: tuple[RawDiffEntry, ...] = (),
     expected_range: ReviewRange | None = None,
     diagram_execution: DiagramExecution | None = None,
+    ocr_exit_code: int | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1785,6 +1800,7 @@ def _finalize_ocr_result(
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
     report: ReviewReport | None = None
     syntax_cache: SyntaxCache = {}
+    diagnostic: ResultDiagnostic | None = None
     if expected_range is None and projection is not None:
         expected_range = ReviewRange(projection.plan.base_sha, projection.plan.head_sha)
     if expected_range is not None and (
@@ -1799,7 +1815,10 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         """Prepare an admitted range, receipt and material projection for atomic replacement."""
-        nonlocal failure_telemetry, filtered, publication, usage, report
+        nonlocal failure_telemetry, filtered, publication, usage, report, diagnostic
+        diagnostic = result_diagnostic(
+            payload, exit_code=ocr_exit_code, action_counts=evidence_action_counts
+        )
         for reserved in (
             TOOLKIT_RESULT_KEY,
             TOOLKIT_ADVISORY_KEY,
@@ -1975,13 +1994,20 @@ def _finalize_ocr_result(
 
     try:
         transform_ocr_result(result_path, finalize)
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
-        _discard_unadmitted_result(result_path)
-        raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
     except BaseException as exc:
-        if isinstance(exc, ReviewRejected):
-            print(exc.diagnostic(), file=sys.stderr)
-        _discard_unadmitted_result(result_path)
+        try:
+            if isinstance(exc, ReviewRejected):
+                print(exc.diagnostic(), file=sys.stderr)
+            if diagnostic is not None:
+                print(diagnostic.render(), file=sys.stderr)
+        except Exception:
+            # Diagnostic delivery never replaces the original failure or skips
+            # disposal of output that has not passed admission.
+            pass
+        finally:
+            _discard_unadmitted_result(result_path)
+        if isinstance(exc, (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge)):
+            raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
         raise
     _print_tool_failure_diagnostics(failure_telemetry)
     if state is not None:
@@ -3776,6 +3802,7 @@ def _run_evidence_review(
                     toolkit_advisory=background_qualification.advisory,
                     expected_range=effective_range,
                     diagram_execution=diagram_execution,
+                    ocr_exit_code=exit_code,
                     **(
                         {
                             "projection": projection,

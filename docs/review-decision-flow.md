@@ -155,7 +155,7 @@ flowchart TD
     successful_run -- No --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
     successful_run -- Yes --> finalize[Enter result finalization]
     finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
-    core -- No --> rejection_diag[Emit bounded rejection facts;<br/>zero vs unavailable; fixed reason code]
+    core -- No --> rejection_diag[Emit closed result shape and execution facts;<br/>missing contract vs zero evidence;<br/>independent summary counts when available]
     rejection_diag --> integrity_error
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
     diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
@@ -269,7 +269,11 @@ ordinary-review meaning.
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
 contradictory manifest, stale identity, failed cleanup, or missing/mismatched toolkit action
-receipt blocks finalization. Mandatory evidence rejection emits safe facts.
+receipt blocks finalization. Missing required telemetry is an unexpected result
+contract; valid telemetry with no primary evidence reports zero evidence calls
+even when other calls ran. Closed result-shape and independent summary-count
+diagnostics do not change error precedence or supply admission authority.
+Result disposal and the original failure survive diagnostic output errors.
 Explicit local debug captures bounded inputs and raw output before ordinary
 cleanup; successful output always takes normal admission and atomic replacement.
 Rejected handoffs are discarded. Historical private-diagnostic markers remain
