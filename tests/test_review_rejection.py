@@ -12,7 +12,7 @@ from ocr_toolkit import ocr_result, review_runner
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import workflow
 from tests.support import gitlab_config
-from tests.test_review_runner import BUILTIN_EVIDENCE_TOOLS, DEFAULT_IDENTITY
+from tests.test_review_runner import BUILTIN_EVIDENCE_TOOLS, DEFAULT_IDENTITY, SUMMARY_ACTION_COUNTS
 
 
 def composition() -> MCPComposition:
@@ -29,10 +29,11 @@ def composition() -> MCPComposition:
 @pytest.mark.parametrize(
     ("telemetry", "expected"),
     [
-        (None, None),
         ({"total": 0, "by_tool": {}}, 0),
         ({"total": 0, "by_tool": {"ocr_toolkit_evidence": 0}}, 0),
-        ({"total": 1, "by_tool": {"read_file": 1}}, None),
+        ({"total": 1, "by_tool": {"file_read": 1}}, 0),
+        ({"total": 1, "by_tool": {"context_get": 1}}, 0),
+        ({"total": 1, "by_tool": {"ocr_toolkit_evidence_search": 1}}, 0),
     ],
 )
 def test_rejected_result_discards_unadmitted_output(
@@ -66,6 +67,124 @@ def test_rejected_result_discards_unadmitted_output(
     assert "private operator content" not in output
     assert str(tmp_path) not in output
     assert ("reported calls: unavailable" if expected is None else "reported calls: 0") in output
+    assert not result.exists()
+
+
+def native_payload() -> dict[str, object]:
+    """Build the reported coverage shape without private source or identifiers."""
+    items = [{"item_id": f"synthetic-{index}"} for index in range(408)]
+    return {
+        "status": "complete",
+        "comments": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": items,
+                "completed": items,
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "status", ["success", "completed_with_warnings", "completed_with_errors", "complete"]
+)
+@pytest.mark.parametrize("actions", [None, SUMMARY_ACTION_COUNTS])
+def test_missing_telemetry_is_an_unexpected_contract(tmp_path, capsys, status, actions):
+    payload = native_payload() if status == "complete" else {"status": status, "comments": []}
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps(payload))
+    with pytest.raises(review_runner.UnexpectedResultContract) as caught:
+        review_runner._finalize_ocr_result(
+            result, composition(), DEFAULT_IDENTITY, None, actions, forbidden=(), ocr_exit_code=0
+        )
+    assert caught.value.reason == "unexpected-result-contract"
+    assert caught.value.detail == "missing-tool-calls"
+    output = capsys.readouterr().err
+    assert "tool_calls=missing" in output and "ocr_exit_code=0" in output
+    assert "reported_evidence_calls=unavailable" in output
+    assert f"summary_receipt={'available' if actions is not None else 'unavailable'}" in output
+    assert "evidence-use-unconfirmed" not in str(caught.value)
+    assert not result.exists()
+
+
+def test_native_only_calls_are_not_missing_telemetry(tmp_path, capsys):
+    payload = native_payload()
+    payload["tool_calls"] = {"total": 213, "by_tool": {"file_read": 213}}
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps(payload))
+    with pytest.raises(review_runner.ReviewRejected) as caught:
+        review_runner._finalize_ocr_result(
+            result, composition(), DEFAULT_IDENTITY, None, forbidden=()
+        )
+    assert caught.value.reason == "evidence-use-unconfirmed"
+    assert caught.value.calls == 0
+    output = capsys.readouterr().err
+    assert "Coverage: selected 408; completed 408" in output
+    assert "tool_calls=present" in output
+    assert "reported_total=213 reported_evidence_calls=0" in output
+    assert not result.exists()
+
+
+def test_early_manifest_failure_keeps_primary_error_and_closed_facts(tmp_path, capsys):
+    from ocr_toolkit.review_range import ReviewRange
+
+    result = tmp_path / "result.json"
+    payload = native_payload()
+    payload["private-key\nsecret-value"] = "private-value"
+    result.write_text(json.dumps(payload))
+    with pytest.raises(review_runner.ReviewRunnerError, match="native manifest did not prove"):
+        review_runner._finalize_ocr_result(
+            result,
+            composition(),
+            DEFAULT_IDENTITY,
+            None,
+            forbidden=(),
+            expected_range=ReviewRange(DEFAULT_IDENTITY.diff_base_sha, DEFAULT_IDENTITY.source_sha),
+        )
+    output = capsys.readouterr().err
+    assert "status=complete" in output and "manifest=present tool_calls=missing" in output
+    assert "unknown_keys=1" in output
+    assert "private" not in output and "secret" not in output
+    assert not result.exists()
+
+
+@pytest.mark.parametrize("error_type", [OSError, BrokenPipeError, ValueError])
+def test_failed_stderr_cannot_replace_rejection_or_skip_cleanup(tmp_path, monkeypatch, error_type):
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps({"status": "success", "tool_calls": {"total": 0, "by_tool": {}}}))
+
+    class FailedSink:
+        def write(self, _text):
+            raise error_type("synthetic diagnostic sink failure")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(review_runner.sys, "stderr", FailedSink())
+        with pytest.raises(review_runner.ReviewRejected) as caught:
+            review_runner._finalize_ocr_result(
+                result, composition(), DEFAULT_IDENTITY, None, forbidden=()
+            )
+    assert caught.value.reason == "evidence-use-unconfirmed"
+    assert not result.exists()
+
+
+def test_failed_diagnostic_formatting_keeps_original_rejection(tmp_path, monkeypatch):
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps({"status": "success"}))
+
+    def fail(_self):
+        raise RuntimeError("synthetic formatting failure")
+
+    monkeypatch.setattr(review_runner.ResultDiagnostic, "render", fail)
+    with pytest.raises(review_runner.UnexpectedResultContract):
+        review_runner._finalize_ocr_result(
+            result, composition(), DEFAULT_IDENTITY, None, forbidden=()
+        )
     assert not result.exists()
 
 
