@@ -38,10 +38,10 @@ The owner requests an efficient release rather than repeating the 0.15.0 cycle.
 | REQ-003 | Closed early facts, actual exit code and independent summary counters | WQ-02 | done |
 | REQ-004 | Cleanup and original rejection survive failed diagnostic output | WQ-02 | done |
 | REQ-005 | Accurate RCA, operations/decision flow and bugfix notes | WQ-02 | done |
-| REQ-006 | Synthetic, real subprocess, Darwin/Linux and installed acceptance | WQ-03 | pending |
+| REQ-006 | Synthetic, real subprocess, Darwin/Linux and installed acceptance | WQ-03 | done |
 | REQ-007 | Integrate any newly released and qualified stable OCR chain | WQ-01, WQ-03 | done |
-| REQ-008 | Final semantic/security/own-tool review and quality gates | WQ-03 | pending |
-| REQ-009 | Protected feature merge and development TestPyPI readback | WQ-04 | pending |
+| REQ-008 | Final semantic/security/own-tool review and quality gates | WQ-03 | done |
+| REQ-009 | Protected feature merge and development TestPyPI readback | WQ-04 | in_progress |
 | REQ-010 | Release markers, notes, contracts and checked plan archival | WQ-05 | pending |
 | REQ-011 | Stable registries, provenance, immutable receipt and issue/main readback | WQ-06 | pending |
 
@@ -95,8 +95,8 @@ Linux Docker is available; no tracked changes preceded this plan.
 | --- | --- | --- | --- |
 | WQ-01 | Materialize/fidelity-check plan; freeze release/OCR/PR inventory | REQ-001, REQ-007 | done |
 | WQ-02 | Implement diagnostic/cleanup owners, regressions, docs and RCA; self-review | REQ-002, REQ-003, REQ-004, REQ-005 | done |
-| WQ-03 | Real consumers/installed gates, final quality, Security and own-tool acceptance | REQ-006, REQ-007, REQ-008 | in_progress |
-| WQ-04 | Signed feature PR, required checks, protected merge and development publication | REQ-009 | pending |
+| WQ-03 | Real consumers/installed gates, final quality, Security and own-tool acceptance | REQ-006, REQ-007, REQ-008 | done |
+| WQ-04 | Signed feature PR, required checks, protected merge and development publication | REQ-009 | in_progress |
 | WQ-05 | Release PR, final contracts and checked plan archival with delivery pending | REQ-010 | pending |
 | WQ-06 | Stable publication and independent external readback/cleanup | REQ-011 | pending |
 
@@ -130,13 +130,23 @@ Linux Docker is available; no tracked changes preceded this plan.
 
 ### Latest Validation Results
 
-Scoped runtime/rejection/operations checks: 293 passed; Ruff and mypy pass.
-Six checksum-verified Darwin native scenarios pass across five actual groups,
-both default/agent audiences and zero/native/evidence-only activity. The first
-two-file fixture was correctly bundled by OCR and was enlarged to exercise groups.
-Security capability preflight is ready with no remediation. Linux, final quality,
-aggregate Security and own-tool acceptance remain pending. Stable upstream is
-still 1.13.10 and there are no open dependency PRs; composition is frozen.
+Runtime commit 53537b0 passes the complete quality gate: 5780 tests, 80 opt-in
+skips, 357 subtests and 91% rounded branch-aware coverage; every group floor passes.
+Six checksum-verified native scenarios pass on both Darwin and Linux/Python 3.12
+across five actual groups, default/agent audience and zero/native/evidence activity.
+The first two-file fixture was correctly bundled and enlarged to test groups.
+Dependency audit and staged/tree/history secret scans pass. Installed wheel/sdist
+consumers are covered by the full gate and remain independently owned by PR CI.
+
+Security scan cc451728-4630-46d6-b43d-df25218fafef sealed dc81f71..53537b0 with
+complete coverage of all three changed runtime files and no findings. Real native
+ChatGPT own-tool acceptance on that same exact range completed 8/8 selected files,
+zero findings/warnings/failed tools, confirmed mandatory summary, passed DLP and
+an admitted model-generated diagram. Three test paths are native-selection exclusions
+and receive direct semantic review and automated tests. Two unchanged large uv.lock
+source omissions are non-material: no dependency inputs changed and the audit passes.
+The advisory 2259-character background was accepted by OCR. No filtered raw findings.
+Stable upstream remains 1.13.10; no open dependency PRs. Composition is frozen.
 
 ### Risks And Recovery
 
@@ -149,9 +159,9 @@ before retrying. Never rewrite a published tag, artifact or immutable release.
 
 ### Resume Point
 
-WQ-03: finish Linux/final quality and exact-range Security/own-tool acceptance,
-then deliver the protected feature PR. Do not repeat completed Darwin probes
-unless the native fixture or relevant runtime changes.
+WQ-04: push the signed feature head, open the protected PR with the exact admitted
+diagram, wait for required checks, merge and verify development TestPyPI. All
+runtime acceptance is complete; later bookkeeping changes need scoped guards only.
 
 ### Plan Fidelity Check
 
