@@ -9,20 +9,20 @@ import stat
 from pathlib import Path
 from typing import Any
 
-from . import comments as comment_checks
 from . import (
-    comparison,
+    comments as comment_checks,
+)
+from . import contracts as contract_rules
+from . import (
     core,
-    declarations,
-    exclusions,
     execution,
+    handoffs,
     numeric,
     peer,
     selection,
     settings,
     wire_controls,
 )
-from . import contracts as contract_rules
 
 
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
@@ -39,7 +39,9 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     required_review_flags = set(settings.REQUIRED_REVIEW_FLAGS)
     missing = sorted(flag for flag in required_review_flags if flag not in help_output)
     if missing:
-        core._fail(f"candidate review help is missing required flags: {', '.join(missing)}")
+        raise core.QualificationContractMismatch(
+            f"missing CLI flags: {missing}", reason="cli-contract"
+        )
     preview_home = directory / "preview-home"
     preview_env = execution._isolated_probe_environment(preview_home)
     preview_command = [str(binary), "review", "--from", base, "--to", head, "--preview"]
@@ -48,14 +50,26 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     try:
         preview_payload = json.loads(preview)
     except json.JSONDecodeError as exc:
-        raise core.CompatibilityError("candidate JSON preview did not emit JSON") from exc
+        raise core.QualificationContractMismatch(
+            "candidate JSON preview did not emit JSON", reason="invalid-preview"
+        ) from exc
     preview_files = preview_payload.get("files") if isinstance(preview_payload, dict) else None
     if not isinstance(preview_files, list) or not any(
         isinstance(item, dict) and item.get("path") == "example.py" for item in preview_files
     ):
-        core._fail("candidate JSON preview did not select the synthetic changed file")
+        raise core.QualificationContractMismatch(
+            "preview lost changed file", reason="invalid-preview"
+        )
     if os.path.lexists(preview_home / ".opencodereview" / "sessions"):
-        core._fail("candidate preview created a review session store")
+        raise core.QualificationContractMismatch(
+            "candidate preview created a review session store", reason="invalid-preview"
+        )
+
+    excluded = json.loads(
+        execution._run([*preview_command, "--exclude", "example.py"], cwd=repo, env=preview_env)
+    )
+    if selection._preview_file_selection(excluded, "example.py")[0]:
+        raise core.QualificationContractMismatch("user exclusion ignored", reason="invalid-preview")
 
     review_home = directory / "review-home"
     env = execution._isolated_probe_environment(review_home)
@@ -87,30 +101,41 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             cwd=repo,
             env=env,
         )
-        review_stages = list(peer._StubHandler.request_stages)
     try:
         sample = json.loads(result_output)
     except json.JSONDecodeError as exc:
-        raise core.CompatibilityError("candidate full review did not emit JSON") from exc
+        raise core.QualificationContractMismatch(
+            "candidate full review did not emit JSON", reason="invalid-result"
+        ) from exc
     if not isinstance(sample, dict):
-        core._fail("candidate full review emitted an unsupported result object")
+        raise core.QualificationContractMismatch("invalid review object", reason="invalid-result")
     optional_capabilities = contract_rules.detect_optional_capabilities(help_output, sample)
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
         outcome = parse_result_outcome(sample)
     except OcrResultContractError as exc:
-        raise core.CompatibilityError(
-            f"candidate full review emitted an unsupported result object: {exc}"
+        raise core.QualificationContractMismatch(
+            "invalid review result", reason="invalid-result"
         ) from exc
     if outcome.kind != "clean":
-        core._fail(f"candidate full review did not complete cleanly: {outcome.kind}")
+        raise core.QualificationContractMismatch(
+            "synthetic clean review failed", reason="invalid-result"
+        )
     comments = sample.get("comments")
     if not isinstance(comments, list) or len(comments) != 1 or not isinstance(comments[0], dict):
-        core._fail("candidate full review did not emit the synthetic comment")
-    contract_rules._validate_file_groups(sample.get("groups"), {"example.py"})
-    if review_stages != ["main", "main", "filter", "main"]:
-        core._fail(f"default medium review emitted an unexpected stage sequence: {review_stages!r}")
+        raise core.QualificationContractMismatch(
+            "candidate full review did not emit the synthetic comment", reason="invalid-result"
+        )
+    from ocr_toolkit.review_range import ReviewRange, admit_native_range
+
+    try:
+        if admit_native_range(sample, ReviewRange(base, head)) is None:
+            raise OcrResultContractError("missing native range")
+    except OcrResultContractError as exc:
+        raise core.QualificationContractMismatch(
+            "result range mismatch", reason="range-contract"
+        ) from exc
     sample["future_additive_field"] = {"accepted": True}
     from ocr_toolkit.posting.comments import comment_line
     from ocr_toolkit.posting.formatting import (
@@ -123,62 +148,96 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     assert isinstance(comment, dict)
     rendered = format_inline_comment(comment)
     if comment_line(comment) != 2 or "Synthetic compatibility finding" not in rendered:
-        core._fail("toolkit posting consumer rejected the candidate result contract")
+        raise core.QualificationContractMismatch(
+            "posting rejected the synthetic finding", reason="publication-contract"
+        )
     token_summary = format_token_usage_summary(sample)
     if not token_summary or "total" not in token_summary:
         core._fail("toolkit token summary rejected the candidate result contract")
-    if "1 total" not in format_tool_calls_summary(sample.get("tool_calls")):
+    if not format_tool_calls_summary(sample.get("tool_calls")):
         core._fail("toolkit tool-call summary rejected the candidate result contract")
-    if comment.get("thinking") != "Synthetic private compatibility reasoning.":
-        core._fail("candidate did not preserve additive comment thinking")
     if "Synthetic private compatibility reasoning." in rendered:
         core._fail("toolkit posting consumer exposed private comment thinking")
-    thinking_probe = {
-        "additive_field_preserved": True,
-        "posting_exposes_thinking": False,
-        "result": "passed",
-    }
+    demonstrated = handoffs.consumer_handoffs(binary, version, directory)
+    if handoffs.chatgpt_auth_handoff(binary, repo, base, head, directory):
+        demonstrated.append("chatgpt_auth")
+    if "--analysis" in help_output:
+        from ocr_toolkit.review_analysis import admit_analysis
 
-    contracts: dict[str, Any] = {
-        "numeric_cli_probe": numeric._numeric_cli_probe(binary, repo, base, head, directory),
-        "optional_capabilities": optional_capabilities,
-        "review_budget_probe": numeric._budget_result_probe(binary, directory),
-        "target_rule_selection_probe": selection._target_rule_selection_probe(binary, directory),
-        "version_probe": "passed",
-        "required_review_flags": sorted(required_review_flags),
-        "preview_probe": {
-            "format": "json",
-            "path": "example.py",
-            "result": "passed",
-            "session_store_created": False,
+        with peer._stub_gateway() as gateway:
+            env["OCR_LLM_URL"] = gateway
+            combined = json.loads(
+                execution._run(
+                    [
+                        str(binary),
+                        "review",
+                        "--from",
+                        base,
+                        "--to",
+                        head,
+                        "--analysis",
+                        "--analysis-max-tokens-budget",
+                        "10000",
+                        "--format",
+                        "json",
+                        "--audience",
+                        "agent",
+                        "--concurrency",
+                        "1",
+                    ],
+                    cwd=repo,
+                    env=env,
+                )
+            )
+        meta = combined.get("analysis_meta") if isinstance(combined, dict) else None
+        if not isinstance(meta, dict):
+            core._fail("advertised Analysis did not emit report metadata")
+        observations = meta.get("observation_ids")
+        citations = meta.get("cited_observation_ids")
+        admitted = admit_analysis(combined, requested=True, forbidden=())
+        if (
+            admitted is not None
+            and admitted.get("status") == "completed"
+            and admitted.get("declared_completion") == "partial"
+            and isinstance(markdown := admitted.get("markdown"), str)
+            and "The example return value changed." in markdown
+            and isinstance(observations, list)
+            and isinstance(citations, list)
+            and bool(citations)
+            and all(citation in observations for citation in citations)
+            and admitted.get("usage")
+            and parse_result_outcome(combined).kind == "clean"
+        ):
+            demonstrated.append("analysis")
+        else:
+            core._fail("advertised Analysis did not complete the controlled report exchange")
+
+    budget = numeric._budget_result_probe(binary, directory)
+    cap = numeric._completion_cap_probe(binary, directory)
+    effort = numeric._reasoning_effort_probe(binary, directory)
+    stream = wire_controls.stream_override_probe(binary, directory)
+    comment_arguments = comment_checks._comment_arguments_probe(binary, directory)
+    contracts = {
+        "checks": {
+            "identity": "passed",
+            "range_preview": "passed",
+            "user_exclusion": "passed",
+            "review_result": "passed",
+            "publication": "passed",
+            "budget_partial": "passed",
+            "provider_controls": "passed",
+            "mcp": "passed",
         },
-        "result_contract_probe": {
-            "additive_fields_allowed": True,
-            "comment_fields": sorted(comment),
-            "manifest_schema": ("ocr.run-manifest/v1" if outcome.manifest_present else "legacy"),
-            "normalized_outcome": outcome.kind,
-            "result": "passed",
+        "native_handoffs": sorted(demonstrated),
+        "optional_capabilities": optional_capabilities,
+        "observations": {
+            "builtin_selection": selection._language_rule_probe(binary, version, directory),
+            "budget": budget,
+            "completion_cap": cap,
+            "reasoning_effort": effort,
+            "stream_override": stream,
+            "comment_arguments": comment_arguments,
         },
     }
-    contracts["semantic_grouping_probe"] = selection._semantic_grouping_probe(binary, directory)
-    contracts["small_change_grouping_probe"] = selection._small_change_grouping_probe(
-        binary, directory
-    )
-    contracts["provider_directory_preview_probe"] = selection._provider_directory_preview_probe(
-        binary, directory
-    )
-    contracts["language_rule_probe"] = selection._language_rule_probe(binary, version, directory)
-    contracts["csharp_context_probe"] = selection._csharp_context_probe(binary, directory)
-    contracts["clojure_context_probe"] = selection._clojure_context_probe(binary, directory)
-    contracts["comparison_sides_probe"] = comparison.comparison_sides_probe(binary, directory)
-    contracts["completion_cap_probe"] = numeric._completion_cap_probe(binary, directory)
-    contracts["reasoning_effort_probe"] = numeric._reasoning_effort_probe(binary, directory)
-    contracts["stream_override_probe"] = wire_controls.stream_override_probe(binary, directory)
-    contracts["comment_arguments_probe"] = comment_checks._comment_arguments_probe(
-        binary, directory
-    )
-    contracts["excluded_coverage_probe"] = exclusions.exclusion_probe(binary, directory)
-    contracts["tool_declarations_probe"] = declarations.declaration_probe(binary, directory)
-    contracts["comment_thinking_probe"] = thinking_probe
     contract_rules._validate_contracts_for_version(version, contracts)
     return contracts

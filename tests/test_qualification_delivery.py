@@ -1,10 +1,11 @@
 """Qualification lookup enforces authorship before privileged issue reuse."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
-from tests.test_ocr_compat import load_script
+from tests.test_ocr_compat import MANIFEST, load_script, release
 
 VERSION = "1.13.5"
 MARKER = f"<!-- ocr-compat-candidate:v{VERSION} -->"
@@ -104,3 +105,112 @@ def test_malformed_or_unrelated_authors_do_not_gain_issue_authority(author):
 def test_marker_mentions_cannot_claim_an_owner_issue(body):
     number, calls = upsert(load_script(), [{"number": 9, "body": body, "user": OWNER}])
     assert number == 50 and calls[-1][1] == "POST"
+
+
+def test_matrix_binds_each_terminal_status_to_its_candidate(tmp_path: Path) -> None:
+    module = load_script()
+    manifest = {"recommended_version": "1.13.8"}
+    matrix = module.assets.qualification_matrix(manifest, [release("1.13.9"), release("1.13.10")])
+    head = "a" * 40
+    for entry in matrix["include"]:
+        tag = entry["tag"]
+        candidate = tmp_path / f"ocr-compatibility-{tag}"
+        candidate.mkdir()
+        (candidate / "checkout.txt").write_text(head + "\n")
+        status = module.contracts.qualification_status(
+            **entry, result="incompatible", reason="invalid-result", phase="contracts"
+        )
+        (candidate / "status.json").write_bytes(module.core.canonical_json(status))
+        assert "invalid-result" in module.delivery.render_workflow_failure_issue(status, "test")
+    assess = module.delivery.assess_matrix
+    assert assess(manifest, matrix, tmp_path, head)["classification"] == "incompatible"
+    assert assess(manifest, matrix, tmp_path, "b" * 40)["classification"] == "incomplete"
+    status_path = tmp_path / "ocr-compatibility-v1.13.10" / "status.json"
+    original = module.core.load_json(status_path)
+    for invalid in (
+        dict(original, comparison_version="1.13.8"),
+        dict(original, version="1.13.9"),
+        dict(original, phase="artifact", reason="artifact-verification-failed", result="failed"),
+    ):
+        status_path.write_bytes(module.core.canonical_json(invalid))
+        result = assess(manifest, matrix, tmp_path, head)
+        assert result["classification"] == "incomplete"
+        assert result["outcomes"]["v1.13.9"] == "incompatible (invalid-result)"
+    status_path.unlink()
+    assert assess(manifest, matrix, tmp_path, head)["classification"] == "incomplete"
+    (tmp_path / "ocr-compatibility-v9.9.9").mkdir()
+    with pytest.raises(module.core.CompatibilityError, match="unexpected candidate"):
+        assess(manifest, matrix, tmp_path, head)
+
+
+def test_retained_qualification_checks_current_asset_identity_before_replay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_script()
+    version = "1.13.11"
+    source = MANIFEST.parent / "evidence" / f"ocr-{version}.json"
+    retained = module.core.load_json(source)
+    manifest = {"recommended_version": retained["tested_baseline_version"]}
+    candidate = release(version)
+    candidate["assets"] = [
+        {
+            "name": asset["name"],
+            "size": asset["size"],
+            "digest": "sha256:" + asset["sha256"],
+            "browser_download_url": (
+                f"https://github.com/alibaba/open-code-review/releases/download/v{version}/"
+                + asset["name"]
+            ),
+        }
+        for asset in retained["assets"]
+    ]
+    monkeypatch.setattr(
+        module.assets, "_download", lambda *_: pytest.fail("replay began a native download")
+    )
+    output = tmp_path / "evidence.json"
+    module.qualification.qualify_release(candidate, manifest, output)
+    assert output.read_bytes() == source.read_bytes()
+
+    candidate["assets"][0]["size"] += 1
+    output.unlink()
+    with pytest.raises(module.core.QualificationStageError, match="release assets"):
+        module.qualification.qualify_release(candidate, manifest, output)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("mismatch", [True, False])
+def test_public_qualification_logs_only_closed_contract_results(
+    tmp_path, monkeypatch, capsys, mismatch
+):
+    module = load_script()
+    monkeypatch.setattr(module.assets, "_request_json", lambda _url: release("2.0.0"))
+    message = "private synthetic model diagnostic"
+
+    def fail(*args, **kwargs):
+        if mismatch:
+            raise module.core.QualificationContractMismatch(message, reason="invalid-result")
+        raise module.core.QualificationStageError(
+            message, phase="contracts", reason="unexpected-error"
+        )
+
+    monkeypatch.setattr(module.qualification, "qualify_release", fail)
+    status = tmp_path / "status.json"
+    code = module.cli.main(
+        [
+            "--manifest",
+            str(MANIFEST),
+            "qualify",
+            "--tag",
+            "v2.0.0",
+            "--public-log",
+            "--output",
+            str(tmp_path / "evidence.json"),
+            "--status-output",
+            str(status),
+        ]
+    )
+    assert code == (0 if mismatch else 1)
+    output = capsys.readouterr()
+    assert message not in output.out + output.err + status.read_text()
+    expected = "incompatible" if mismatch else "failed"
+    assert module.core.load_json(status)["result"] == expected

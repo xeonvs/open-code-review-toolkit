@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from hypothesis import settings
 
-from ocr_toolkit import preflight
+from ocr_toolkit import native_capabilities, preflight
 
 settings.register_profile(
     "ocr-ci", max_examples=100, derandomize=True, database=None, deadline=1000, print_blob=False
@@ -45,6 +45,12 @@ def native_candidate_inventory() -> Callable[[str], tuple[str, str] | None]:
         for asset in release["assets"]:
             if asset["name"] == asset_name:
                 known[asset["sha256"]] = (version, asset["size"])
+    # The qualification workflow verifies the candidate before launching the
+    # isolated tests. Rebind its bytes here before enabling a candidate route.
+    receipt = os.environ.get("OCR_QUALIFY_CANDIDATE")
+    if receipt:
+        candidate = json.loads(receipt)
+        known[candidate["sha256"]] = (candidate["version"], candidate["size"])
     result: dict[tuple[str, str], tuple[str, str]] = {}
 
     def select(variable: str) -> tuple[str, str] | None:
@@ -78,6 +84,12 @@ def qualified_native_ocr(
         monkeypatch.setattr(
             preflight, "SUPPORTED_OCR_VERSIONS", (*preflight.SUPPORTED_OCR_VERSIONS, version)
         )
+        if os.environ.get("OCR_QUALIFY_CANDIDATE"):
+            monkeypatch.setitem(
+                native_capabilities._QUALIFIED_HANDOFFS,
+                version,
+                frozenset({"diagram_output", "gitlink_projection"}),
+            )
         assert preflight.validate_ocr_binary(executable=binary, announce=False) == version
         return binary, version
 

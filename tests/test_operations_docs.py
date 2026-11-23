@@ -877,7 +877,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
     assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow
-    assert "|| ! uv sync --locked --no-default-groups --python 3.14" in workflow
+    assert "|| ! uv sync --locked --group dev --python 3.14" in workflow
     assert "record-setup-failure" in workflow
     assert '--through-tag "${THROUGH_TAG}"' in workflow
     assert "contents: read" in workflow
@@ -886,7 +886,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "persist-credentials: false" in workflow
     assert "max-parallel: 2" in workflow
     assert "build-matrix" in workflow
-    assert "assess-chain" in workflow
+    assert "assess-matrix" in workflow
+    assert '--head "${GITHUB_SHA}"' in workflow
     assert "pattern: ocr-compatibility-v*" in workflow
     assert workflow.count("prepare-update") == 1
     assert "README.md docs/gitlab.md docs/security.md" not in workflow
@@ -902,7 +903,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert workflow.count("upsert-issue") == 1
     assert "continue-on-error: true" in workflow
     qualify_job = workflow.split("  qualify:\n", 1)[1].split("  aggregate:\n", 1)[0]
-    dependency_sync = "uv sync --locked --no-default-groups --python 3.14"
+    dependency_sync = "uv sync --locked --group dev --python 3.14"
     assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}(?:\s|$)", qualify_job)
     assert dependency_sync in qualify_job
     assert qualify_job.index("name: Qualify candidate") < qualify_job.index(dependency_sync)
@@ -912,10 +913,9 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify" in qualify_job
     assert "PYTHONPATH=src python scripts/ocr_compat.py upsert-issue" in qualify_job
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
-    assert "QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}" in workflow
-    assert 'case "${QUALIFICATION_OUTCOME}" in' in workflow
-    assert "success) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
-    assert "failure) input=(--status /tmp/ocr-compat/status.json)" in workflow
+    assert "compatible) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
+    assert "incompatible|failed) input=(--status /tmp/ocr-compat/status.json)" in workflow
+    assert workflow.count("github.ref == 'refs/heads/main' && !inputs.qualification_only") == 2
     assert "if: ${{ !cancelled() }}" in workflow
     assert "if: ${{ always() && !cancelled() }}" in workflow
     assert "if: steps.qualify.outcome == 'failure'" in workflow

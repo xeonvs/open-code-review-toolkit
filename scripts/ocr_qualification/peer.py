@@ -187,7 +187,32 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             contents = type(self)._message_contents(messages)
             if any(settings.PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
                 type(self).recheck_instruction_requests += 1
-            if type(self).tool_script is not None:
+            if "submit_analysis" in tool_names:
+                tool_results = " ".join(
+                    message["content"]
+                    for message in messages
+                    if isinstance(message, dict)
+                    and message.get("role") == "tool"
+                    and str(message.get("tool_call_id", "")).startswith("analysis-")
+                    and isinstance(message.get("content"), str)
+                    and not message["content"].startswith("Error:")
+                )
+                observation = re.search(r"\bobs-\d+\b", tool_results)
+                if observation or "file_read" not in tool_names:
+                    arguments = {
+                        "markdown": "The example return value changed."
+                        + (f" [[{observation.group()}]]" if observation else ""),
+                        "declared_completion": "partial",
+                    }
+                    function = {"name": "submit_analysis", "arguments": json.dumps(arguments)}
+                else:
+                    function = {
+                        "name": "file_read",
+                        "arguments": '{"side":"new","file_path":"example.py","start_line":1,"end_line":2}',
+                    }
+                call_id = f"analysis-{type(self).request_count}"
+                stage = "analysis"
+            elif type(self).tool_script is not None:
                 try:
                     function, call_id = type(self).tool_script(request)
                 except core.CompatibilityError as exc:

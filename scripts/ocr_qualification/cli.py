@@ -30,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     qualify.add_argument("--output", type=Path, required=True)
     qualify.add_argument("--issue-body", type=Path)
     qualify.add_argument("--status-output", type=Path)
+    qualify.add_argument(
+        "--public-log", action="store_true", help="emit only closed failure reasons"
+    )
     setup_failure = subparsers.add_parser("record-setup-failure")
     setup_failure.add_argument("--tag", required=True)
     setup_failure.add_argument("--comparison-version", required=True)
@@ -38,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     assess = subparsers.add_parser("assess-chain")
     assess.add_argument("--evidence", type=Path, action="append", required=True)
     assess.add_argument("--output", type=Path, required=True)
+    matrix_results = subparsers.add_parser("assess-matrix")
+    matrix_results.add_argument("--matrix", type=Path, required=True)
+    matrix_results.add_argument("--artifacts", type=Path, required=True)
+    matrix_results.add_argument("--head", required=True)
+    matrix_results.add_argument("--output", type=Path, required=True)
     prepare = subparsers.add_parser("prepare-update")
     prepare.add_argument("--evidence", type=Path, action="append", required=True)
     prepare.add_argument("--human-conclusion", action="append", default=[])
@@ -110,7 +118,20 @@ def main(argv: list[str] | None = None) -> int:
             result = assets.qualification_matrix(manifest, releases)
             args.output.write_bytes(core.canonical_json(result))
             print(f"built qualification matrix with {len(result['include'])} release(s)")
+            remaining = len(releases) - len(result["include"])
+            if remaining:
+                print(f"{remaining} further stable release(s) remain after this batch")
             return 0
+        if args.command == "assess-matrix":
+            result = delivery.assess_matrix(
+                manifest, core.load_json(args.matrix), args.artifacts, args.head
+            )
+            core.write_atomic_bytes(
+                args.output, core.canonical_json(result), label="qualification assessment"
+            )
+            for tag, outcome in result["outcomes"].items():
+                print(f"{tag}: {outcome}")
+            return int(result["classification"] == "incomplete")
         if args.command == "assess-chain":
             evidences = [core.load_json(path) for path in args.evidence]
             result = promotion.assess_automatic_chain(manifest, evidences)
@@ -150,14 +171,20 @@ def main(argv: list[str] | None = None) -> int:
             raise core.QualificationStageError(
                 str(exc), phase="metadata", reason="metadata-request-failed"
             ) from exc
-        if not isinstance(release, dict):
-            core._fail("upstream tag response must be an object")
+        if (
+            not isinstance(release, dict)
+            or release.get("tag_name") != args.tag
+            or release.get("draft") is not False
+            or release.get("prerelease") is not False
+        ):
+            core._fail("upstream response must identify the requested published stable release")
         evidence = qualification.qualify_release(
             release,
             manifest,
             args.output,
             comparison_version=args.comparison_version,
             tested_baseline_version=args.tested_baseline_version,
+            root=args.manifest.resolve().parents[1],
         )
         if args.issue_body is not None:
             core._qualification_stage(
@@ -211,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
                     tag=args.tag,
                     comparison_version=args.comparison_version or manifest_version,
                     tested_baseline_version=args.tested_baseline_version or manifest_version,
-                    result="failed",
+                    result="incompatible"
+                    if isinstance(exc, core.QualificationContractMismatch)
+                    else "failed",
                     phase=phase,
                     reason=reason,
                 )
@@ -220,17 +249,31 @@ def main(argv: list[str] | None = None) -> int:
                     core.canonical_json(status),
                     label="compatibility status",
                 )
+                if status["result"] == "incompatible":
+                    print(f"OCR {status['version']} is incompatible: {reason}")
+                    return 0
+                if args.public_log:
+                    print(
+                        f"OCR {status['version']} qualification incomplete: {phase} / {reason}",
+                        file=sys.stderr,
+                    )
+                    return 1
             except Exception as status_exc:
                 status_detail = (
                     str(status_exc)
                     if isinstance(status_exc, core.CompatibilityError)
                     else f"unexpected {type(status_exc).__name__}"
                 )
-                print(f"OCR compatibility status write failed: {status_detail}", file=sys.stderr)
+                if not args.public_log:
+                    print(
+                        f"OCR compatibility status write failed: {status_detail}", file=sys.stderr
+                    )
         detail = (
             str(exc)
             if isinstance(exc, core.CompatibilityError)
             else f"unexpected {type(exc).__name__}"
         )
+        if args.command == "qualify" and args.public_log:
+            detail = "could not retain a validated status"
         print(f"OCR compatibility qualification failed: {detail}", file=sys.stderr)
         return 1

@@ -26,6 +26,15 @@ class QualificationStageError(CompatibilityError):
         self.reason = reason
 
 
+class QualificationContractMismatch(QualificationStageError):
+    """A successful controlled observation contradicted a toolkit requirement."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        if reason not in settings.CONTRACT_MISMATCH_REASONS:
+            raise ValueError("unknown compatibility mismatch reason")
+        super().__init__(message, phase="contracts", reason=reason)
+
+
 @dataclass(frozen=True)
 class GroupingInventoryEntry:
     """One strictly parsed, qualification-only grouping inventory entry."""

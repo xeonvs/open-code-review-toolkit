@@ -108,9 +108,11 @@ def discover_unseen(
                 continue
             version = tag.removeprefix("v")
             parsed = core._version(version)
-            if parsed <= floor:
+            # Older maintenance lines can publish after the tracked line. Only
+            # the actual floor tag anchors this discovery window.
+            if parsed == floor:
                 reached_floor = True
-            elif version not in known and (ceiling is None or parsed <= ceiling):
+            elif parsed > floor and version not in known and (ceiling is None or parsed <= ceiling):
                 unseen.append(release)
         if reached_floor or len(payload) < settings.MAX_RELEASES_PER_PAGE:
             break
@@ -128,10 +130,6 @@ def qualification_matrix(
 ) -> dict[str, list[dict[str, str]]]:
     """Build ordered matrix entries with distinct tested and adjacent baselines."""
 
-    if len(releases) > settings.MAX_QUALIFICATION_CHAIN:
-        core._fail(
-            f"refusing to qualify more than {settings.MAX_QUALIFICATION_CHAIN} releases per run"
-        )
     tested_baseline = str(manifest["recommended_version"])
     comparison = tested_baseline
     entries: list[dict[str, str]] = []
@@ -154,7 +152,7 @@ def qualification_matrix(
             }
         )
         comparison = version
-    return {"include": entries}
+    return {"include": entries[: settings.MAX_QUALIFICATION_CHAIN]}
 
 
 def _asset_from_api(value: Any) -> core.Asset:
@@ -185,7 +183,8 @@ def release_assets(release: dict[str, Any]) -> list[core.Asset]:
     if not isinstance(values, list) or not values or len(values) > settings.MAX_ASSETS:
         core._fail("upstream release assets are missing or exceed the configured bound")
     assets = [_asset_from_api(value) for value in values]
-    if {asset.name for asset in assets} != settings.REQUIRED_ASSETS:
+    names = {asset.name for asset in assets}
+    if len(names) != len(assets) or names != settings.REQUIRED_ASSETS:
         core._fail("upstream release asset set differs from the supported matrix")
     if sum(asset.size for asset in assets) > settings.MAX_TOTAL_ASSET_BYTES:
         core._fail("upstream release assets exceed the total download budget")

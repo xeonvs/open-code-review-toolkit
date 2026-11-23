@@ -5,12 +5,76 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
-from . import assets, contracts, core, settings
+from . import assets, contracts, core, promotion, settings
+
+
+def assess_matrix(
+    manifest: dict[str, Any], matrix: dict[str, Any], artifacts: Path, head: str
+) -> dict[str, Any]:
+    """Bind each job's retained outcome to the discovered tag, baselines and checkout."""
+
+    entries = matrix.get("include")
+    if (
+        re.fullmatch(r"[0-9a-f]{40}", head) is None
+        or not isinstance(entries, list)
+        or not 1 <= len(entries) <= settings.MAX_QUALIFICATION_CHAIN
+        or any(not isinstance(entry, dict) for entry in entries)
+    ):
+        core._fail("invalid qualification matrix or checkout")
+    releases = [{"tag_name": entry.get("tag")} for entry in entries]
+    if matrix != assets.qualification_matrix(manifest, releases):
+        core._fail("expected qualification matrix does not match the active baseline")
+    expected = {f"ocr-compatibility-{entry['tag']}" for entry in entries}
+    if artifacts.is_dir() and any(item.name not in expected for item in artifacts.iterdir()):
+        core._fail("qualification artifacts include an unexpected candidate")
+
+    outcomes = {}
+    evidences = []
+    incomplete = False
+    for entry in entries:
+        tag = entry["tag"]
+        candidate = artifacts / f"ocr-compatibility-{tag}"
+        try:
+            if (candidate / "checkout.txt").read_text(encoding="ascii").strip() != head:
+                core._fail("candidate checkout mismatch")
+            status = contracts.validate_qualification_status(
+                core.load_json(candidate / "status.json")
+            )
+            if any(status[key] != value for key, value in entry.items()):
+                core._fail("candidate identity mismatch")
+            result = status["result"]
+            if result == "compatible":
+                evidence = core.load_json(candidate / "evidence.json")
+                if any(evidence.get(key) != status[key] for key in (*entry, "version", "result")):
+                    core._fail("candidate evidence mismatch")
+                contracts._validate_evidence_contracts(status["version"], evidence)
+                evidences.append(evidence)
+            elif result == "incompatible" and (candidate / "evidence.json").exists():
+                core._fail("incompatible candidate also has compatible evidence")
+            incomplete |= result == "failed"
+            outcomes[tag] = f"{result} ({status['reason']})"
+        except (OSError, UnicodeError, core.CompatibilityError):
+            incomplete = True
+            outcomes[tag] = "missing or inconsistent qualification artifact"
+    if incomplete:
+        classification = "incomplete"
+    elif len(evidences) < len(entries):
+        classification = "incompatible"
+    else:
+        classification = promotion.assess_automatic_chain(manifest, evidences)["classification"]
+    return {
+        "classification": classification,
+        "target_version": entries[-1]["tag"].removeprefix("v"),
+        "outcomes": outcomes,
+        "checkout": head,
+    }
 
 
 def _issue_api_request(
@@ -178,13 +242,18 @@ def render_workflow_failure_issue(status: dict[str, Any], run_url: str) -> str:
     """Render a failed attempt from closed status values, never private detail."""
 
     checked = contracts.validate_qualification_status(status)
-    if checked["result"] != "failed":
-        core._fail("failure issue requires a failed qualification status")
+    if checked["result"] not in {"failed", "incompatible"}:
+        core._fail("failure issue requires a failed or incompatible qualification status")
     version = checked["version"]
+    title = (
+        "is incompatible with the toolkit contract"
+        if checked["result"] == "incompatible"
+        else "compatibility qualification failed"
+    )
     return (
         f"<!-- ocr-compat-candidate:v{version} -->\n"
-        f"## OCR v{version} compatibility qualification failed\n\n"
-        "- machine result: **failed**\n"
+        f"## OCR v{version} {title}\n\n"
+        f"- machine result: **{checked['result']}**\n"
         f"- closed phase: `{checked['phase']}`\n"
         f"- closed reason: `{checked['reason']}`\n"
         f"- current tested baseline: `v{checked['tested_baseline_version']}`\n"

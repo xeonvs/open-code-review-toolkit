@@ -45,6 +45,8 @@ def _render_python_constant(name: str, value: str | tuple[str, ...]) -> str:
 
     if isinstance(value, str):
         return f"{name} = {json.dumps(value)}"
+    if not value:
+        return f"{name} = ()"
     items = "".join(f"    {json.dumps(item)},\n" for item in value)
     return f"{name} = (\n{items})"
 
@@ -111,7 +113,7 @@ def assess_automatic_chain(
         if candidate[:2] != previous[:2] or candidate[2] != previous[2] + 1:
             contiguous = False
         if (
-            item.get("schema_version") not in {2, 3}
+            item.get("schema_version") not in {2, 3, 4}
             or item.get("tested_baseline_version") != tested_baseline
             or item.get("comparison_version") != comparison
             or item.get("result") != "compatible"
@@ -182,18 +184,18 @@ def prepare_update(
         transition = core._release_transition(comparison, candidate)
         if transition is None:
             core._fail("candidate evidence chain is not a contiguous release sequence")
-        if transition != "patch" and item.get("schema_version") not in {2, 3}:
-            core._fail("minor and major promotions require chain-aware evidence schema 2 or 3")
+        if transition != "patch" and item.get("schema_version") not in {2, 3, 4}:
+            core._fail("minor and major promotions require chain-aware evidence schema 2 or later")
         if item.get("result") != "compatible":
             core._fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")
-        if schema_version in {2, 3}:
+        if schema_version in {2, 3, 4}:
             if item.get("tested_baseline_version") != old_version:
                 core._fail(f"candidate evidence {version} has a stale tested baseline")
             if item.get("comparison_version") != expected_comparison:
                 core._fail(f"candidate evidence {version} has a non-adjacent comparison version")
         elif schema_version != 1 or len(evidences) != 1:
-            core._fail("multi-release promotion requires chain-aware evidence schema 2 or 3")
+            core._fail("multi-release promotion requires chain-aware evidence schema 2 or later")
         classification = item.get("classification")
         conclusion = conclusions.get(version)
         if conclusion is not None and (
@@ -217,8 +219,8 @@ def prepare_update(
         core._fail("human conclusions may reference only evidence versions in this promotion")
 
     for item in evidences:
-        if item.get("schema_version") != 3:
-            core._fail("current candidate requires evidence schema 3")
+        if item.get("schema_version") not in {3, 4}:
+            core._fail("current candidate requires evidence schema 3 or 4")
         candidate_version = item.get("version")
         if not isinstance(candidate_version, str):
             core._fail("candidate evidence version must be a string")
@@ -371,6 +373,21 @@ def prepare_update(
     pending = [
         (path, payload) for path, payload in outputs if _generated_destination(path, payload)
     ]
+    handoff_path = preflight_path.with_name("_qualified_handoffs.json")
+    handoff_payload = None
+    if core._version(version) >= settings.BEHAVIORAL_EPOCH:
+        candidates = {item["version"]: item for item in evidences}
+        inventory = {}
+        for release in releases:
+            release_version = release["version"]
+            if release_version in new_supported:
+                observed = candidates.get(release_version)
+                if observed is None:
+                    observed = core.load_json(root / release["evidence"])
+                inventory[release_version] = observed["contracts"]["native_handoffs"]
+        if handoff_path.is_symlink() or (handoff_path.exists() and not handoff_path.is_file()):
+            core._fail("native handoffs destination must be a regular file")
+        handoff_payload = core.canonical_json(inventory)
 
     # Validate every input and transformation before changing the checkout, then
     # write each accepted evidence snapshot together with its linked manifest.
@@ -381,7 +398,11 @@ def prepare_update(
             output.write(payload)
     manifest_path.write_bytes(manifest_payload)
     preflight_path.write_text(preflight, encoding="utf-8")
-    return [manifest_path, *destinations, preflight_path, fragment]
+    outputs_written = [manifest_path, *destinations, preflight_path, fragment]
+    if handoff_payload is not None:
+        core.write_atomic_bytes(handoff_path, handoff_payload, label="native handoffs")
+        outputs_written.append(handoff_path)
+    return outputs_written
 
 
 def parse_human_conclusions(values: list[str]) -> dict[str, str]:

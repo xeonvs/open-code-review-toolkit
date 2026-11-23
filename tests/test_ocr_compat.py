@@ -566,13 +566,13 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
             name="opencodereview-linux-amd64",
             size=1,
             sha256=binary_digest,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/bin",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.14.0/bin",
         ),
         module.core.Asset(
             name="sha256sum.txt",
             size=1,
             sha256="1" * 64,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/sums",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.14.0/sums",
         ),
     ]
 
@@ -607,9 +607,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(
-            module.assets, "_request_json", lambda _url: release(preflight.RECOMMENDED_OCR_VERSION)
-        ),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.14.0")),
     ):
         result = module.cli.main(
             [
@@ -617,11 +615,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                f"v{preflight.RECOMMENDED_OCR_VERSION}",
-                "--comparison-version",
-                "1.12.13",
-                "--tested-baseline-version",
-                "1.12.13",
+                "v1.14.0",
                 "--output",
                 str(output),
                 "--status-output",
@@ -661,8 +655,9 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = manifest_before_1_11_3(module)
     first_page = [release("1.11.3")]
-    first_page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.11.2")]
+    first_page.append(release("1.10.99"))
+    first_page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 2))
+    second_page = [release("2.0.0"), release("1.11.2")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -672,7 +667,7 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module.assets, "_request_json", fake_request):
         unseen = module.assets.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.11.3"]
+    assert [item["tag_name"] for item in unseen] == ["v1.11.3", "v2.0.0"]
     assert len(requested) == 2
 
 
@@ -770,6 +765,15 @@ def test_qualification_matrix_rejects_duplicate_releases() -> None:
 
     with pytest.raises(module.core.CompatibilityError, match="duplicate version"):
         module.assets.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
+
+
+def test_large_qualification_queue_starts_with_oldest_ten() -> None:
+    module = load_script()
+    manifest = {"recommended_version": "2.0.0"}
+    candidates = [release(f"2.0.{patch}") for patch in range(11, 0, -1)]
+    result = module.assets.qualification_matrix(manifest, candidates)
+    assert [entry["tag"] for entry in result["include"]] == [f"v2.0.{n}" for n in range(1, 11)]
+    assert result["include"][-1]["comparison_version"] == "2.0.9"
 
 
 @pytest.mark.parametrize(

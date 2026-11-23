@@ -13,6 +13,10 @@ on:
         description: Optional stable upper bound for one contiguous unseen-release chain
         required: false
         type: string
+      qualification_only:
+        description: Record candidate issues and evidence without preparing an automatic update
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -129,7 +133,8 @@ jobs:
           PY_SETUP_OUTCOME: ${{ steps.setup_python.outcome }}
         run: |
           mkdir -p /tmp/ocr-compat
-          if [ "${UV_SETUP_OUTCOME}" != success ] || [ "${PY_SETUP_OUTCOME}" != success ] || ! uv sync --locked --no-default-groups --python 3.14; then
+          git rev-parse HEAD >/tmp/ocr-compat/checkout.txt
+          if [ "${UV_SETUP_OUTCOME}" != success ] || [ "${PY_SETUP_OUTCOME}" != success ] || ! uv sync --locked --group dev --python 3.14; then
             PYTHONPATH=src python scripts/ocr_compat.py record-setup-failure \
               --tag "${CANDIDATE_TAG}" \
               --comparison-version "${COMPARISON_VERSION}" \
@@ -138,6 +143,7 @@ jobs:
             exit 1
           fi
           PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify \
+            --public-log \
             --tag "${CANDIDATE_TAG}" \
             --comparison-version "${COMPARISON_VERSION}" \
             --tested-baseline-version "${TESTED_BASELINE_VERSION}" \
@@ -148,14 +154,14 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          case "${QUALIFICATION_OUTCOME}" in
-            success) input=(--evidence /tmp/ocr-compat/evidence.json) ;;
-            failure) input=(--status /tmp/ocr-compat/status.json) ;;
-            *) echo "unsupported qualification outcome" >&2; exit 1 ;;
+          result=$(jq -er .result /tmp/ocr-compat/status.json)
+          case "${result}" in
+            compatible) input=(--evidence /tmp/ocr-compat/evidence.json) ;;
+            incompatible|failed) input=(--status /tmp/ocr-compat/status.json) ;;
+            *) echo "unsupported qualification result" >&2; exit 1 ;;
           esac
           test -f "${input[1]}"
           PYTHONPATH=src python scripts/ocr_compat.py upsert-issue \
@@ -181,7 +187,7 @@ jobs:
   aggregate:
     name: assess-complete-chain
     needs: [discover, qualify]
-    if: needs.discover.outputs.count != '0'
+    if: ${{ !cancelled() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -198,29 +204,26 @@ jobs:
           path: /tmp/ocr-chain
       - name: Assess the complete observed release chain
         id: chain
+        shell: bash
+        env:
+          EXPECTED_MATRIX: ${{ needs.discover.outputs.matrix }}
         run: |
-          mapfile -d '' evidence_files < <(find /tmp/ocr-chain -name evidence.json -type f -print0)
-          test "${#evidence_files[@]}" -eq "${{ needs.discover.outputs.count }}"
-          args=()
-          for evidence in "${evidence_files[@]}"; do
-            args+=(--evidence "${evidence}")
-          done
-          PYTHONPATH=src python scripts/ocr_compat.py assess-chain \
-            "${args[@]}" \
-            --output /tmp/ocr-chain-assessment.json
+          printf '%s\n' "${EXPECTED_MATRIX}" > /tmp/ocr-matrix.json
+          PYTHONPATH=src python scripts/ocr_compat.py assess-matrix \
+            --matrix /tmp/ocr-matrix.json --artifacts /tmp/ocr-chain --head "${GITHUB_SHA}" \
+            --output /tmp/ocr-chain-assessment.json | tee -a "${GITHUB_STEP_SUMMARY}"
           classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-chain-assessment.json"))["classification"])')
           target=$(python -c 'import json; print(json.load(open("/tmp/ocr-chain-assessment.json"))["target_version"])')
           echo "classification=${classification}" >>"${GITHUB_OUTPUT}"
           echo "target=${target}" >>"${GITHUB_OUTPUT}"
       - name: Prepare one cumulative automatic-safe patch
-        if: steps.chain.outputs.classification == 'automatic-safe'
+        if: needs.qualify.result == 'success' && github.ref == 'refs/heads/main' && !inputs.qualification_only && steps.chain.outputs.classification == 'automatic-safe'
         env:
           TARGET_VERSION: ${{ steps.chain.outputs.target }}
         run: |
-          mapfile -d '' evidence_files < <(find /tmp/ocr-chain -name evidence.json -type f -print0)
           args=()
           latest_issue=''
-          for evidence in "${evidence_files[@]}"; do
+          for evidence in /tmp/ocr-chain/ocr-compatibility-v*/evidence.json; do
             args+=(--evidence "${evidence}")
             version=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "${evidence}")
             if [ "${version}" = "${TARGET_VERSION}" ]; then
@@ -233,9 +236,11 @@ jobs:
           PYTHONPATH=src python scripts/ocr_compat.py prepare-update \
             "${args[@]}" \
             --fragment-number "${latest_issue}"
+          git add -N compatibility/evidence/ changelog.d/ src/ocr_toolkit/_qualified_handoffs.json
           git diff --binary >"/tmp/ocr-chain-update.patch"
           test -s /tmp/ocr-chain-update.patch
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.chain.outcome != 'skipped' }}
         with:
           name: ocr-compatibility-chain
           path: |
@@ -244,7 +249,7 @@ jobs:
           if-no-files-found: error
           retention-days: 2
       - name: Open automatic-safe compatibility PR when bot credential is configured
-        if: steps.chain.outputs.classification == 'automatic-safe'
+        if: needs.qualify.result == 'success' && github.ref == 'refs/heads/main' && !inputs.qualification_only && steps.chain.outputs.classification == 'automatic-safe'
         env:
           GH_TOKEN: ${{ secrets.OCR_UPDATE_BOT_TOKEN }}
           REPOSITORY: ${{ github.repository }}
@@ -267,7 +272,7 @@ jobs:
           git fetch origin "${branch}" || true
           git switch -C "${branch}" "${GITHUB_SHA}"
           git add compatibility/ocr-support.json compatibility/evidence/ \
-            src/ocr_toolkit/preflight.py examples/gitlab/ocr-review.gitlab-ci.yml \
+            src/ocr_toolkit/preflight.py src/ocr_toolkit/_qualified_handoffs.json examples/gitlab/ocr-review.gitlab-ci.yml \
             changelog.d/
           git commit -m "Target OCR ${version}"
           git push --force-with-lease="${branch}" origin "${branch}"

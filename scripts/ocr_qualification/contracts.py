@@ -171,7 +171,34 @@ def _validate_contracts_for_version(version: str, contracts: Any) -> None:
     """Validate observed contracts against the epoch owned by the candidate version."""
 
     version_tuple = core._version(version)
-    if version_tuple < history.HISTORICAL_CUTOFF:
+    if version_tuple >= settings.BEHAVIORAL_EPOCH:
+        if not isinstance(contracts, dict):
+            core._fail("behavioral qualification requires a contracts object")
+        required = {
+            "identity",
+            "range_preview",
+            "user_exclusion",
+            "review_result",
+            "publication",
+            "budget_partial",
+            "provider_controls",
+            "mcp",
+        }
+        checks = contracts.get("checks")
+        if not isinstance(checks, dict) or any(checks.get(name) != "passed" for name in required):
+            core._fail("behavioral qualification omitted a required consumer check")
+        handoffs = contracts.get("native_handoffs")
+        if (
+            not isinstance(handoffs, list)
+            or not all(isinstance(item, str) for item in handoffs)
+            or handoffs != sorted(set(handoffs))
+            or not set(handoffs) <= settings.NATIVE_HANDOFFS
+            or not {"diagram_output", "gitlink_projection"} <= set(handoffs)
+        ):
+            core._fail("invalid native handoff qualification")
+        if not isinstance(contracts.get("observations"), dict):
+            core._fail("missing behavioral qualification observations")
+    elif version_tuple < history.HISTORICAL_CUTOFF:
         history.validate_contracts(version, version_tuple, {"contracts": contracts}, core._fail)
     else:
         _validate_current_contracts(contracts, version)
@@ -180,6 +207,8 @@ def _validate_contracts_for_version(version: str, contracts: Any) -> None:
 def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
     """Select the frozen or live qualification epoch from the candidate version."""
 
+    if core._version(version) >= settings.BEHAVIORAL_EPOCH and evidence.get("schema_version") != 4:
+        core._fail("current candidate requires behavioral evidence schema 4")
     _validate_contracts_for_version(version, evidence.get("contracts"))
 
 
@@ -210,6 +239,13 @@ def _rolling_runtime_support(version: str) -> dict[str, object]:
     """Return the three-line runtime policy for one qualified recommendation."""
 
     major, minor, _patch = core._version(version)
+    if core._version(version) >= settings.BEHAVIORAL_EPOCH:
+        return {
+            "deprecated_lines": [],
+            "qualified_patches_only": True,
+            "rejected_before": f"{major}.{minor}.0",
+            "supported_lines": [f"{major}.{minor}"],
+        }
     if minor < 2:
         core._fail("rolling runtime support requires two preceding minor lines")
     return {
@@ -470,12 +506,16 @@ def qualification_status(
     baseline = tested_baseline_version.removeprefix("v")
     core._version(comparison)
     core._version(baseline)
-    if result not in {"compatible", "failed"}:
+    if result not in {"compatible", "failed", "incompatible"}:
         core._fail("qualification status result is invalid")
     if phase not in settings.QUALIFICATION_PHASES or reason not in settings.QUALIFICATION_REASONS:
         core._fail("qualification status phase or reason is invalid")
     if (result == "compatible") != (phase == "complete" and reason == "compatible"):
         core._fail("qualification status result is inconsistent")
+    if result == "incompatible" and (
+        phase != "contracts" or reason not in settings.CONTRACT_MISMATCH_REASONS
+    ):
+        core._fail("qualification status incompatibility requires a proven contract mismatch")
     if result == "failed" and reason not in settings.QUALIFICATION_FAILURE_REASONS.get(
         phase, frozenset()
     ):
