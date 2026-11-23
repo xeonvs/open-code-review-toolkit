@@ -29,7 +29,9 @@ def peer(mode: str) -> int:
     """Stand in for OCR only; evidence and action attribution remain real."""
 
     if "--version" in sys.argv:
-        print("ocr version 1.13.3")
+        from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
+
+        print(f"ocr version {RECOMMENDED_OCR_VERSION}")
         return 0
     if "--preview" in sys.argv:
         return 0

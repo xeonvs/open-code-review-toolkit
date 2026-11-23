@@ -25,10 +25,10 @@ Repair CI policy selector registration, qualify future stable versions by consum
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Public CI policy selectors no longer filter findings or private results | WQ-01 | active |
-| REQ-002 | Behavioral qualification, candidate disposition, safe batching and promotion | WQ-02 | active |
-| REQ-003 | Private opt-in Analysis and accurate operator documentation | WQ-03 | active |
-| REQ-004 | Hosted qualification, installed regressions, review and mandatory draft pause | WQ-04 | pending |
+| REQ-001 | Public CI policy selectors no longer filter findings or private results | WQ-01 | done |
+| REQ-002 | Behavioral qualification, candidate disposition, safe batching and promotion | WQ-02 | done |
+| REQ-003 | Private opt-in Analysis and accurate operator documentation | WQ-03 | done |
+| REQ-004 | Hosted qualification, installed regressions, review and mandatory draft pause | WQ-04 | active |
 | REQ-005 | Protected delivery and immutable receipt readback | WQ-05 | pending |
 
 ### Explicit Non-Goals
@@ -69,7 +69,11 @@ Exercise synthetic GitLab review/post, controlled model, installed wheel and act
 
 ### Latest Validation Results
 
-Hosted run 45148738452 produced compatible evidence for 1.13.11–13. Root retrieved those three artifacts before expiry. The CI-selector regression failed on the old code and passed after the source fix, with 239 tests in the surrounding suites. Posting tests cover a current operational partial, budget-only failure, missing receipt, wrong exit and terminal failure. All 305 posting tests and 205 subtests passed. The separate installed DLP acceptance is pending.
+Hosted run 45148738452 produced compatible evidence for 1.13.11–13. Root retrieved those three artifacts before expiry. The CI-selector regression failed on the old code and passed after the source fix, with 239 tests in the surrounding suites. Posting tests cover a current operational partial, budget-only failure, missing receipt, wrong exit and terminal failure. All 305 posting tests and 205 subtests passed. Installed wheel review and post preserved both findings with and without CI records. The private discussion control omitted one finding from publication and attributed the omission to forge discussions alone.
+
+The final hosted run [45200392627](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45200392627) assessed the full chain at 2247999. Every candidate was compatible. Promotion recorded reviewed conclusions for all six, recommended 1.14.2, and limited runtime admission to 1.14.0–2. The independent verified Darwin 1.14.2 probe passed numeric, Analysis, native-auth, gitlink and diagram checks.
+
+The full quality gate passed with 5809 tests, 358 subtests, 80 skipped tests and 90.61% coverage. The instruction contract passed. The dependency audit reported no known vulnerabilities in audited dependencies.
 
 ### Risks And Recovery
 
@@ -77,7 +81,7 @@ Bound qualification to v1.14.2. If a candidate fails, inspect its closed phase a
 
 ### Resume Point
 
-Complete WQ-01–03 on the feature branch before final validation and the draft pause.
+At draft creation, wait for the owner's explicit resume instruction before WQ-05. The Codex Security MCP rejected the branch checkout and its independent clone during startup. Resolve the missing security report before marking ready.
 
 ### Plan Fidelity Check
 

@@ -1,33 +1,19 @@
 {
-  "1.13.10": [
+  "1.14.0": [
+    "analysis",
+    "chatgpt_auth",
     "diagram_output",
     "gitlink_projection"
   ],
-  "1.13.3": [
+  "1.14.1": [
+    "analysis",
+    "chatgpt_auth",
     "diagram_output",
     "gitlink_projection"
   ],
-  "1.13.4": [
-    "diagram_output",
-    "gitlink_projection"
-  ],
-  "1.13.5": [
-    "diagram_output",
-    "gitlink_projection"
-  ],
-  "1.13.6": [
-    "diagram_output",
-    "gitlink_projection"
-  ],
-  "1.13.7": [
-    "diagram_output",
-    "gitlink_projection"
-  ],
-  "1.13.8": [
-    "diagram_output",
-    "gitlink_projection"
-  ],
-  "1.13.9": [
+  "1.14.2": [
+    "analysis",
+    "chatgpt_auth",
     "diagram_output",
     "gitlink_projection"
   ]

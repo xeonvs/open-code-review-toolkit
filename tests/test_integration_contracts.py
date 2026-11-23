@@ -157,7 +157,6 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     example_pin = re.search(r'^  OCR_VERSION: "v([0-9.]+)"$', workflow, re.MULTILINE)
     assert example_pin is not None
     example_version = example_pin.group(1)
-    assert example_version in SUPPORTED_OCR_VERSIONS
     example_entry = next(
         item for item in manifest["releases"] if item["version"] == example_version
     )
@@ -171,7 +170,15 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
         r"^Status: (active|blocked|ready_for_closure)$", plan, re.MULTILINE
     )
     if not active:
+        assert example_version in SUPPORTED_OCR_VERSIONS
         assert example_version == recommended
+    else:
+        stable = (PROJECT_ROOT / ".release-version").read_text().strip()
+        assert f'OCR_TOOLKIT_VERSION: "{stable}"' in workflow
+        if example_version != recommended:
+            target = next(item for item in manifest["releases"] if item["version"] == recommended)
+            evidence = json.loads((PROJECT_ROOT / target["evidence"]).read_text())
+            assert example_version == evidence["tested_baseline_version"]
     linux_digest = next(
         asset["sha256"]
         for asset in example_entry["assets"]

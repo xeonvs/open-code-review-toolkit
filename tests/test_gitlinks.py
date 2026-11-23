@@ -28,6 +28,7 @@ from ocr_toolkit.pre_execution import (
     GITLINK_STATUS_SCHEMA,
     read_pre_execution_status,
 )
+from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION, SUPPORTED_OCR_VERSIONS
 
 OLD_OID = "1" * 40
 NEW_OID = "2" * 40
@@ -651,7 +652,7 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
                 "exact_range": f"{base}..{head}",
                 "source_artifact_sha256": source.hexdigest(),
             },
-            "execution": {"ocr_version": "v1.13.3"},
+            "execution": {"ocr_version": f"v{RECOMMENDED_OCR_VERSION}"},
             "coverage": {
                 "selected": [item],
                 "completed": [item],
@@ -664,14 +665,15 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
     qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
     manifest = payload["manifest"]
     assert isinstance(manifest, dict)
-    for version in ("v1.13.4", "v1.13.5", "v1.13.6", "v1.13.7", "v1.13.8", "v1.13.9", "v1.13.10"):
+    for patch in SUPPORTED_OCR_VERSIONS:
+        version = f"v{patch}"
         manifest["execution"]["ocr_version"] = version
         qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
     for version in (None, [], "1.13.7", "v1.13.11", "v1.13.7 "):
         manifest["execution"]["ocr_version"] = version
         with pytest.raises(RepositoryEvidenceError, match="unsupported binary"):
             qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
-    manifest["execution"]["ocr_version"] = "v1.13.3"
+    manifest["execution"]["ocr_version"] = f"v{RECOMMENDED_OCR_VERSION}"
     native_input = manifest["input"]
     assert isinstance(native_input, dict)
     native_input["resolved_head"] = base

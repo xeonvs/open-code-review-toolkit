@@ -21,6 +21,7 @@ from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repositor
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.pre_execution import read_pre_execution_status
+from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 from ocr_toolkit.providers import gitlab
 from ocr_toolkit.review_runner import (
     ReviewIdentity,
@@ -1433,7 +1434,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "import json, os, pathlib, subprocess, sys\n"
         "args = sys.argv[1:]\n"
         "if args == ['--version']:\n"
-        "    print('Open Code Review v1.13.2')\n"
+        f"    print('Open Code Review v{RECOMMENDED_OCR_VERSION}')\n"
         "    raise SystemExit(0)\n"
         "assert args[0] == 'review'\n"
         "def option(name):\n"
@@ -1562,7 +1563,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "diagram": {
             "schema": "ocr.review-diagram/v1",
             "mode": "on",
-            "state": "unsupported",
+            "state": "not-generated",
             "reason": "none",
             "calls": 0,
             "failed_calls": 0,
@@ -1608,6 +1609,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
                         "ocr_toolkit_evidence",
                         "ocr_toolkit_evidence_search",
                         "ocr_toolkit_evidence_coverage",
+                        "ocr_toolkit_review_diagram",
                     ],
                 }
             ],

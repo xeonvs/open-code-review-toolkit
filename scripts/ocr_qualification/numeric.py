@@ -424,8 +424,10 @@ def _numeric_cli_probe(
                 "candidate max-tools grace verdict changed with the numeric boundary",
                 reason="cli-contract",
             )
-        if requested_value is not None and requested_value > 0 and rounds != max(
-            minimum, requested_value
+        if (
+            requested_value is not None
+            and requested_value > 0
+            and rounds != max(minimum, requested_value)
         ):
             raise core.QualificationContractMismatch(
                 "candidate max-tools override was not applied exactly", reason="cli-contract"

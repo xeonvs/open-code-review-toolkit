@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit import review_runner
+from ocr_toolkit import preflight, review_runner
 from ocr_toolkit.evidence.gitlink_projection import (
     gitlink_selection_proof,
     make_gitlink_projection,
@@ -308,7 +308,7 @@ def test_post_rebuilds_native_partial_coverage_and_rejects_tampering(
                 "exact_range": f"{base}..{head}",
                 "source_artifact_sha256": source.hexdigest(),
             },
-            "execution": {"ocr_version": "v1.13.3"},
+            "execution": {"ocr_version": f"v{preflight.RECOMMENDED_OCR_VERSION}"},
             "coverage": {
                 "selected": [item],
                 "completed": [item],
@@ -380,7 +380,7 @@ def test_dlp_filtered_gitlink_review_keeps_safe_finding_and_verifiable_coverage(
         "exact_range": f"{base}..{head}",
         "source_artifact_sha256": proof["source_artifact_sha256"],
     }
-    manifest["execution"] = {"ocr_version": "v1.13.3"}
+    manifest["execution"] = {"ocr_version": f"v{preflight.RECOMMENDED_OCR_VERSION}"}
     manifest["coverage"] = {
         "selected": [item],
         "completed": [item],

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.10",
-  "recommended_version": "1.13.10",
+  "monitoring_floor": "1.14.2",
+  "recommended_version": "1.14.2",
   "releases": [
     {
       "assets": [
@@ -3148,17 +3148,332 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.10",
       "status": "tested",
       "version": "1.13.10"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "cea0ae7ba9f93b5a2f2cbb2deca33be4c49b38cddbadc6f0d419cb6893766a2b",
+          "size": 63604304
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ae77e6b696ba0a4ac15307bd9f04c955dba94ac23eadf319efdd406271530f13",
+          "size": 60402034
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "7347e29ea8b26a8a5ed2778e95ac3e2954cc1695d34f70dfd9a4e8c8e146f55f",
+          "size": 61767842
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "aaab77fc1825bb7de42d62bde1803ef316bd5d54c00bbed512a029c570c76180",
+          "size": 58196130
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "aa1fb88e6c8814bd903744f94f926202f5bb28d60c84051d7f07e3f518119fcf",
+          "size": 63294976
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "bda0e419d436d0ff0227742cabcb4aa46e6245a6f096b0a60b5ff20cefc4d9cf",
+          "size": 58935808
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "af7a93f0e5f1d496797ea9026ea36870c7f170864a75d00b38bad86eb6effb6f",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.11.json",
+      "evidence_sha256": "3b839958186cda3bf37f454e50444d712b9b8bd7758b157c25912985dca59498",
+      "human_conclusion": "Historical transition. Move rules and native session improvements were reviewed; Linux qualification passed in run 45148738452.",
+      "published_at": "2026-11-17T05:30:06Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.11",
+      "status": "tested",
+      "version": "1.13.11"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "e067e92e8fa7030f59490f9cec5b86f9c69dd8a13d252b979f4cd87b7f047696",
+          "size": 63629824
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "d68eadd45e57f05698373cc7115084a204798e7da37a52ce8326444a9e257a65",
+          "size": 60419474
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "673ed6bfd905bf68383269e78945b9d873a5c8c0931fce6e86374ca58df0b8b1",
+          "size": 61792418
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "178b1a926616f69522a7dc18a69513841813132f98accc35db960276cd53408d",
+          "size": 58196130
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "d84b3d10e776d00825dd27aadd2a3612a884ad276a82eb823eae62ed5a200fb9",
+          "size": 63318528
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "ff65a2ae93a46dce2f5bc18c29a21c48f8eccc0b935f7fd45b99c732694e0b1b",
+          "size": 58957312
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "fd3d565a8aa07983779262b3547b6b010c5029db4191acc5a63d262141d9da1c",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.12.json",
+      "evidence_sha256": "e2b8fdf79cce07420f553184f166e5ca50cd5fa1cdb932d951f82caaecc3a6d7",
+      "human_conclusion": "Historical transition. Operational partials can exit one with completed findings. The toolkit now validates this handoff and preserves CI failure.",
+      "published_at": "2026-11-18T03:33:12Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.12",
+      "status": "tested",
+      "version": "1.13.12"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "796795fb84eac9c4ff283e1c706d606e0786949a5df238d1316b763430f545fe",
+          "size": 63642080
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "e0a1666bb00065d13da755d5c0f714d676be5087d2544c5f1348da4a205b93d6",
+          "size": 60419442
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "e3eb634c8205a120c16e9943de00aef895e2cd86d6b13c38e25427c924275ec8",
+          "size": 61804706
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "b1747dc4a41f4bc103e8bcf7a8a5c1ff551a731216b6b6326ad9b8ca2850b26e",
+          "size": 58196130
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "8580eb0661b7707831cb9bdbd3840f08ddae9e8ebc31dbdf13db51251515ac7b",
+          "size": 63329280
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "27167fbdf05923be5640bb9bc25cc292519457e06c989ff760125fe36fd62dd9",
+          "size": 58966528
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "919f7688142a592527bae084c8541ef9b81552d244dd50ec287447aee2be48dc",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.13.json",
+      "evidence_sha256": "d83b32b25700955143898fadac09eef5eb1a92b4a9af1b40c540bd7d7be00adc",
+      "human_conclusion": "Historical transition. Compression budget and OAuth callback cleanup are native behaviors. Recorded Linux evidence passed.",
+      "published_at": "2026-11-19T03:04:50Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.13",
+      "status": "tested",
+      "version": "1.13.13"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "407dc4c3ce50b296c6a6f77a5bad118c8278be22a379ce9ed0a897e02a0c2beb",
+          "size": 64026240
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "e8e4cd1aeaa95e845eb018c55b0c5985e182da172aa0d490292ec5a899064fbf",
+          "size": 60773602
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "3faf877bb78720269dd215215ab7cf4741bf188e163b8f18012cbe2d3ba3037d",
+          "size": 62185634
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "2dacf5f000f861075609ca91af420bc6904fb8f81bdf44bdea913a31edf5cc66",
+          "size": 58523810
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "951285a5fce602782b4c15407116360d2df90d4033fa5459336afe1c0133fbf3",
+          "size": 63724544
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d114c643bcb86f2074c262500b73b82958ab9bfac0f80f44c355cdc4238386c8",
+          "size": 59317760
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "a997529fb71d64555bc98583fcfe9c130e48a65ccf63e97d4d62f7889c9ccc0f",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.14.0.json",
+      "evidence_sha256": "245ad1b17e3cc39813609a6481c9952869e7b65b6a5411e6331adf89bda18d7f",
+      "human_conclusion": "New supported line. Reviewed opt-in Analysis and its separate budget and artifact boundary, changed file selection and rules, severity ordering and MCP discovery. Exact Linux candidate passed run 45200392627.",
+      "published_at": "2026-11-21T07:17:08Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.0",
+      "status": "tested",
+      "version": "1.14.0"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "bd650ba4f48a8e26776dbde841347f4fb01b6e16f52338d11024c2afb5da3b44",
+          "size": 64030336
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "5a7be8517ed81032f8ec91806d86c696911140e7cab17607f3345245404c7c3a",
+          "size": 60773602
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "7d31862a1b9c6f9cea02141673f7b814071d2f36f1a9e6ce2f14d39d959229f4",
+          "size": 62185634
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "fc2e05595ab0484d07b223813b4f44167e8ead744e1ff6ddf3ecd3535c2a06b4",
+          "size": 58523810
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "207704128e2b14bf4c45899d9f2085d1b2bc693a02fff959b9332b211148527f",
+          "size": 63726592
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "87e6796c59d105fc1d71b67b5e8f5577bb513e7f3d689a1dece0c773cb19bae1",
+          "size": 59319296
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "08d6c85caa4cd04e73eb20700eb39ddd9adcdab874f741fc7ad21f990b93aa01",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.14.1.json",
+      "evidence_sha256": "932839c02bd66cb16ab2685be607b42cb3586cdb573f14d87494a5d2edb4cb67",
+      "human_conclusion": "Supported patch. Reviewed Analysis usage and workspace FIFO handling. The private report and main-result contracts passed on Linux in run 45200392627.",
+      "published_at": "2026-11-22T09:42:28Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.1",
+      "status": "tested",
+      "version": "1.14.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "e7b4e8bd0ee3c9c97ef2317483773e065eec520a2efc3c8ca6b2a1105b4ddcfb",
+          "size": 64046704
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "5f4cf6c7684b1333248fc63b2ebd65f0884f9c884160bd01c8c4f82afabf2cc0",
+          "size": 60790098
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "d4d718501742cad754210d85c6dcf8cb1664bd914fb370fa89c3776fc69e111f",
+          "size": 62202018
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "9b02a873fbde8bbb30ffc8457cf89f04896363a02dd2a4299fef1919f83209e5",
+          "size": 58523810
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "614151f4c280910f6fc501a2793e1dd1b59483eea0144f10550092ccd533f652",
+          "size": 63743488
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "15f99eb9084624eabbf7fbcac112140aef003d577321c79100773adce9f1c910",
+          "size": 59333632
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "749ab6799592aa59d6778c78689099902c21a054ef761fe9a49b668a73c8abee",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.14.2.json",
+      "evidence_sha256": "b5a4d00b01acc84991c263d44e0fa7a2c001fa3043b9c84aa262fd85b1531294",
+      "human_conclusion": "Recommended. Reviewed BOM handling in Objective-C and native refactoring. Linux run 45200392627 and independent Darwin arm64 probes passed.",
+      "published_at": "2026-11-23T03:44:24Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.2",
+      "status": "tested",
+      "version": "1.14.2"
     }
   ],
   "runtime_support": {
-    "deprecated_lines": [
-      "1.11"
-    ],
+    "deprecated_lines": [],
     "qualified_patches_only": true,
-    "rejected_before": "1.11.0",
+    "rejected_before": "1.14.0",
     "supported_lines": [
-      "1.12",
-      "1.13"
+      "1.14"
     ]
   },
   "schema_version": 2,

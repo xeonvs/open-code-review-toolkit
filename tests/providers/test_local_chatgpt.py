@@ -402,7 +402,7 @@ def test_local_review_process_receives_native_binding_and_cleans_only_private_ho
 import json, os, sys
 from pathlib import Path
 if sys.argv[1:] == ['--version']:
-    print('1.13.2')
+    print('{preflight.RECOMMENDED_OCR_VERSION}')
     raise SystemExit(0)
 home = Path(os.environ['HOME'])
 config = json.loads((home / '.opencodereview/config.json').read_text())
