@@ -4,19 +4,300 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from tests.support import PROJECT_ROOT
+from tests.support import PROJECT_ROOT, native_range_input
+from tests.test_context_policy import policy_value
+from tests.test_gitlab_discussions import note
+from tests.test_gitlab_provider import _GitLabHandler, _https_gitlab
 
 HELPER = PROJECT_ROOT / "tests" / "installed_policy_e2e.py"
 RUNTIME_SMOKE = PROJECT_ROOT / "scripts" / "installed_runtime_smoke.py"
 ARTIFACT_VERSION = "0.0.dev0"
+
+
+def _check_installed_ci_selector_dlp(
+    root: Path, python: Path, cli: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Compare the delivered GitLab review on one range with and without CI context."""
+
+    root.mkdir(mode=0o700)
+    repository = root / "repository"
+    repository.mkdir()
+
+    def git(*args: str) -> str:
+        return _run(["git", *args], cwd=repository).strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Synthetic")
+    git("config", "user.email", "synthetic@example.invalid")
+    (repository / "src").mkdir()
+    source = repository / "src" / "sample.py"
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    policy_directory = repository / ".opencodereview"
+    policy_directory.mkdir()
+    policy = policy_value()
+    policy["schema_version"] = "ocr.review-context-policy/v4"
+    del policy["references"]
+    policy["ci_outcomes"] = {"checks": [{"name": "test", "path_prefixes": ["src/"]}]}
+    (policy_directory / "review-context-policy.json").write_text(
+        json.dumps(policy), encoding="utf-8"
+    )
+    git("add", ".")
+    git("-c", "commit.gpgsign=false", "commit", "-qm", "protected policy")
+    base = git("rev-parse", "HEAD")
+    source.write_text("VALUE = 2\n", encoding="utf-8")
+    git("-c", "commit.gpgsign=false", "commit", "-qam", "source change")
+    head = git("rev-parse", "HEAD")
+
+    safe_finding = "Add a test for this value in src/."
+    private_diagnostic = "The test covers src/."
+    discussion_text = "The private discussion calls for a synthetic audit of this assignment."
+    findings = [
+        {"path": "src/sample.py", "line": 1, "content": message}
+        for message in (safe_finding, discussion_text)
+    ]
+    model_result = root / "model-result.json"
+    model_result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "comments": findings,
+                "warnings": [],
+                "summary": {"test_diagnostic": private_diagnostic},
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "input": native_range_input(base, head),
+                    "coverage": {
+                        "selected": [{"item_id": "src/sample.py"}],
+                        "completed": [{"item_id": "src/sample.py"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    ocr = root / "ocr"
+    ocr.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(str(python))} -I - "
+        f"{shlex.quote(str(model_result))} \"$@\" <<'PY'\n"
+        """import json
+import subprocess
+import sys
+from pathlib import Path
+
+if "--preview" in sys.argv:
+    raise SystemExit(0)
+from ocr_toolkit import __version__
+
+assert __version__ == "0.0.dev0"
+config = json.loads((Path.home() / ".opencodereview" / "config.json").read_text())
+server = config["mcp_servers"]["ocr_toolkit_evidence"]
+requests = [
+    {"id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2024-11-05", "capabilities": {},
+        "clientInfo": {"name": "synthetic-ci-dlp-peer", "version": "1"},
+    }},
+    {"id": 2, "method": "tools/call", "params": {
+        "name": "ocr_toolkit_evidence", "arguments": {"action": "summary"},
+    }},
+]
+completed = subprocess.run(
+    [server["command"], *server["args"]],
+    input="".join(json.dumps({"jsonrpc": "2.0", **request}) + "\\n" for request in requests),
+    capture_output=True, text=True, check=True, timeout=15,
+)
+responses = {item["id"]: item for item in map(json.loads, completed.stdout.splitlines())}
+assert not responses[2]["result"].get("isError")
+print(Path(sys.argv[1]).read_text())
+PY
+""",
+        encoding="utf-8",
+    )
+    ocr.chmod(0o700)
+
+    finish = datetime.now(UTC).isoformat()
+    mr = "/api/v4/projects/7/merge_requests/9"
+    original_get = _GitLabHandler.do_GET
+    delivered: list[tuple[str, dict]] = []
+    with_ci = with_discussion = False
+
+    def respond(peer: _GitLabHandler, payload: object, status: int = 200) -> None:
+        data = json.dumps(payload).encode()
+        peer.send_response(status)
+        peer.send_header("Content-Type", "application/json")
+        peer.send_header("Content-Length", str(len(data)))
+        peer.end_headers()
+        peer.wfile.write(data)
+
+    def get(peer: _GitLabHandler) -> None:
+        url = urlsplit(peer.path)
+        assert peer.headers["PRIVATE-TOKEN"] == "synthetic-gitlab-test-token"
+        if url.path == "/api/v4/projects/7/pipelines":
+            assert parse_qs(url.query)["sha"] == [head]
+            respond(peer, [{"id": 10, "sha": head}] if with_ci else [])
+        elif url.path == "/api/v4/projects/7/pipelines/10/jobs":
+            assert with_ci
+            respond(
+                peer,
+                [
+                    {
+                        "id": 110,
+                        "name": "test",
+                        "status": "success",
+                        "allow_failure": False,
+                        "finished_at": finish,
+                        "pipeline": {"id": 10, "sha": head},
+                    }
+                ],
+            )
+        elif url.path == "/api/v4/user":
+            respond(peer, {"id": 99, "username": "OCR_Bot"})
+        elif url.path == f"{mr}/notes":
+            respond(peer, [])
+        elif url.path == f"{mr}/discussions":
+            respond(
+                peer,
+                [
+                    {
+                        "id": "synthetic-thread",
+                        "notes": [
+                            {**note(1, discussion_text), "created_at": finish, "updated_at": finish}
+                        ],
+                    }
+                ]
+                if with_discussion
+                else [],
+            )
+        else:
+            original_get(peer)
+
+    def post(peer: _GitLabHandler) -> None:
+        assert peer.headers["PRIVATE-TOKEN"] == "synthetic-gitlab-test-token"
+        assert peer.path in {f"{mr}/discussions", f"{mr}/notes"}
+        payload = json.loads(peer.rfile.read(int(peer.headers["Content-Length"])))
+        delivered.append((peer.path, payload))
+        new_id = len(delivered) + 1
+        respond(
+            peer,
+            {"id": f"synthetic-discussion-{new_id}", "notes": [{"id": new_id}]}
+            if peer.path.endswith("/discussions")
+            else {"id": new_id},
+            status=201,
+        )
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_GitLabHandler, "do_GET", get)
+        patch.setattr(_GitLabHandler, "do_POST", post, raising=False)
+        with _https_gitlab(
+            root / "tls",
+            source_sha=head,
+            target_sha=base,
+            diff_base_sha=base,
+            diff_start_sha=base,
+        ) as api_url:
+            environment = {
+                "HOME": str(root),
+                "PATH": os.pathsep.join((str(root), os.environ["PATH"])),
+                "NO_PROXY": "localhost,127.0.0.1",
+                "SSL_CERT_FILE": os.environ["SSL_CERT_FILE"],
+                "GITLAB_CI": "true",
+                "GITLAB_API_TOKEN": "synthetic-gitlab-test-token",
+                "CI_API_V4_URL": api_url,
+                "CI_SERVER_URL": api_url.removesuffix("/api/v4"),
+                "CI_PROJECT_ID": "7",
+                "CI_MERGE_REQUEST_IID": "9",
+                "CI_MERGE_REQUEST_EVENT_TYPE": "detached",
+                "CI_MERGE_REQUEST_DIFF_BASE_SHA": base,
+                "CI_COMMIT_SHA": head,
+                "CI_JOB_ID": "11",
+                "CI_PIPELINE_ID": "10",
+                "OCR_LLM_MODEL": "openai/synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_LLM_TOKEN": "synthetic-provider-token",
+                "OCR_LLM_URL": "https://provider.example.invalid/v1",
+                "OCR_POST_MODE": "direct",
+                "OCR_REVIEW_CONTEXT_MODE": "enriched",
+                "OCR_REVIEW_DIAGRAM_MODE": "off",
+                "OCR_STRICT_POSTING": "true",
+            }
+            for scenario in ("without-ci", "with-ci", "with-protected-discussion"):
+                with_ci = scenario != "without-ci"
+                with_discussion = scenario == "with-protected-discussion"
+                delivered.clear()
+                result = root / f"{scenario}.json"
+                stderr = root / f"{scenario}.stderr"
+                output_args = ["--result", str(result), "--stderr", str(stderr)]
+                _run(
+                    [
+                        str(cli),
+                        "review",
+                        *output_args,
+                        "--",
+                        "--from",
+                        base,
+                        "--to",
+                        head,
+                        "--format",
+                        "json",
+                    ],
+                    cwd=repository,
+                    env=environment,
+                )
+                raw = result.read_text(encoding="utf-8")
+                artifact = json.loads(raw)
+                assert stat.S_IMODE(result.stat().st_mode) == 0o600
+                metadata = artifact["_ocr_toolkit"]
+                assert metadata["review"]["diff_base_sha"] == base
+                assert metadata["review"]["source_sha"] == head
+                assert metadata["context"]["per_source"]["forge:ci_outcomes"] == (
+                    "complete" if with_ci else "partial"
+                )
+                publication = metadata["publication"]
+                _run([str(cli), "post", *output_args], cwd=repository, env=environment)
+                inline_bodies = [
+                    item["body"] for path, item in delivered if path == f"{mr}/discussions"
+                ]
+                summary_bodies = [item["body"] for path, item in delivered if path == f"{mr}/notes"]
+                assert len(summary_bodies) == 1
+                assert len(inline_bodies) == (1 if with_discussion else 2)
+                assert safe_finding in inline_bodies[0]
+                if with_discussion:
+                    assert artifact["comments"] == findings[:1]
+                    assert discussion_text not in raw
+                    assert discussion_text not in json.dumps(delivered)
+                    assert publication["state"] == "publication-filtered"
+                    assert publication["retained"] == {"comments": 1, "warnings": 0}
+                    assert publication["omitted"] == {"comments": 1, "warnings": 0, "fields": 1}
+                    assert publication["reason_counts"]["forbidden"] == 1
+                    assert publication["source_attribution"]["counts"]["forge_discussions"] == 1
+                    assert publication["source_attribution"]["counts"]["ci_outcomes"] == 0
+                    assert (
+                        "DLP-admitted subset: 1 finding(s) and 0 warning(s). "
+                        "Omitted before posting: 1 finding(s)" in summary_bodies[0]
+                    )
+                else:
+                    assert artifact["comments"] == findings
+                    assert artifact["summary"]["test_diagnostic"] == private_diagnostic
+                    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
+                    assert "ocr-toolkit-signal" not in summary_bodies[0]
+                    assert discussion_text in inline_bodies[1]
 
 
 def _run(
@@ -177,50 +458,67 @@ def test_installation_without_runtime_lock_fails_functional_mcp_probe(
     assert "No module named 'mcp'" in probe.stderr
 
 
+def _install_artifact(artifact: Path, requirements: Path, root: Path) -> tuple[Path, Path]:
+    uv = shutil.which("uv")
+    assert uv is not None
+    environment = root / "venv"
+    _run([uv, "venv", "--python", sys.executable, "--no-project", str(environment)], cwd=root)
+    binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
+    python = binary_directory / ("python.exe" if os.name == "nt" else "python")
+    cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
+    _run(
+        [
+            uv,
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "--require-hashes",
+            "--only-binary",
+            ":all:",
+            "--index-url",
+            "https://pypi.org/simple",
+            "--requirement",
+            str(requirements),
+        ],
+        cwd=root,
+    )
+    _run([uv, "pip", "install", "--python", str(python), "--no-deps", str(artifact)], cwd=root)
+    _run([uv, "pip", "check", "--python", str(python)], cwd=root)
+    return python, cli
+
+
+@pytest.fixture(scope="module")
+def installed_wheel(
+    installed_artifacts: tuple[Path, Path, Path], tmp_path_factory: pytest.TempPathFactory
+) -> tuple[Path, Path]:
+    wheel, _, requirements = installed_artifacts
+    return _install_artifact(wheel, requirements, tmp_path_factory.mktemp("installed-wheel"))
+
+
+def test_installed_ci_selectors_preserve_gitlab_findings_and_private_result(
+    installed_wheel: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _check_installed_ci_selector_dlp(tmp_path / "ci-selector-dlp", *installed_wheel, monkeypatch)
+
+
 def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
-    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
+    installed_artifacts: tuple[Path, Path, Path],
+    installed_wheel: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     """Prove both package paths under hostile imports, private state, and stdio MCP."""
 
     git_binary = shutil.which("git")
-    uv_binary = shutil.which("uv")
     assert git_binary is not None
-    assert uv_binary is not None
-    artifacts = installed_artifacts[:2]
-    runtime_requirements = installed_artifacts[2]
-    for label, artifact in zip(("wheel", "sdist"), artifacts, strict=True):
+    _, rebuilt, requirements = installed_artifacts
+    for label in ("wheel", "sdist"):
         root = tmp_path / label
         root.mkdir(mode=0o700)
-        environment = root / "venv"
-        _run(
-            [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
-            cwd=root,
+        python, cli = (
+            installed_wheel if label == "wheel" else _install_artifact(rebuilt, requirements, root)
         )
-        binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
-        python = binary_directory / ("python.exe" if os.name == "nt" else "python")
-        cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
-        _run(
-            [
-                uv_binary,
-                "pip",
-                "install",
-                "--python",
-                str(python),
-                "--require-hashes",
-                "--only-binary",
-                ":all:",
-                "--index-url",
-                "https://pypi.org/simple",
-                "--requirement",
-                str(runtime_requirements),
-            ],
-            cwd=root,
-        )
-        _run(
-            [uv_binary, "pip", "install", "--python", str(python), "--no-deps", str(artifact)],
-            cwd=root,
-        )
-        _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)
+        binary_directory = python.parent
         installed_version = _run(
             [str(python), "-I", "-c", "import ocr_toolkit; print(ocr_toolkit.__version__)"],
             cwd=root,

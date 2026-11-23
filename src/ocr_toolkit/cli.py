@@ -55,6 +55,13 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
     review_parser.add_argument(
+        "--analysis", action="store_true", help="Request private Behavior/Impact Analysis."
+    )
+    review_parser.add_argument(
+        "--analysis-max-tokens-budget",
+        help="Separate native Analysis token budget (0 means unlimited).",
+    )
+    review_parser.add_argument(
         "--local", action="store_true", help="Review immutable Git refs and publish local Markdown."
     )
     review_parser.add_argument(
@@ -108,6 +115,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return mcp_config.configure_mcp_servers()
     if args.command == "review":
         ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
+        if args.analysis:
+            ocr_args = [*ocr_args, "--analysis"]
+        if args.analysis_max_tokens_budget is not None:
+            ocr_args = [*ocr_args, "--analysis-max-tokens-budget", args.analysis_max_tokens_budget]
         try:
             return review_runner.run_evidence_review(
                 Path(args.result),
