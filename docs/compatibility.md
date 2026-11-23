@@ -9,7 +9,16 @@ requires its own qualification before installation.
 ## Upgrading the toolkit and OCR
 
 Replace the 0.15.1 wheel and OCR 1.13.x binary together. For 0.15.2 the
-target pair is toolkit 0.15.2 and OCR 1.14.2. On Linux amd64, verify the
+target pair is toolkit 0.15.2 and OCR 1.14.2. Once 0.15.2 is published,
+run the following inside the toolkit virtual environment and check that it prints
+`ocr-ci 0.15.2`:
+
+```sh
+python -m pip install --upgrade --only-binary=:all: 'open-code-review-toolkit==0.15.2'
+ocr-ci --version
+```
+
+On Linux amd64, verify the
 download in a private directory before installing the executable:
 
 ```sh
@@ -46,10 +55,12 @@ use the example from the tag matching the installed toolkit.
 ## Qualification lanes
 
 The live suite exercises the interfaces used by the toolkit on a verified
-candidate binary. Changes to rule text, glob spellings and new supported
-extensions are observations for release review. A blocking result identifies
-the toolkit operation that failed. Historical evidence remains available for
-readback. [Qualification maintenance](development.md#maintaining-ocr-qualification)
+candidate binary. The evidence records which sampled fixture paths were
+selected. Review upstream changes to rule text, glob spellings and supported
+extensions using the release and source comparison. A demonstrated
+incompatibility carries a closed phase and reason code. New qualifications use
+schema 5 with immutable comparison-side checks and observations for each
+recorded native handoff. Archived schema-4 receipts remain readable. [Qualification maintenance](development.md#maintaining-ocr-qualification)
 
 The **OCR compatibility** workflow checks stable upstream releases every Monday
 at 07:15 UTC and qualifies candidates newer than the manifest monitoring floor.
@@ -77,6 +88,25 @@ Classify a pin-only promotion and its machine or human qualification evidence as
 
 - `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence and runtime preflight version. GitLab example version/checksum pins move together in the release PR. It never writes directly to `main`.
 - `human-review-required`: every minor/major release, skipped or non-increasing patch, changed contract requiring operator review, feature-bearing release, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
+
+For local attempts that request `--status-output`, choose a fresh output directory for each run. Each directory preserves one candidate outcome and its matching evidence.
+
+Discovery qualifies up to ten releases per run. To continue a longer queue, dispatch
+with `after_tag` set to the last classified tag. Each candidate retains its adjacent
+comparison and tested baseline. To requalify recorded behavioral candidates on a new checkout, set both
+bounds with `qualification_only=true`. For the OCR 1.14.0–1.14.2 window use
+`after_tag=v1.13.13` (exclusive) and `through_tag=v1.14.2` (inclusive).
+Earlier schema-3 releases retain their original tested baseline for archive
+readback. Keep those releases outside the rerun window.
+Continuations require human review before promotion.
+For a fix following incompatible releases, pass the compatible evidence and a
+`--human-conclusion VERSION=TEXT` for the fix and each skipped release. Supply
+each skipped candidate's `--incompatible-status PATH/status.json` alongside its
+original `incompatibility.json` in the same directory. Promotion checks the
+recorded executable size and SHA-256 against the currently published asset.
+A replacement under the same tag requires a fresh qualification. Candidate jobs
+use read-only repository permissions. A separate aggregation job validates
+the artifacts before updating their issues.
 
 Each OCR version owns one stable HTML marker and one qualification issue. The workflow performs a single upsert through bounded direct issue listing rather than GitHub's eventually consistent search index. Reuse requires the exact marker on the first line and a GitHub-reported author matching the repository's individual owner or the verified GitHub Actions bot identity. Marker copies, quoted mentions and membership associations confer no write authority. Other manually created issues require operator reconciliation. Historical issues closed with the `duplicate` label remain as incident evidence but do not compete for canonical identity. Any other duplicate among eligible issues fails closed instead of creating another issue; after operators select and reconcile the canonical issue, reruns update it in place.
 

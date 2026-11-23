@@ -90,7 +90,7 @@ and configuration boundary. Account reachability requires a separate operator lo
 Keep personal credentials out of shared CI. Use an operator-authorized local
 native login/review when a changed consumed auth contract requires it.
 
-OCR 1.14 and later use evidence schema 4. A blocking check must name its
+New qualifications of OCR 1.14 and later produce evidence schema 5. A blocking check must name its
 toolkit consumer and demonstrate a failure that affects that consumer.
 Use a verified native binary and the deterministic gateway to exercise the
 immutable range, user exclusions, result parser, partial coverage, configured
@@ -106,8 +106,11 @@ write, manifest readback and promotion. A malformed result or a controlled
 violation of the consumer contract must still identify the failing operation.
 
 Archived evidence remains tied to its original schema and bytes.
-`scripts/ocr_compat_history.py` owns legacy readback; use the schema-4 checks
-for new 1.14+ candidates. A previously qualified release outside the selected
+Evidence before 1.13.9 uses `scripts/ocr_compat_history.py` for readback.
+OCR 1.13.9–1.13.13 use the archived schema-3 checks in
+`scripts/ocr_qualification/contracts.py`. The initial schema-4 evidence for OCR 1.14.x remains readable in the
+manifest archive. Fresh checks and promotions on the behavioral line require
+schema 5 with per-handoff observations and immutable comparison-side evidence. A previously qualified release outside the selected
 line is historical. Test preflight and optional capability selection against
 the installed wheel.
 
@@ -119,7 +122,27 @@ aggregate against the discovery matrix before any promotion. Promotion must
 validate generated destinations before writing: reuse identical evidence and
 reject a conflicting destination.
 
-The comparison-side probe additionally binds actual `file_read`, `file_find` and
+To refresh receipts for an already supported behavioral release window, verify
+that the qualification-only run succeeded at the reviewed full workflow SHA.
+Set `run_id` and `run_head` to that run number and SHA. Download only the
+candidate artifacts into a fresh directory, then refresh and validate:
+
+```sh
+artifacts=$(mktemp -d)
+gh run download "$run_id" --pattern 'ocr-compatibility-v*' --dir "$artifacts"
+PYTHONPATH=src python scripts/ocr_compat.py refresh-receipts --artifacts "$artifacts" \
+  --head "$run_head" --after-tag v1.13.13 --through-tag v1.14.2
+PYTHONPATH=src python scripts/ocr_compat.py validate
+```
+
+Refresh requires the original release asset identities. It updates per-version
+evidence, manifest hashes and packaged handoffs for the tested window.
+
+Schema-5 qualification exercises immutable comparison sides in the candidate
+run. The same boundary also has an opt-in native pytest case in
+`tests/test_ocr_comparison.py`. Request-declaration probes run separately in
+`tests/test_ocr_qualification_selection.py`; their results require that test
+when assessing this boundary. The comparison-side probe binds actual `file_read`, `file_find` and
 `code_search` calls/results to immutable base/head objects. Renamed/deleted paths,
 invalid side values, a different checked-out target and dirty files cannot borrow
 another side's content. Successful same-tool controls separate independent negative

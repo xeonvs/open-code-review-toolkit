@@ -669,7 +669,7 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
         version = f"v{patch}"
         manifest["execution"]["ocr_version"] = version
         qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
-    for version in (None, [], "1.13.7", "v1.13.11", "v1.13.7 "):
+    for version in (None, [], RECOMMENDED_OCR_VERSION, "v1.13.11", f"v{RECOMMENDED_OCR_VERSION} "):
         manifest["execution"]["ocr_version"] = version
         with pytest.raises(RepositoryEvidenceError, match="unsupported binary"):
             qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)

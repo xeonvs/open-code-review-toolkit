@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import stat
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +15,8 @@ from . import core, execution, settings
 def chatgpt_auth_handoff(binary: Path, repo: Path, base: str, head: str, directory: Path) -> bool:
     """Verify native config selection and the empty-store boundary without credentials."""
 
+    if not hasattr(os, "getuid"):
+        return False
     env = execution._isolated_probe_environment(directory / "native-auth-home")
     env["OCR_TELEMETRY_ENABLED"] = "false"
     help_output = execution._run([str(binary), "--help"], cwd=repo, env=env)
@@ -53,24 +54,37 @@ def chatgpt_auth_handoff(binary: Path, repo: Path, base: str, head: str, directo
         or any((store / filename).exists() for filename in ("accounts.json", "host.json"))
     ):
         return False
-    lock_metadata = lock.lstat()
-    return (
-        stat.S_ISREG(lock_metadata.st_mode)
-        and stat.S_IMODE(lock_metadata.st_mode) == 0o600
-        and lock_metadata.st_size == 0
-    )
+    from ocr_toolkit.local_chatgpt import LocalChatGPTError, _directory, _native_file
+
+    # The empty synthetic store lacks registration files. Check the directories
+    # and lock using the installed consumer's metadata admission directly.
+    home = Path(env["HOME"])
+    try:
+        for ancestor in (*reversed(home.parents), home):
+            _directory(ancestor, owned=ancestor == home)
+        _directory(home / ".opencodereview", owned=True)
+        _directory(store.parent, owned=True)
+        _directory(store, owned=True, private=True)
+        _native_file(lock, limit=0, required=False)
+        return lock.exists()
+    except (OSError, LocalChatGPTError):
+        return False
 
 
-def consumer_handoffs(binary: Path, version: str, directory: Path) -> list[str]:
+def consumer_handoffs(
+    binary: Path,
+    version: str,
+    directory: Path,
+    executable: core.Asset,
+) -> list[str]:
     """Exercise the verified executable through toolkit gitlink and diagram routes."""
 
     env = execution._isolated_probe_environment(directory / "consumer-home")
-    with binary.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    executable.verify_file(binary)
     env.update(
         OCR_GITLINK_QUALIFY_BINARY=str(binary),
         OCR_QUALIFY_CANDIDATE=json.dumps(
-            {"version": version, "sha256": digest, "size": binary.stat().st_size}
+            {"version": version, "sha256": executable.sha256, "size": executable.size}
         ),
         GIT_AUTHOR_NAME="Synthetic Reviewer",
         GIT_COMMITTER_NAME="Synthetic Reviewer",

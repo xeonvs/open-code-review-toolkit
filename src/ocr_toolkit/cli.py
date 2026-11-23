@@ -12,6 +12,7 @@ from ocr_toolkit import __version__, configure, mcp_config, preflight, review_ru
 from ocr_toolkit.dlp_audit import cli as dlp_cli
 from ocr_toolkit.dlp_audit.state import AuditError
 from ocr_toolkit.posting.workflow import main as posting_main
+from ocr_toolkit.telemetry import cli as telemetry_cli
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    telemetry_cli.configure_parser(
+        subparsers.add_parser("telemetry", help="Collect and report on GitLab reviews locally.")
+    )
     audit_parser = subparsers.add_parser(
         "dlp-audit",
         help="Run offline DLP audits of local text/code with private reports.",
@@ -59,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_parser.add_argument(
         "--analysis-max-tokens-budget",
+        action="append",
         help="Separate native Analysis token budget (0 means unlimited).",
     )
     review_parser.add_argument(
@@ -107,6 +112,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("unrecognized arguments: " + " ".join(remaining))
     if args.command == "dlp-audit":
         return dlp_cli.run(args)
+    if args.command == "telemetry":
+        return telemetry_cli.run(args)
     if args.command == "preflight":
         return preflight.main(local=True) if args.local else preflight.main()
     if args.command == "configure":
@@ -117,8 +124,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
         if args.analysis:
             ocr_args = [*ocr_args, "--analysis"]
-        if args.analysis_max_tokens_budget is not None:
-            ocr_args = [*ocr_args, "--analysis-max-tokens-budget", args.analysis_max_tokens_budget]
+        for budget in args.analysis_max_tokens_budget or ():
+            ocr_args = [*ocr_args, "--analysis-max-tokens-budget", budget]
         try:
             return review_runner.run_evidence_review(
                 Path(args.result),

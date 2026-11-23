@@ -529,7 +529,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
     module = load_script()
     output = tmp_path / "evidence.json"
     status_output = tmp_path / "status.json"
-    binary_digest = "0" * 64
+    binary_digest = hashlib.sha256(b"x").hexdigest()
     assets = [
         module.core.Asset(
             name="opencodereview-linux-amd64",
@@ -569,7 +569,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
     monkeypatch.setattr(
         module.probes,
         "run_contracts",
-        lambda binary, _version, directory: module.comments._comment_arguments_probe(
+        lambda binary, _version, directory, _asset: module.comments._comment_arguments_probe(
             binary, directory
         ),
     )
@@ -743,6 +743,12 @@ def test_large_qualification_queue_starts_with_oldest_ten() -> None:
     result = module.assets.qualification_matrix(manifest, candidates)
     assert [entry["tag"] for entry in result["include"]] == [f"v2.0.{n}" for n in range(1, 11)]
     assert result["include"][-1]["comparison_version"] == "2.0.9"
+    continued = module.assets.qualification_matrix(manifest, candidates, after_tag="v2.0.10")
+    assert continued["include"] == [
+        {"tag": "v2.0.11", "comparison_version": "2.0.10", "tested_baseline_version": "2.0.0"}
+    ]
+    with pytest.raises(module.core.CompatibilityError, match="was not discovered"):
+        module.assets.qualification_matrix(manifest, candidates, after_tag="v2.0.12")
 
 
 @pytest.mark.parametrize(

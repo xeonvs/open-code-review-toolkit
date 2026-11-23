@@ -2,6 +2,14 @@
 
 This matrix records what the repository test suite proves and, equally importantly, what it does not prove. The governing rule is [Test doubles and integration proof](project_principles.md#test-doubles-and-integration-proof): a double may replace a collaborator beyond the production owner under test, but it may not replace that owner and still be cited as integration evidence.
 
+## Local GitLab telemetry
+
+| Boundary | Evidence | Limit |
+| --- | --- | --- |
+| Published summary to offline report | Installed CLI receives current producer-generated notes through a controlled `glab` executable, collects and updates the same MR population, then renders EN/RU HTML and JSON in ordinary and anonymized modes from the saved snapshot with `glab` unavailable and costs disabled. A checked Python audit hook blocks network calls during rendering. The wheel and the wheel rebuilt from sdist exercise the same entry points. | The controlled peer supplies GitLab API responses. Corporate authentication and the private catalog require a separate operator run. |
+| Historical and current telemetry | Publication tests cover older summary and status layouts. Current cases originate in the posting formatter and status workflows. Missing counters, explicit zero, lifecycle skips, DLP, failed jobs and published partial reviews have independent assertions. | Published messages can omit fields and older messages can have been deleted before observation. |
+| Input scope and files | Subprocess tests verify host, project and bot identity, deduplication, pagination and restricted data. Filesystem tests exercise real owner-only paths, atomic failures, worktrees, symlinks and hardlinks. | A report describes the selected projects and observed history. It cannot infer hidden findings or establish that a later change fixed a defect. |
+
 ## v0.15.0 atomic structural evidence budgets
 
 Real temporary Git repositories cross the production collector, complete

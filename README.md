@@ -46,10 +46,11 @@ Verify the installation without contacting an LLM provider:
 
 ```console
 ocr --version
+ocr-ci --version
 ocr-ci --help
 ```
 
-`ocr --version` must report the manifest's exact `recommended_version`; `ocr-ci --help` must exit
+`ocr --version` must report the manifest's exact `recommended_version`. Check that `ocr-ci --version` reports the intended toolkit release and that `ocr-ci --help` exits
 successfully. `ocr-ci preflight` is an operational configuration check, not the installation
 smoke test.
 
@@ -93,6 +94,8 @@ or an explicitly nonblocking embedding stream; a conventional CI stderr pipe is
 intentionally not used because it can block a review.
 
 ## How GitLab reviews evolve
+
+Collect GitLab review delivery and process metrics on a workstation for a single project with `ocr-ci telemetry collect --project example/service --no-costs`. Replace `example/service` with the project path. This skips the provider pricing request. Generate a private HTML report and aggregate JSON offline with `ocr-ci telemetry report`. See [local GitLab reports](docs/telemetry.md).
 
 On a successful rerun, the toolkit replaces untouched OCR-only notes instead of accumulating stale reviews. A human reply transfers that discussion to the team: the conversation is preserved and a matching finding is suppressed. Reply with `/ocr suppress` or `@<live-bot-username> suppress` to keep a discussion open without future repeats; use the corresponding `resolve` command to resolve it after the next successful posting transaction. For example, a bot named `mr.bot` accepts the exact reply `@mr.bot resolve`.
 

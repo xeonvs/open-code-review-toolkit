@@ -254,13 +254,18 @@ def validate_ocr_binary(*, executable: str | None = None, announce: bool = True)
         raise PreflightError(
             f"ocr --version exited {completed.returncode}: {redact_sensitive(output)}"
         )
-    reported = set(re.findall(r"(?<![0-9.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![0-9.])", output))
-    if len(reported) != 1:
+    lines = completed.stdout.strip().splitlines()
+    banner = re.fullmatch(
+        r"(?:open-code-review|Open Code Review|ocr)[ \t]+v?([0-9]+\.[0-9]+\.[0-9]+)"
+        r"(?P<metadata>[ \t]+.*)?",
+        lines[0] if lines else "",
+    )
+    if banner is None or re.search(r"[0-9]+\.[0-9]+\.[0-9]+", banner["metadata"] or ""):
         raise PreflightError(
             "Unsupported Open Code Review version; expected one qualified stable version, "
             f"got {redact_sensitive(output)!r}"
         )
-    version = reported.pop()
+    version = banner.group(1)
     if version in DEPRECATED_OCR_VERSIONS:
         print(
             f"WARNING: Open Code Review {version} is deprecated; upgrade to "

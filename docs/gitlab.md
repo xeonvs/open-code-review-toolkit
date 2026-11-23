@@ -10,11 +10,19 @@ Start with the [complete checksum-pinned pipeline](../examples/gitlab/ocr-review
 
 ## Required configuration
 
-The example leaves Behavior/Impact Analysis disabled. Set `OCR_ANALYSIS=true`
+Behavior/Impact Analysis requires the wheel and qualified binary described in
+the [paired upgrade instructions](compatibility.md#upgrading-the-toolkit-and-ocr).
+Use the example from the matching release tag once published. The preceding
+release’s example still pins the older wheel and ignores the Analysis setting.
+The new example defaults to the main review alone. Set `OCR_ANALYSIS=true`
 on a review job to investigate the impact of the same MR diff alongside its
 ordinary review. Set `OCR_ANALYSIS_MAX_TOKENS_BUDGET` to a positive integer
-for a separate soft cost ceiling. The private result JSON carries the admitted
-investigation. The MR discussion, findings and approval decision use the main
+for a separate soft cost ceiling. When present, read `toolkit_analysis` in
+`/tmp/ocr-result-${CI_JOB_ID}.json` inside the trusted job before it ends.
+If the optional report would exceed `OCR_MAX_RESULT_BYTES`, the runner can
+omit it and preserve the main result. Use the main review status for CI. The
+example leaves this private file on the runner. Keep the raw result out of job
+logs and uploaded artifacts. The MR discussion, findings and approval decision use the main
 review.
 
 The complete variable inventory, owner, requirement, exact default, and behavior are in [Environment configuration](configuration.md). The principal secrets are:
@@ -109,6 +117,8 @@ An exact merge-request lifecycle read also precedes evidence collection. If the 
 GitLab Code Owners and code-owner approval rules are separate project merge policy. They are not prerequisites for OCR execution and cannot give unprotected repository content policy authority. Likewise, a green advisory pipeline or allowed-to-fail OCR job proves neither that `ocr-ci review` completed nor that OCR or its model executed. Inspect the review result, manifest coverage, receipt, and published status.
 
 ## Production bot configuration
+
+The review summary can display the selected model in Technical details. Posting uses the recorded review result and applies publication DLP before emitting the name. Local telemetry uses this field when estimating the cost of a run. [Local telemetry guide](telemetry.md)
 
 Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the selected reads, notes, drafts, discussion management, and optional approval. GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative.
 

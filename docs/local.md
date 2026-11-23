@@ -8,8 +8,9 @@ then configure the LLM environment described in [configuration.md](configuration
 ## Optional Behavior/Impact Analysis
 
 To investigate how a change affects callers, add `--analysis` to a local review.
-The investigation uses the same immutable range and may make one additional
-model request concurrently. Give it a separate soft token budget if required.
+The investigation uses the same immutable range and runs alongside the main review. It can make
+multiple model requests as it reads evidence. Set a separate soft token budget
+when you want to limit investigation costs.
 
 ```console
 review_dir=$(mktemp -d)
@@ -20,7 +21,7 @@ ocr-ci review --local --analysis --analysis-max-tokens-budget 20000 --result "$r
 Read `toolkit_analysis` in the private result JSON. Its status describes the
 investigation; the main review's status and coverage describe the findings.
 Admitted Markdown is available when the investigation produces a report that
-passes DLP. Check declared completeness before using its conclusions. With Analysis enabled, the stderr artifact stays empty and the debug bundle omits native stdout, stderr, traces and result copies.
+passes DLP. Check declared completeness before using its conclusions. With Analysis enabled, the stderr artifact stays empty and the debug bundle omits native stdout, stderr, traces and result copies. An empty stderr artifact cannot establish which reads succeeded in either part of the original run. For diagnostics on a fresh main review, rerun the same range with Analysis disabled and inspect that run’s stderr.
 
 ## Offline DLP audits
 

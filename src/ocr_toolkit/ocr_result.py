@@ -18,6 +18,7 @@ from ocr_toolkit.common.redaction import sanitize_ocr_value
 
 DEFAULT_MAX_RESULT_BYTES = 2_000_000
 MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
+ANALYSIS_INPUT_HEADROOM_BYTES = 2_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
 TOOLKIT_PRIVATE_DIAGNOSTIC_KEY = "_ocr_toolkit_private_diagnostic"
 TOOLKIT_GITLINK_SELECTION_KEY = "_ocr_toolkit_gitlink_selection"
@@ -325,7 +326,7 @@ def _decode_result(data: bytes) -> Any:
             return result
 
         return json.loads(text, object_pairs_hook=reject_duplicate_advisory)
-    except (json.JSONDecodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise OcrResultMalformed(str(exc)) from exc
 
 
@@ -346,8 +347,11 @@ def load_ocr_result(path: Path) -> Any:
 
                 if not toolkit_receipt_is_valid(metadata):
                     raise OcrResultMalformed("OCR toolkit receipt is invalid")
+                # Posting rechecks the two optional publication channels separately.
                 scalar_metadata = {
-                    key: value for key, value in metadata.items() if key != "diagram"
+                    key: value
+                    for key, value in metadata.items()
+                    if key not in {"diagram", "review_model"}
                 }
                 if scalar_metadata != sanitize_ocr_value(scalar_metadata):
                     raise OcrResultMalformed("OCR toolkit receipt changed during redaction")
@@ -421,18 +425,31 @@ def load_ocr_result(path: Path) -> Any:
         os.close(descriptor)
 
 
-def inspect_ocr_result(path: Path) -> Any:
+def _analysis_input_limit(handoff_limit: int) -> int:
+    """Bound the transient native report, its raw duplicate and metadata independently."""
+    return handoff_limit + ANALYSIS_INPUT_HEADROOM_BYTES
+
+
+def inspect_ocr_result(path: Path, *, analysis_input: bool = False) -> Any:
     """Load bounded raw OCR JSON for a pre-publication policy owner."""
 
     descriptor = _open_result(path)
     try:
-        return _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
+        limit = max_result_bytes()
+        return _decode_result(
+            _read_descriptor(
+                descriptor, limit=_analysis_input_limit(limit) if analysis_input else limit
+            )
+        )
     finally:
         os.close(descriptor)
 
 
 def transform_ocr_result(
-    path: Path, transformer: Callable[[dict[str, Any]], Mapping[str, Any]]
+    path: Path,
+    transformer: Callable[[dict[str, Any]], Mapping[str, Any]],
+    *,
+    optional_field: str | None = None,
 ) -> dict[str, Any]:
     """Atomically replace one hostile OCR result with a validated transformation.
 
@@ -450,16 +467,38 @@ def transform_ocr_result(
     try:
         descriptor = _open_result_at(parent_descriptor, path)
         opened = os.fstat(descriptor)
-        result = _decode_result(_read_descriptor(descriptor, limit=limit))
+        input_limit = _analysis_input_limit(limit) if optional_field is not None else limit
+        result = _decode_result(_read_descriptor(descriptor, limit=input_limit))
         if not isinstance(result, dict):
             raise OcrResultMalformed("OCR result JSON must be an object")
         try:
             transformed = dict(transformer(result))
         except RecursionError as exc:
             raise OcrResultMalformed(str(exc)) from exc
-        encoded = json.dumps(
-            transformed, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8")
+
+        def encode() -> bytes:
+            return json.dumps(
+                transformed, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            ).encode("utf-8")
+
+        encoded = encode()
+        if len(encoded) > limit:
+            receipt = transformed.get(TOOLKIT_RESULT_KEY)
+            if isinstance(receipt, dict) and "review_model" in receipt:
+                publication = receipt.get("publication")
+                if (
+                    isinstance(publication, dict)
+                    and publication.get("state") == "publication-filtered"
+                    and transformed.get("llm") == {"model": receipt["review_model"]}
+                ):
+                    del transformed["llm"]
+                transformed[TOOLKIT_RESULT_KEY] = {
+                    k: v for k, v in receipt.items() if k != "review_model"
+                }
+                encoded = encode()
+        if len(encoded) > limit and optional_field is not None and optional_field in transformed:
+            del transformed[optional_field]
+            encoded = encode()
         if len(encoded) > limit:
             raise OcrResultTooLarge(
                 f"transformed OCR result JSON exceeds OCR_MAX_RESULT_BYTES={limit}"

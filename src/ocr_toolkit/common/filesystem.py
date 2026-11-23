@@ -5,6 +5,7 @@ from __future__ import annotations
 import errno
 import os
 import stat
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -21,7 +22,9 @@ def fsync_directory(descriptor: int) -> None:
             raise
 
 
-def open_private_parent_directory(path: Path, *, create: bool = True) -> tuple[int, str]:
+def open_private_parent_directory(
+    path: Path, *, create: bool = True, check_directory: Callable[[int], None] | None = None
+) -> tuple[int, str]:
     """Open a path's parent without following replaceable pathname components.
 
     The returned descriptor pins the parent directory.  Callers must use
@@ -37,6 +40,8 @@ def open_private_parent_directory(path: Path, *, create: bool = True) -> tuple[i
     descriptor = os.open(os.path.sep, os.O_RDONLY | os.O_DIRECTORY)
     try:
         for component in parts[:-1]:
+            if check_directory is not None:
+                check_directory(descriptor)
             flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
             try:
                 child = os.open(component, flags, dir_fd=descriptor)
@@ -56,6 +61,8 @@ def open_private_parent_directory(path: Path, *, create: bool = True) -> tuple[i
             os.close(descriptor)
             descriptor = child
         parent = os.fstat(descriptor)
+        if check_directory is not None:
+            check_directory(descriptor)
         if not stat.S_ISDIR(parent.st_mode):
             raise OSError("private output parent is not a directory")
         return descriptor, parts[-1]

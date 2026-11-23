@@ -16,8 +16,9 @@ import tempfile
 import threading
 import time
 from collections import Counter
-from collections.abc import Callable, Sequence
-from contextlib import ExitStack
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from io import BufferedWriter
@@ -175,7 +176,9 @@ from ocr_toolkit.pre_execution import (
 )
 from ocr_toolkit.provider_config import REASONING_EFFORTS
 from ocr_toolkit.provider_failure import (
+    CLOSED_PROVIDER_FAILURE_SCHEMA,
     ProviderFailureProjection,
+    ProviderFailureReason,
     provider_failure_projection,
     render_provider_diagnostics,
 )
@@ -210,6 +213,7 @@ from ocr_toolkit.result_diagnostics import ResultDiagnostic, result_diagnostic
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_identity import validate_detached_merge_request_pipeline
+from ocr_toolkit.review_model import admitted_model
 from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
 from ocr_toolkit.review_range import ReviewRange, admit_native_range, range_payload
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
@@ -383,6 +387,19 @@ class BackgroundPreviewUnclassified(ReviewRunnerError):
         self.diagnostic_count = max(1, min(diagnostic_count, 1024))
 
 
+_DEFERRED_TERMINATION: ContextVar[list[int] | None] = ContextVar(
+    "deferred_review_termination", default=None
+)
+
+
+def _interrupt_review(signum: int, _frame: object) -> None:
+    deferred = _DEFERRED_TERMINATION.get()
+    if deferred is None:
+        raise ReviewRunnerError(f"OCR review interrupted by signal {signum}")
+    if not deferred:
+        deferred.append(signum)
+
+
 def _install_termination_handlers() -> dict[int, object]:
     """Translate default process termination into an unwind through private cleanup."""
 
@@ -390,15 +407,12 @@ def _install_termination_handlers() -> dict[int, object]:
         return {}
     previous_handlers: dict[int, object] = {}
 
-    def interrupt(signum: int, _frame: object) -> None:
-        raise ReviewRunnerError(f"OCR review interrupted by signal {signum}")
-
     for signum in (signal.SIGINT, signal.SIGTERM):
         previous = signal.getsignal(signum)
         if previous not in {signal.SIG_DFL, signal.default_int_handler}:
             continue
         try:
-            signal.signal(signum, interrupt)
+            signal.signal(signum, _interrupt_review)
         except (OSError, ValueError):
             continue
         previous_handlers[int(signum)] = previous
@@ -416,28 +430,39 @@ def _restore_termination_handlers(previous_handlers: dict[int, object]) -> None:
             continue
 
 
-def _block_termination_signals() -> set[int | signal.Signals] | None:
-    """Defer termination until private cleanup and result projection are complete."""
+@dataclass
+class _DeferredSignals:
+    token: Token[list[int] | None]
+    pending: list[int]
+    previous_mask: set[signal.Signals] | None = None
 
-    if threading.current_thread() is not threading.main_thread() or not hasattr(
-        signal, "pthread_sigmask"
-    ):
+
+def _block_termination_signals() -> _DeferredSignals | None:
+    """Defer both main-thread and worker-delivered process signals through cleanup."""
+    if threading.current_thread() is not threading.main_thread():
         return None
-    try:
-        return signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
-    except (OSError, ValueError):
-        return None
+    pending: list[int] = []
+    guard = _DeferredSignals(_DEFERRED_TERMINATION.set(pending), pending)
+    if hasattr(signal, "pthread_sigmask"):
+        try:
+            guard.previous_mask = signal.pthread_sigmask(
+                signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM}
+            )
+        except (OSError, ValueError):
+            pass
+    return guard
 
 
-def _restore_signal_mask(previous_mask: set[int | signal.Signals] | None) -> None:
-    """Restore the caller's signal mask after cleanup has reached a safe state."""
-
-    if previous_mask is None or not hasattr(signal, "pthread_sigmask"):
+def _restore_signal_mask(guard: _DeferredSignals | None) -> None:
+    if guard is None:
         return
     try:
-        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
-    except (OSError, ValueError):
-        return
+        if guard.previous_mask is not None:
+            signal.pthread_sigmask(signal.SIG_SETMASK, guard.previous_mask)
+    finally:
+        _DEFERRED_TERMINATION.reset(guard.token)
+        if guard.pending:
+            _interrupt_review(guard.pending[0], None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -465,6 +490,7 @@ class ReviewRunState:
         default_factory=review_analysis.AnalysisOptions
     )
     result_admitted: bool = False
+    provider_failure: ProviderFailureReason | None = None
 
     def enter(self, stage: FailureStage) -> None:
         """Enter a real execution phase and notify the optional progress observer."""
@@ -571,8 +597,8 @@ class EnrichmentReceipt:
 
 def _write_isolated_runtime_config(
     *, debug: DebugBundle | None = None, local: bool = False
-) -> None:
-    """Rebuild only validated runtime settings inside the fresh OCR home."""
+) -> str | None:
+    """Rebuild validated settings and return this execution's configured model."""
 
     updates = configure.build_config_updates(**({"local": True} if local else {}))
     url = updates.get("llm.url")
@@ -585,12 +611,12 @@ def _write_isolated_runtime_config(
         except (preflight.PreflightError, ValueError) as exc:
             raise ReviewRunnerError(str(exc)) from exc
     update_ocr_config(updates)
+    native = updates.get("providers.chatgpt")
+    native = native if isinstance(native, dict) else None
+    model = native.get("model", "") if native is not None else updates.get("llm.model")
     if debug is not None:
-        native = updates.get("providers.chatgpt")
-        native = native if isinstance(native, dict) else None
         protocol = "openai-responses" if native is not None else updates["llm.protocol"]
         body = native.get("extra_body") if native is not None else updates.get("llm.extra_body")
-        model = native.get("model", "") if native is not None else updates["llm.model"]
         reasoning = body.get("reasoning") if isinstance(body, dict) else None
         effort = (
             reasoning.get("effort")
@@ -610,7 +636,7 @@ def _write_isolated_runtime_config(
                 "llm_protocol": protocol,
                 "review_effort": updates["effort"],
                 "language": updates["language"],
-                "llm_model_sha256": hashlib.sha256(model.encode("utf-8")).hexdigest(),
+                "llm_model_sha256": hashlib.sha256((model or "").encode("utf-8")).hexdigest(),
                 "extra_body_present": body is not None,
                 "extra_headers_present": "llm.extra_headers" in updates,
                 "telemetry_enabled": updates["telemetry.enabled"],
@@ -622,6 +648,8 @@ def _write_isolated_runtime_config(
                 ),
             },
         )
+
+    return model if isinstance(model, str) else None
 
 
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
@@ -1800,6 +1828,7 @@ def _finalize_ocr_result(
     diagram_execution: DiagramExecution | None = None,
     ocr_exit_code: int | None = None,
     analysis_requested: bool = False,
+    configured_model: str | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1964,6 +1993,11 @@ def _finalize_ocr_result(
                 facts={"dlp_state": publication["state"]},
             )
             state.enter("result-validation")
+        if filtered and ocr_exit_code == 1:
+            # The native operational partial was validated before its manifest was filtered.
+            original = publication["original"]
+            assert isinstance(original, dict)
+            original["operational_partial"] = True
         metadata["publication"] = publication
         effective_coverage: RepositoryCoverage | None = None
         if projection is not None:
@@ -1976,6 +2010,18 @@ def _finalize_ocr_result(
             metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
         if provider_receipt:
+            native_identity = payload.get("llm")
+            if (
+                configured_model
+                and isinstance(native_identity, dict)
+                and native_identity.get("model") == configured_model
+            ):
+                selected_model = admitted_model(configured_model, forbidden=forbidden)
+                if selected_model is not None:
+                    metadata["review_model"] = selected_model
+                    if filtered:
+                        # The closed publication projection omits all other native LLM metadata.
+                        projected["llm"] = {"model": selected_model}
             if not toolkit_receipt_is_valid(metadata):
                 raise ReviewRunnerError("toolkit generated an invalid review receipt")
         elif identity.target_protection != "local" or identity.mr_author_id is not None:
@@ -2018,7 +2064,13 @@ def _finalize_ocr_result(
         return finalized
 
     try:
-        transform_ocr_result(result_path, finalize)
+        transform_ocr_result(
+            result_path,
+            finalize,
+            **(
+                {"optional_field": review_analysis.PRIVATE_RESULT_KEY} if analysis_requested else {}
+            ),
+        )
     except BaseException as exc:
         try:
             if isinstance(exc, ReviewRejected):
@@ -3242,6 +3294,23 @@ def _remove_optional_diagram_artifacts(artifacts: EvidenceArtifacts) -> None:
             diagram_warning()
 
 
+@contextmanager
+def _analysis_directory() -> Iterator[Path]:
+    """Keep termination guarded until the last native Analysis byte is removed."""
+
+    previous_mask = None
+    previous_handlers = _install_termination_handlers()
+    try:
+        with tempfile.TemporaryDirectory(prefix="ocr-analysis-") as name:
+            try:
+                yield Path(name)
+            finally:
+                previous_mask = _block_termination_signals()
+    finally:
+        _restore_termination_handlers(previous_handlers)
+        _restore_signal_mask(previous_mask)
+
+
 def run_evidence_review(
     result_path: Path,
     stderr_path: Path,
@@ -3361,9 +3430,7 @@ def run_evidence_review(
             if not formats:
                 ocr_args = [*ocr_args, "--format", "json"]
             _prepare_review_output_artifacts(result_path, stderr_path)
-            directory = Path(
-                review_lock.enter_context(tempfile.TemporaryDirectory(prefix="ocr-analysis-"))
-            )
+            directory = review_lock.enter_context(_analysis_directory())
             execution_result, execution_stderr = directory / "result.json", directory / "stderr"
         with dlp_mode(dlp_enabled):
             code = _run_evidence_review(
@@ -3373,10 +3440,19 @@ def run_evidence_review(
                 state=state,
                 dlp_enabled=dlp_enabled,
             )
+        admitted: bytes | None = None
         if state.analysis.enabled and state.result_admitted:
             admitted = _read_bounded_artifact(
                 execution_result, limit=max_result_bytes(), label="admitted Analysis result"
             )
+        elif state.analysis.enabled and state.provider_failure is not None:
+            admitted = json.dumps(
+                {
+                    "schema_version": CLOSED_PROVIDER_FAILURE_SCHEMA,
+                    "reason": state.provider_failure.value,
+                }
+            ).encode("utf-8")
+        if admitted is not None:
             try:
                 write_private_bytes(result_path, admitted)
             except OSError as exc:
@@ -3579,7 +3655,7 @@ def _run_evidence_review(
     try:
         try:
             state.enter("configuration")
-            _write_isolated_runtime_config(
+            configured_model = _write_isolated_runtime_config(
                 **({"debug": state.debug} if state.debug is not None else {}),
                 **({"local": True} if native_store is not None else {}),
             )
@@ -3744,6 +3820,9 @@ def _run_evidence_review(
             "--background-file",
             str(artifacts.bootstrap),
         ]
+        model_overrides = _option_values(effective_ocr_args, "--model")
+        if model_overrides:
+            configured_model = model_overrides[0] if len(model_overrides) == 1 else None
         state.enter("preview")
         ocr_binary = native_binary or _resolve_ocr_binary()
         projection: GitlinkProjection | None = None
@@ -3801,43 +3880,51 @@ def _run_evidence_review(
     finally:
         previous_mask = _block_termination_signals()
         try:
-            if gateway is not None:
+            try:
+                if gateway is not None:
+                    try:
+                        federation_forbidden = gateway.forbidden_publication
+                        receipt = gateway.close()
+                        composition = replace(composition, federation_receipt=receipt)
+                    except (ValueError, OSError):
+                        cleanup_error = OSError("federation cleanup could not be verified")
+                if state.progress is not None:
+                    state.progress.phase("cleanup")
+                partial = exit_code != 0 and _failed_review_result_is_partial(
+                    result_path,
+                    exit_code=exit_code,
+                    analysis_requested=state.analysis.enabled,
+                    state=state,
+                )
+                if exit_code == 0 or partial:
+                    evidence_action_counts = read_action_receipt(artifacts.action_receipt)
+                    if diagram_execution is not None:
+                        diagram_execution.capture()
+                if state.debug is not None:
+                    state.debug.capture("evidence.json", artifacts.store)
+                    state.debug.capture("context.json", artifacts.context_store)
+                    state.debug.capture("policy-rules.json", artifacts.policy_rules)
+                    state.debug.capture("evidence-actions.json", artifacts.action_receipt)
+                    state.debug.capture("diagram.json", artifacts.diagram)
+                    if not state.analysis.enabled:
+                        state.debug.capture_native_trace()
+            finally:
                 try:
-                    federation_forbidden = gateway.forbidden_publication
-                    receipt = gateway.close()
-                    composition = replace(composition, federation_receipt=receipt)
-                except (ValueError, OSError):
-                    cleanup_error = OSError("federation cleanup could not be verified")
-            if state.progress is not None:
-                state.progress.phase("cleanup")
-            partial = exit_code != 0 and _failed_review_result_is_partial(
-                result_path, exit_code=exit_code, analysis_requested=state.analysis.enabled
-            )
-            if exit_code == 0 or partial:
-                evidence_action_counts = read_action_receipt(artifacts.action_receipt)
-                if diagram_execution is not None:
-                    diagram_execution.capture()
-            if state.debug is not None:
-                state.debug.capture("evidence.json", artifacts.store)
-                state.debug.capture("context.json", artifacts.context_store)
-                state.debug.capture("policy-rules.json", artifacts.policy_rules)
-                state.debug.capture("evidence-actions.json", artifacts.action_receipt)
-                state.debug.capture("diagram.json", artifacts.diagram)
-                if not state.analysis.enabled:
-                    state.debug.capture_native_trace()
-            try:
-                _remove_ephemeral_review_artifacts(artifacts)
-            except OSError as exc:
-                cleanup_error = cleanup_error or exc
-            try:
-                shutil.rmtree(session_home)
-            except OSError as exc:
-                cleanup_error = cleanup_error or exc
-            state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
-            if previous_home is None:
-                os.environ.pop("HOME", None)
-            else:
-                os.environ["HOME"] = previous_home
+                    try:
+                        _remove_ephemeral_review_artifacts(artifacts)
+                    except OSError as exc:
+                        cleanup_error = cleanup_error or exc
+                    finally:
+                        try:
+                            shutil.rmtree(session_home)
+                        except OSError as exc:
+                            cleanup_error = cleanup_error or exc
+                    state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
+                finally:
+                    if previous_home is None:
+                        os.environ.pop("HOME", None)
+                    else:
+                        os.environ["HOME"] = previous_home
             if cleanup_error is None and (exit_code == 0 or partial):
                 state.enter("result-validation")
                 forbidden: tuple[str | ForbiddenValue, ...] = tuple(
@@ -3864,6 +3951,7 @@ def _run_evidence_review(
                     expected_range=effective_range,
                     diagram_execution=diagram_execution,
                     ocr_exit_code=exit_code,
+                    **({"configured_model": configured_model} if configured_model else {}),
                     **({"analysis_requested": True} if state.analysis.enabled else {}),
                     **(
                         {
@@ -3981,13 +4069,17 @@ def _closed_provider_failure_projection(
 
 
 def _failed_review_result_is_partial(
-    result_path: Path, *, exit_code: int, analysis_requested: bool
+    result_path: Path,
+    *,
+    exit_code: int,
+    analysis_requested: bool,
+    state: ReviewRunState | None = None,
 ) -> bool:
     """Keep a candidate for full admission, or a validated provider diagnostic."""
 
     try:
-        raw = inspect_ocr_result(result_path)
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
+        raw = inspect_ocr_result(result_path, analysis_input=analysis_requested)
+    except (OSError, OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
         raw = None
     if (
         isinstance(raw, dict)
@@ -4009,8 +4101,12 @@ def _failed_review_result_is_partial(
                     return True
             except OcrResultContractError:
                 pass
-        if not analysis_requested and provider_failure_projection(raw) is not None:
-            return False
+        projection = provider_failure_projection(raw)
+        if projection is not None:
+            if not analysis_requested:
+                return False
+            if state is not None:
+                state.provider_failure = projection.reason
     _discard_unadmitted_result(result_path)
     return False
 

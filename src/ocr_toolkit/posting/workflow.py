@@ -1154,6 +1154,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
     mcp_usage_summary = format_mcp_usage_summary(result.get(TOOLKIT_RESULT_KEY))
     token_usage_summary = format_token_usage_summary(result)
+    review_model = toolkit_metadata.get("review_model") if toolkit_metadata is not None else None
+    native_llm = result.get("llm")
+    if not isinstance(native_llm, dict) or native_llm.get("model") != review_model:
+        review_model = None
     try:
         outcome = parse_result_outcome(result)
     except OcrResultContractError as exc:
@@ -1164,6 +1168,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return invalid_ocr_schema_exit(config, "field 'comments' must be a list")
     if not isinstance(warnings_value, list):
         return invalid_ocr_schema_exit(config, "field 'warnings' must be a list")
+    if publication_state == "publication-filtered" and not _filtered_handoff_matches(
+        result, publication, outcome
+    ):
+        return invalid_ocr_schema_exit(
+            config, "filtered result contradicts its publication receipt"
+        )
+
     comments: list[dict[str, Any]] = []
     for index, comment in enumerate(comments_value):
         if not isinstance(comment, dict):
@@ -1305,6 +1316,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 tool_calls_summary=tool_calls_summary,
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
+                review_model=review_model,
                 ocr_core_advisory_summary=ocr_core_advisory_summary,
                 publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
@@ -1541,6 +1553,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            review_model=review_model,
             ocr_core_advisory_summary=ocr_core_advisory_summary,
             publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
@@ -1819,6 +1832,26 @@ def post_llm_provider_failure(
     return 1
 
 
+def _filtered_handoff_matches(
+    result: dict[str, Any], publication: dict[str, Any], outcome: ReviewOutcome
+) -> bool:
+    """Bind the validated receipt to this payload before filtering or posting it."""
+    original = publication["original"]
+    comments, warnings = result.get("comments"), result.get("warnings")
+    return (
+        isinstance(comments, list)
+        and isinstance(warnings, list)
+        and publication["retained"] == {"comments": len(comments), "warnings": len(warnings)}
+        and (
+            original.get("operational_partial") is not True
+            or (
+                outcome.kind == "partial"
+                and (not outcome.budget_exceeded or original["failed"] >= 2)
+            )
+        )
+    )
+
+
 def _admitted_operational_partial(result: Any) -> bool:
     """Recognize a current toolkit handoff eligible for normal posting checks."""
 
@@ -1828,7 +1861,17 @@ def _admitted_operational_partial(result: Any) -> bool:
     if identity is None or identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS:
         return False
     try:
-        return parse_result_outcome(result).operational_partial
+        outcome = parse_result_outcome(result)
+        if outcome.manifest_present:
+            return outcome.operational_partial
+        publication = result[TOOLKIT_RESULT_KEY]["publication"]
+        original = publication.get("original")
+        return (
+            publication.get("state") == "publication-filtered"
+            and isinstance(original, dict)
+            and original.get("operational_partial") is True
+            and _filtered_handoff_matches(result, publication, outcome)
+        )
     except OcrResultContractError:
         return False
 

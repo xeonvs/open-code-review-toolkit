@@ -247,7 +247,14 @@ def test_metadata_query_and_shape_cross_real_preflight_tls(
         assert "context_length=2048" in output.out
 
 
-@pytest.mark.parametrize("output", ("ocr development", "ocr 0.0.0 and 0.0.1"))
+@pytest.mark.parametrize(
+    "output",
+    (
+        "ocr development",
+        "ocr 0.0.0 and 0.0.1",
+        f"open-code-review v{preflight.RECOMMENDED_OCR_VERSION} and v0.0.1",
+    ),
+)
 def test_binary_identity_requires_one_unambiguous_stable_version(tmp_path, output):
     binary = tmp_path / "ocr"
     binary.write_text("#!/bin/sh\nprintf '%s\\n' '" + output + "'\n")

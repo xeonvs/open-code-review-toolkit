@@ -50,7 +50,7 @@ def format_token_usage_summary(result: dict[str, Any]) -> str:
     total = usage.get("total")
     details: list[str] = []
     for bucket in ("input", "output", "cached", "reasoning", "other"):
-        if (count := usage.get(bucket)) is not None and count > 0:
+        if (count := usage.get(bucket)) is not None:
             details.append(f"{bucket}: {count}")
 
     if total is None:

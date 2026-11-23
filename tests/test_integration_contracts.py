@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
+import os
 import re
+import subprocess
 from datetime import date
 
 import pytest
@@ -13,7 +16,39 @@ from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.evidence.policy import parse_accepted_decisions
 from ocr_toolkit.mcp_config import parse_mcp_servers
 from ocr_toolkit.preflight import SUPPORTED_OCR_VERSIONS
+from tests.conftest import _native_assets, native_candidate_inventory, qualified_native_ocr
 from tests.support import HELPER_DIR, PROJECT_ROOT
+
+
+def test_qualification_inventory_skips_incompatible_rows_and_selects_exact_receipt() -> None:
+    supported = {"name": "ocr-test", "sha256": "a" * 64, "size": 20}
+    releases = [
+        {"status": "incompatible", "version": "1.0.1"},
+        {"status": "tested", "version": "1.0.0", "assets": [supported]},
+    ]
+    assert _native_assets(releases, "ocr-test", None) == {"a" * 64: ("1.0.0", 20)}
+    receipt = json.dumps({"sha256": "b" * 64, "version": "1.0.2", "size": 35})
+    assert _native_assets(releases, "ocr-test", receipt) == {"b" * 64: ("1.0.2", 35)}
+
+
+@pytest.mark.parametrize("field", ["sha256", "size", "version"])
+def test_qualification_rejects_each_receipt_mismatch(tmp_path, monkeypatch, field):
+    binary = tmp_path / "ocr"
+    version = SUPPORTED_OCR_VERSIONS[-1]
+    binary.write_text(f"#!/bin/sh\necho 'ocr {version}'\n")
+    binary.chmod(0o700)
+    receipt = {
+        "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+        "size": binary.stat().st_size,
+        "version": version,
+    }
+    receipt[field] = {"sha256": "0" * 64, "size": 1, "version": "99.98.97"}[field]
+    monkeypatch.setenv("OCR_QUALIFY_CANDIDATE", json.dumps(receipt))
+    monkeypatch.setenv("OCR_TEST_BINARY", str(binary))
+    inventory = native_candidate_inventory.__wrapped__()
+    select = qualified_native_ocr.__wrapped__(inventory, monkeypatch)
+    with pytest.raises(AssertionError, match=r"exact official|size differs|version differs"):
+        select("OCR_TEST_BINARY")
 
 
 def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
@@ -142,6 +177,65 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
     assert "ocr llm test" not in workflow
 
 
+def _published_example_pins(workflow: str) -> tuple[str, str, str]:
+    """Read the shipped wheel, native version and Linux checksum as one unit."""
+
+    pins = {}
+    for name in ("OCR_TOOLKIT_VERSION", "OCR_VERSION", "OCR_SHA256"):
+        (pins[name],) = re.findall(rf'^  {name}: "([^"]+)"$', workflow, re.MULTILINE)
+    return pins["OCR_TOOLKIT_VERSION"], pins["OCR_VERSION"], pins["OCR_SHA256"]
+
+
+def _assert_shipped_pin_pair(workflow: str, shipped: str, stable: str) -> None:
+    expected = _published_example_pins(shipped)
+    assert expected[0] == stable
+    assert _published_example_pins(workflow) == expected, "active CI pins differ from shipped pair"
+
+
+def test_active_example_rejects_new_native_pin_with_the_prior_wheel() -> None:
+    def example(native: str, digest: str) -> str:
+        return f'  OCR_TOOLKIT_VERSION: "0.15.1"\n  OCR_VERSION: "{native}"\n  OCR_SHA256: "{digest}"\n'
+
+    shipped = example("v1.13.10", "a" * 64)
+    mixed = example("v1.14.2", "b" * 64)
+    with pytest.raises(AssertionError, match="shipped pair"):
+        _assert_shipped_pin_pair(mixed, shipped, "0.15.1")
+
+
+def _active_plan() -> bool:
+    plan = (PROJECT_ROOT / "PLANS.md").read_text()
+    state = (PROJECT_ROOT / "docs/codex/ENGINEERING_WORKFLOW_STATE.yaml").read_text()
+    return bool(
+        re.search(r"^active_plan: PLANS\.md$", state, re.MULTILINE)
+        and re.search(r"^Status: (active|blocked|ready_for_closure)$", plan, re.MULTILINE)
+    )
+
+
+def test_active_gitlab_example_matches_the_published_tag() -> None:
+    if not _active_plan():
+        return
+    stable = (PROJECT_ROOT / ".release-version").read_text().strip()
+    tag = f"refs/tags/v{stable}"
+    present = subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", tag], cwd=PROJECT_ROOT, check=False
+    )
+    if present.returncode == 1:
+        reason = f"Published example comparison requires release tag v{stable}; fetch release tags."
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(reason)
+        pytest.skip(reason)
+    present.check_returncode()
+    shipped = subprocess.run(
+        ["git", "show", f"{tag}:examples/gitlab/ocr-review.gitlab-ci.yml"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    workflow = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
+    _assert_shipped_pin_pair(workflow, shipped, stable)
+
+
 def test_gitlab_docs_match_the_current_review_surface() -> None:
     """Keep documented commands and ownership boundaries aligned with CI."""
 
@@ -164,21 +258,13 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     # An active plan can qualify a newer OCR version before release preparation
     # advances the published example. Once the plan is archived, the example
     # must name the current recommendation without relying on a legacy marker.
-    plan = (PROJECT_ROOT / "PLANS.md").read_text()
-    state = (PROJECT_ROOT / "docs/codex/ENGINEERING_WORKFLOW_STATE.yaml").read_text()
-    active = re.search(r"^active_plan: PLANS\.md$", state, re.MULTILINE) and re.search(
-        r"^Status: (active|blocked|ready_for_closure)$", plan, re.MULTILINE
-    )
-    if not active:
+    if not _active_plan():
         assert example_version in SUPPORTED_OCR_VERSIONS
         assert example_version == recommended
-    else:
-        stable = (PROJECT_ROOT / ".release-version").read_text().strip()
-        assert f'OCR_TOOLKIT_VERSION: "{stable}"' in workflow
-        if example_version != recommended:
-            target = next(item for item in manifest["releases"] if item["version"] == recommended)
-            evidence = json.loads((PROJECT_ROOT / target["evidence"]).read_text())
-            assert example_version == evidence["tested_baseline_version"]
+    assert (
+        _published_example_pins(workflow)[0]
+        == (PROJECT_ROOT / ".release-version").read_text().strip()
+    )
     linux_digest = next(
         asset["sha256"]
         for asset in example_entry["assets"]

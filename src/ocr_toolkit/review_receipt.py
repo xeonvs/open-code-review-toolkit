@@ -25,6 +25,7 @@ from ocr_toolkit.reporting.dlp import (
 from ocr_toolkit.reporting.federation import valid_reconciliation
 from ocr_toolkit.repository_coverage import RepositoryCoverageError, parse_repository_coverage
 from ocr_toolkit.result_contract import OcrResultContractError
+from ocr_toolkit.review_model import model_slug
 from ocr_toolkit.review_range import parse_range_payload
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
@@ -352,6 +353,12 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             "tool_execution",
             "cleanup",
         }
+        | (
+            {"review_model"}
+            if receipt_version in {RECEIPT_V13, RECEIPT_V14}
+            and model_slug(toolkit_metadata.get("review_model"))
+            else set()
+        )
         | ({"repository_coverage"} if receipt_version in {RECEIPT_V12, RECEIPT_V14} else set())
         | ({"range", "diagram"} if receipt_version in {RECEIPT_V13, RECEIPT_V14} else set())
     ):
@@ -601,6 +608,13 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     tool_execution = toolkit_metadata.get("tool_execution")
     cleanup = toolkit_metadata.get("cleanup")
+    original = publication.get("original")
+    if (
+        receipt_version not in {RECEIPT_V13, RECEIPT_V14}
+        and isinstance(original, dict)
+        and "operational_partial" in original
+    ):
+        return invalid
     publication_state = publication_dlp_state(publication)
     failure_state = tool_execution.get("state") if isinstance(tool_execution, dict) else None
     failed_tools = tool_execution.get("failed") if isinstance(tool_execution, dict) else None

@@ -71,6 +71,23 @@ def _request_json(url: str) -> dict[str, Any] | list[Any]:
     return value
 
 
+def retained_window(
+    manifest: dict[str, Any], *, after_tag: str, through_tag: str
+) -> list[dict[str, str]]:
+    """Select one explicit, previously recorded stable window for a qualification-only run."""
+    start, end = core._version(after_tag), core._version(through_tag)
+    if not start < end <= core._version(manifest["monitoring_floor"]):
+        core._fail("invalid retained qualification window")
+    known = {core._version(entry["version"]): entry for entry in manifest["releases"]}
+    if start not in known or end not in known:
+        core._fail("retained qualification endpoints must be known releases")
+    return [
+        {"tag_name": "v" + known[version]["version"]}
+        for version in sorted(known)
+        if start <= version <= end
+    ]
+
+
 def discover_unseen(
     manifest: dict[str, Any], *, through_tag: str | None = None
 ) -> list[dict[str, Any]]:
@@ -126,7 +143,7 @@ def discover_unseen(
 
 
 def qualification_matrix(
-    manifest: dict[str, Any], releases: list[dict[str, Any]]
+    manifest: dict[str, Any], releases: list[dict[str, Any]], *, after_tag: str | None = None
 ) -> dict[str, list[dict[str, str]]]:
     """Build ordered matrix entries with distinct tested and adjacent baselines."""
 
@@ -152,6 +169,15 @@ def qualification_matrix(
             }
         )
         comparison = version
+    if after_tag:
+        if settings.VERSION_RE.fullmatch(after_tag) is None:
+            core._fail("invalid qualification continuation tag")
+        cursor = after_tag.removeprefix("v")
+        if cursor not in seen:
+            core._fail("continuation tag was not discovered in this release window")
+        entries = [
+            entry for entry in entries if core._version(entry["tag"]) > core._version(cursor)
+        ]
     return {"include": entries[: settings.MAX_QUALIFICATION_CHAIN]}
 
 
@@ -189,6 +215,22 @@ def release_assets(release: dict[str, Any]) -> list[core.Asset]:
     if sum(asset.size for asset in assets) > settings.MAX_TOTAL_ASSET_BYTES:
         core._fail("upstream release assets exceed the total download budget")
     return sorted(assets, key=lambda asset: asset.name)
+
+
+def verify_disposition_asset(tag: str, executable: dict[str, Any]) -> None:
+    """Reject a retained disposition if upstream replaced its verified executable."""
+    release = _request_json(f"{settings.UPSTREAM_API}/releases/tags/{tag}")
+    if (
+        not isinstance(release, dict)
+        or release.get("tag_name") != tag
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+    ):
+        core._fail("retained incompatible release no longer identifies its published tag")
+    assets = release_assets(release)
+    actual = next(asset for asset in assets if asset.name == "opencodereview-linux-amd64")
+    if executable != {"name": actual.name, "sha256": actual.sha256, "size": actual.size}:
+        core._fail("incompatible executable changed; qualify the current release again")
 
 
 def _download(asset: core.Asset, directory: Path) -> Path:

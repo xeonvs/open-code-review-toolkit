@@ -137,6 +137,9 @@ def test_nonzero_handoff_requires_native_operational_partial_coverage(
         (REPORT_TEXT, 1, True, 1),
         (REPORT_TEXT, 0, True, 2),
         (REPORT_TEXT, 1, False, 1),
+        ("cleanup after probe exception", 1, False, 2),
+        ("process cancellation during cleanup", 0, False, 2),
+        ("provider reason write failed", 1, False, 2),
     ],
 )
 def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_markdown(
@@ -147,6 +150,46 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
     repo, base, head = compat.execution._synthetic_repo(tmp_path, git_environment)
     monkeypatch.chdir(repo)
 
+    if markdown == "cleanup after probe exception":
+
+        def unexpected_probe_failure(*args, **kwargs):
+            raise review_runner.ReviewRunnerError("synthetic inspection failed")
+
+        monkeypatch.setattr(
+            review_runner, "_failed_review_result_is_partial", unexpected_probe_failure
+        )
+    previous_home = os.environ.get("HOME")
+    if markdown == "process cancellation during cleanup":
+        import io
+        import signal
+        import threading
+
+        from ocr_toolkit.review_progress import ReviewProgress
+
+        monkeypatch.setattr(
+            review_runner, "ReviewProgress", lambda _stream: ReviewProgress(io.StringIO())
+        )
+        monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true")
+        remove_artifacts = review_runner._remove_ephemeral_review_artifacts
+
+        def cancel_during_cleanup(artifacts):
+            if os.environ.get("HOME") != previous_home:
+                assert any(t.name == "ocr-review-progress" for t in threading.enumerate())
+                os.kill(os.getpid(), signal.SIGTERM)
+            remove_artifacts(artifacts)
+
+        monkeypatch.setattr(
+            review_runner, "_remove_ephemeral_review_artifacts", cancel_during_cleanup
+        )
+    if markdown == "provider reason write failed":
+        write = review_runner.write_private_bytes
+
+        def fail_public_result(path, content):
+            if path == tmp_path / "result.json":
+                raise OSError("disk full")
+            write(path, content)
+
+        monkeypatch.setattr(review_runner, "write_private_bytes", fail_public_result)
     combined = _combined(markdown)
     combined.update(
         status="skipped",
@@ -179,6 +222,17 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
             failed=[{"item_id": "unreviewed", "classification": "provider"}],
         )
         combined["tool_calls"] = {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}}
+    if exit_code == 1 and not partial:
+        from tests.test_provider_failure import _error_attempt, _request, _result
+
+        combined["retry_report"] = _result(
+            [
+                _request(
+                    "failed",
+                    [_error_attempt(status=401, error_class="authentication", phase="http")],
+                )
+            ]
+        )["retry_report"]
     payload = tmp_path / "native.json"
     payload.write_text(json.dumps(combined), encoding="utf-8")
     calls_path = tmp_path / "process.jsonl"
@@ -251,6 +305,7 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
         )
         == expected_exit
     )
+    assert os.environ.get("HOME") == previous_home
     preview, review = (json.loads(line) for line in calls_path.read_text().splitlines())
     assert preview["args"][-1] == "--preview"
     assert review["args"] == [
@@ -261,8 +316,8 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
     ]
     assert not (preview["leaked_env"] or review["leaked_env"])
     assert preview["home"] == review["home"] and not Path(review["home"]).exists()
-    serialized = result.read_text(encoding="utf-8")
-    if exit_code == int(partial):
+    serialized = result.read_text(encoding="utf-8") if result.exists() else ""
+    if exit_code == int(partial) and expected_exit == exit_code:
         admitted = json.loads(serialized)
         analysis = {
             "status": "completed",
@@ -279,9 +334,26 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
         }
         assert admitted["status"] == ("partial" if partial else "skipped")
         assert not {"analysis", "analysis_raw", "analysis_meta", "session_id"} & admitted.keys()
+    elif expected_exit == 1 and not partial:
+        from ocr_toolkit.provider_failure import (
+            CLOSED_PROVIDER_FAILURE_SCHEMA,
+            ProviderFailureReason,
+            provider_failure_reason,
+        )
+
+        assert json.loads(serialized) == {
+            "schema_version": CLOSED_PROVIDER_FAILURE_SCHEMA,
+            "reason": "authentication",
+        }
+        assert (
+            provider_failure_reason(json.loads(serialized)) == ProviderFailureReason.AUTHENTICATION
+        )
     else:
         assert not serialized
-    assert stat.S_IMODE(result.stat().st_mode) == 0o600
+    if markdown == "provider reason write failed":
+        assert not result.exists()
+    else:
+        assert stat.S_IMODE(result.stat().st_mode) == 0o600
     assert stderr.read_bytes() == b""
     assert RAW_MARKER not in serialized and FORBIDDEN_REPORT not in serialized
     journal = json.loads((debug / "journal.json").read_text())
@@ -291,3 +363,139 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
     output = capsys.readouterr()
     for text in (output.out, output.err, (debug / "summary.md").read_text()):
         assert RAW_MARKER not in text and REPORT_TEXT not in text and FORBIDDEN_REPORT not in text
+
+
+def test_wrapper_preserves_duplicate_budget_for_validation(tmp_path, monkeypatch, capsys):
+    compat = load_script()
+    env = compat.execution._isolated_probe_environment(tmp_path / "git-home")
+    repo, base, head = compat.execution._synthetic_repo(tmp_path, env)
+    monkeypatch.chdir(repo)
+    code = cli.main(
+        [
+            "review",
+            "--result",
+            str(tmp_path / "result"),
+            "--stderr",
+            str(tmp_path / "stderr"),
+            "--analysis-max-tokens-budget",
+            "100",
+            "--analysis-max-tokens-budget",
+            "0",
+            "--",
+            "--from",
+            base,
+            "--to",
+            head,
+        ]
+    )
+    assert code == 2
+    assert "at most once" in capsys.readouterr().err
+
+
+def test_signal_guard_outlives_raw_analysis_files():
+    import signal
+
+    previous = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(review_runner.ReviewRunnerError, match="interrupted"):
+        with review_runner._analysis_directory() as directory:
+            (directory / "stderr").write_text(RAW_MARKER)
+            signal.raise_signal(signal.SIGTERM)
+    assert not directory.exists()
+    assert signal.getsignal(signal.SIGTERM) is previous
+
+
+def test_invalid_numeric_result_becomes_a_closed_handoff_failure(tmp_path):
+    from ocr_toolkit.ocr_result import OcrResultMalformed, inspect_ocr_result
+
+    path = tmp_path / "native.json"
+    path.write_text('{"bad":' + "9" * 5000 + "}")
+    with pytest.raises(OcrResultMalformed):
+        inspect_ocr_result(path)
+    assert not review_runner._failed_review_result_is_partial(
+        path, exit_code=1, analysis_requested=True
+    )
+    assert not path.exists()
+
+
+def test_optional_analysis_yields_bytes_to_primary(tmp_path, monkeypatch):
+    from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
+    from tests.test_review_runner import (
+        BUILTIN_EVIDENCE_TOOLS,
+        DEFAULT_IDENTITY,
+        SUMMARY_ACTION_COUNTS,
+        complete_review_payload,
+    )
+
+    path = tmp_path / "native.json"
+    primary = complete_review_payload(
+        tool_calls={"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}}
+    )
+    composition = MCPComposition(
+        {}, (MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),), (), ()
+    )
+
+    def finalize(analysis):
+        review_runner._finalize_ocr_result(
+            path,
+            composition,
+            DEFAULT_IDENTITY,
+            None,
+            SUMMARY_ACTION_COUNTS,
+            forbidden=(),
+            ocr_exit_code=0,
+            analysis_requested=analysis,
+        )
+
+    path.write_text(json.dumps(primary))
+    finalize(False)
+    expected = path.read_bytes()
+    monkeypatch.setenv("OCR_MAX_RESULT_BYTES", str(len(expected)))
+    path.write_text(
+        json.dumps({**primary, **_combined(), "analysis_raw": "x" * (len(expected) + 1)})
+    )
+    assert path.stat().st_size > len(expected)
+    finalize(True)
+    assert path.read_bytes() == expected
+
+
+def test_non_analysis_partial_probe_discards_unreadable_result(tmp_path, monkeypatch):
+    path = tmp_path / "result"
+    path.write_text(RAW_MARKER)
+
+    def unreadable(*a, **kw):
+        raise OSError("result unreadable")
+
+    monkeypatch.setattr(review_runner, "inspect_ocr_result", unreadable)
+    assert not review_runner._failed_review_result_is_partial(
+        path, exit_code=1, analysis_requested=False
+    )
+    assert not path.exists()
+
+
+def test_operational_partial_analysis_native_result_has_a_separate_input_budget(
+    tmp_path, monkeypatch
+):
+    native = _combined()
+    native.update(
+        status="partial",
+        review_status="partial",
+        analysis_raw="x" * 5000,
+        manifest={
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "partial",
+            "coverage": {
+                "selected": [{"item_id": "one"}, {"item_id": "two"}],
+                "completed": [{"item_id": "one"}],
+                "reused": [],
+                "waived": [],
+                "failed": [{"item_id": "two", "classification": "provider"}],
+            },
+        },
+    )
+    path = tmp_path / "native.json"
+    path.write_text(json.dumps(native))
+    monkeypatch.setenv("OCR_MAX_RESULT_BYTES", "2000")
+    assert review_runner._failed_review_result_is_partial(
+        path, exit_code=1, analysis_requested=True
+    )

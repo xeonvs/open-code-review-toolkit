@@ -126,6 +126,18 @@ CHILD_ENVIRONMENT_DENYLIST = {
     "OCR_RAW_LOGGING",
 }
 
+# Forwarded only to the authenticated local glab subprocess.
+GLAB_PASSTHROUGH = {
+    "CI_JOB_TOKEN",
+    "GITLAB_ACCESS_TOKEN",
+    "GITLAB_API_HOST",
+    "GITLAB_HOST",
+    "GITLAB_REPO",
+    "GITLAB_TOKEN",
+    "GITLAB_URI",
+    "GITLAB_URL",
+}
+
 REMOVED_PUBLIC_INPUTS = {
     "OCR_GITLAB_BOT_USER_ID",
     "OCR_RUN_HELPER_TESTS",
@@ -246,6 +258,7 @@ def test_source_environment_inventory_matches_the_documented_contract() -> None:
         | set(GITLAB_DEFAULTS)
         | REDACTION_ONLY
         | CHILD_ENVIRONMENT_DENYLIST
+        | GLAB_PASSTHROUGH
         | {"OCR_USE_ANTHROPIC"}
     )
     assert source_names == expected

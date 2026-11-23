@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -167,7 +168,9 @@ def _validate_current_contracts(value: object, version: str) -> None:
         core._fail("current qualification omitted the review-result contract")
 
 
-def _validate_contracts_for_version(version: str, contracts: Any) -> None:
+def _validate_contracts_for_version(
+    version: str, contracts: Any, *, archived: bool = False
+) -> None:
     """Validate observed contracts against the epoch owned by the candidate version."""
 
     version_tuple = core._version(version)
@@ -188,20 +191,64 @@ def _validate_contracts_for_version(version: str, contracts: Any) -> None:
             or not {"diagram_output", "gitlink_projection"} <= set(handoffs)
         ):
             core._fail("invalid native handoff qualification")
-        if not isinstance(contracts.get("observations"), dict):
+        observations = contracts.get("observations")
+        if not isinstance(observations, dict):
             core._fail("missing behavioral qualification observations")
+        if not archived:
+            expected = {
+                "analysis": {"status": "completed", "citations_verified": True},
+                "chatgpt_auth": {"login_required": True, "store_admitted": True},
+                "diagram_output": {"consumer": "toolkit-local", "rendered": True},
+                "gitlink_projection": {"consumer": "toolkit-local", "immutable_range": True},
+            }
+            proofs = observations.get("native_handoffs")
+            if not isinstance(proofs, dict) or set(proofs) != set(handoffs):
+                core._fail("missing native handoff observations")
+            for name in handoffs:
+                observation = proofs[name]
+                if not isinstance(observation, dict) or any(
+                    type(observation.get(key)) is not type(value) or observation[key] != value
+                    for key, value in expected[name].items()
+                ):
+                    core._fail(f"invalid native handoff observation: {name}")
+            sides = observations.get("comparison_sides")
+            if (
+                not isinstance(sides, dict)
+                or sides.get("result") != "passed"
+                or sides.get("old_ref") != "resolved-base"
+                or sides.get("new_ref") != "resolved-head"
+                or sides.get("worktree") != "preserved"
+                or sides.get("target_tip") != "not-used"
+                or sides.get("invalid_sides_rejected") is not True
+                or sides.get("default_side") != "new"
+                or sides.get("renamed_paths") != "side-relative"
+                or sides.get("deleted_paths") != "old-only"
+                or not isinstance(sides.get("tools"), list)
+                or any(
+                    name not in sides["tools"] for name in ("file_read", "file_find", "code_search")
+                )
+            ):
+                core._fail("missing immutable comparison-side observations")
     elif version_tuple < history.HISTORICAL_CUTOFF:
         history.validate_contracts(version, version_tuple, {"contracts": contracts}, core._fail)
     else:
         _validate_current_contracts(contracts, version)
 
 
-def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
+def _validate_evidence_contracts(
+    version: str, evidence: dict[str, Any], *, archived: bool = False
+) -> None:
     """Select the frozen or live qualification epoch from the candidate version."""
 
-    if core._version(version) >= settings.BEHAVIORAL_EPOCH and evidence.get("schema_version") != 4:
-        core._fail("current candidate requires behavioral evidence schema 4")
-    _validate_contracts_for_version(version, evidence.get("contracts"))
+    if core._version(version) >= settings.BEHAVIORAL_EPOCH and evidence.get(
+        "schema_version"
+    ) not in ({4, 5} if archived else {5}):
+        core._fail("current candidate requires current behavioral evidence schema 5")
+    _validate_contracts_for_version(
+        version,
+        evidence.get("contracts"),
+        archived=archived and evidence.get("schema_version") == 4,
+    )
 
 
 def _language_rules_for_version(version: str) -> dict[str, str]:
@@ -302,6 +349,31 @@ def _validate_runtime_support(manifest: dict[str, Any], recommended: str) -> Non
         core._fail("runtime_support must resolve the recommendation to an exact tested patch")
 
 
+def validate_candidate_assets(item: dict[str, Any], candidate_version: str) -> list[dict[str, Any]]:
+    """Validate the complete canonical inventory before classification or promotion."""
+
+    assets = item.get("assets")
+    if not isinstance(assets, list) or len(assets) != len(settings.REQUIRED_ASSETS):
+        core._fail(f"candidate evidence {candidate_version} assets must be the supported matrix")
+    asset_names: set[str] = set()
+    for asset in assets:
+        if not isinstance(asset, dict):
+            core._fail(f"candidate evidence {candidate_version} asset must be an object")
+        name, size, sha256 = asset.get("name"), asset.get("size"), asset.get("sha256")
+        if not isinstance(name, str) or name in asset_names or Path(name).name != name:
+            core._fail(f"candidate evidence {candidate_version} asset name is invalid")
+        asset_names.add(name)
+        if type(size) is not int or size <= 0 or size > settings.MAX_ASSET_BYTES:
+            core._fail(f"candidate evidence {candidate_version}/{name} size is invalid")
+        if not isinstance(sha256, str) or (
+            len(sha256) != 64 or settings.SHA256_RE.fullmatch(sha256) is None
+        ):
+            core._fail(f"candidate evidence {candidate_version}/{name} digest is invalid")
+    if asset_names != settings.REQUIRED_ASSETS:
+        core._fail(f"candidate evidence {candidate_version} asset set is invalid")
+    return assets
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -342,7 +414,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
             if not _valid_human_conclusion(conclusion):
                 core._fail(f"incompatible candidate {version} requires a bounded human conclusion")
             evidence = _read_manifest_evidence(entry, root, version)
-            checked = validate_qualification_status(evidence)
+            checked = validate_incompatible_receipt(evidence)
             if checked["result"] != "incompatible" or checked["version"] != version:
                 core._fail(f"disposition does not identify incompatible candidate {version}")
             incompatible_statuses.append(checked)
@@ -384,7 +456,19 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
         evidence = _read_manifest_evidence(entry, root, version)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             core._fail(f"evidence does not qualify {version} as compatible")
-        _validate_evidence_contracts(version, evidence)
+        archived = False
+        if evidence.get("schema_version") == 4:
+            archive = core.load_json(root / "compatibility" / "schema-4-archive.json")
+            archived = archive.get(version) == entry["evidence_sha256"]
+        _validate_evidence_contracts(version, evidence, archived=archived)
+        if "qualification_checkout" in entry:
+            checkout = entry["qualification_checkout"]
+            if (
+                not isinstance(checkout, str)
+                or not re.fullmatch(r"[0-9a-f]{40}", checkout)
+                or entry["evidence"] != f"compatibility/evidence/ocr-{version}-{checkout}.json"
+            ):
+                core._fail("requalification receipt and checkout disagree")
         if core._version(version) >= settings.BEHAVIORAL_EPOCH and status == "tested":
             native_handoffs[version] = evidence["contracts"]["native_handoffs"]
         evidence_assets = evidence.get("assets")
@@ -514,6 +598,11 @@ def _validate_file_groups(value: Any, expected_paths: set[str] | None = None) ->
         core._fail("candidate semantic grouping did not cover the expected paths")
 
 
+def require_behavioral_version(version: str) -> None:
+    if core._version(version) < settings.BEHAVIORAL_EPOCH:
+        core._fail(f"OCR {version} belongs to a frozen readback-only qualification epoch")
+
+
 def _require_live_qualification_version(version: str) -> None:
     """Keep frozen readback epochs outside the forward-only executable suite."""
 
@@ -602,4 +691,31 @@ def validate_qualification_status(value: dict[str, Any]) -> dict[str, str]:
     )
     if value.get("version") != status["version"]:
         core._fail("qualification status version is inconsistent")
+    return status
+
+
+def validate_incompatible_receipt(value: dict[str, Any]) -> dict[str, str]:
+    """Require the verified Linux executable identity behind a retained disposition."""
+    if (
+        set(value) != {"schema", "status", "executable"}
+        or value["schema"] != "ocr.incompatibility/v1"
+    ):
+        core._fail("invalid incompatible executable receipt")
+    executable = value["executable"]
+    if not isinstance(executable, dict) or set(executable) != {"name", "size", "sha256"}:
+        core._fail("invalid incompatible executable identity")
+    validate_digest = executable["sha256"]
+    if (
+        executable["name"] != "opencodereview-linux-amd64"
+        or type(executable["size"]) is not int
+        or not 0 < executable["size"] <= settings.MAX_ASSET_BYTES
+        or not isinstance(validate_digest, str)
+        or len(validate_digest) != 64
+        or settings.SHA256_RE.fullmatch(validate_digest) is None
+        or not isinstance(value["status"], dict)
+    ):
+        core._fail("invalid incompatible executable identity")
+    status = validate_qualification_status(value["status"])
+    if status["result"] != "incompatible":
+        core._fail("receipt does not qualify candidate as incompatible")
     return status

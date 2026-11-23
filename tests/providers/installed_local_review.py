@@ -31,7 +31,7 @@ def peer(mode: str) -> int:
     if "--version" in sys.argv:
         from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 
-        print(f"ocr version {RECOMMENDED_OCR_VERSION}")
+        print(f"open-code-review {RECOMMENDED_OCR_VERSION}")
         return 0
     if "--preview" in sys.argv:
         return 0

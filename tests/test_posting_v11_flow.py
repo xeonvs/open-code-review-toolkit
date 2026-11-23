@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from ocr_toolkit.ocr_result import load_ocr_result
 from ocr_toolkit.posting import formatting, freshness, gitlab, gitlab_approval, workflow
 from ocr_toolkit.posting.approval import (
     ApprovalEligibility,
@@ -323,8 +324,11 @@ def test_receiptless_ci_result_cannot_post_with_same_source_head(
     assert workflow.post_results(gitlab_config(), {"comments": [], "warnings": []}) == 1
 
 
+@pytest.mark.parametrize("native_model", ("openai/gpt-5.4", "different-run-model", None))
 def test_v11_findings_use_exact_receipt_diff_tuple_and_protected_anchor(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    native_model: str | None,
 ) -> None:
     """Inline positions use the reviewed B/start/H, even when B differs from T."""
 
@@ -361,8 +365,15 @@ def test_v11_findings_use_exact_receipt_diff_tuple_and_protected_anchor(
     monkeypatch.setattr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0)
     result = _result("clean", comments=True)
     result["_ocr_toolkit"] = receipt
+    receipt["review_model"] = "openai/gpt-5.4"
+    if native_model is not None:
+        result["llm"] = {"model": native_model}
+    # Reload a transferred result, including one with a substituted receipt model.
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps(result))
+    monkeypatch.setenv("OCR_LLM_MODEL", receipt["review_model"])
 
-    assert workflow.post_results(gitlab_config(), result) == 0
+    assert workflow.post_results(gitlab_config(), load_ocr_result(path)) == 0
     assert observed_refs == [
         {
             "base_sha": identity.diff_base_sha,
@@ -372,6 +383,10 @@ def test_v11_findings_use_exact_receipt_diff_tuple_and_protected_anchor(
     ]
     assert identity.diff_base_sha != identity.target_sha
     assert len(notes) == 1
+    model_lines = [line for line in notes[0].splitlines() if line.startswith("- Review model v1:")]
+    assert model_lines == (
+        ["- Review model v1: `openai/gpt-5.4`"] if native_model == receipt["review_model"] else []
+    )
     assert "protected policy anchor" in notes[0]
     assert identity.policy_sha in notes[0]
     assert "comment-only" in notes[0]
@@ -1644,3 +1659,107 @@ def test_formatting_only_displays_validated_policy_sha_without_branch_name() -> 
     assert identity.policy_branch is not None
     assert identity.policy_branch not in summary
     assert "limited, comment-only mode" not in summary
+
+
+def test_operational_partial_retains_safe_finding_after_publication_filter(tmp_path, monkeypatch):
+    from ocr_toolkit import review_runner
+    from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
+    from tests.test_review_runner import (
+        BUILTIN_EVIDENCE_TOOLS,
+        DEFAULT_IDENTITY,
+        SUMMARY_ACTION_COUNTS,
+    )
+
+    result = _result("partial", comments=True)
+    result.pop("_ocr_toolkit")
+    result["comments"].append(
+        {"path": "module.py", "line": 2, "content": "hidden synthetic content"}
+    )
+    result["tool_calls"] = {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}}
+    path = tmp_path / "review.json"
+    path.write_text(json.dumps(result))
+    review_runner._finalize_ocr_result(
+        path,
+        MCPComposition(
+            {}, (MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),), (), ()
+        ),
+        DEFAULT_IDENTITY,
+        None,
+        SUMMARY_ACTION_COUNTS,
+        forbidden=("hidden synthetic content",),
+        ocr_exit_code=1,
+        expected_range=CURRENT_RANGE,
+    )
+    projected = json.loads(path.read_text())
+    receipt = projected["_ocr_toolkit"]
+    assert "manifest" not in projected
+    assert projected["comments"] == result["comments"][:1]
+    assert receipt["publication"]["original"]["operational_partial"] is True
+    assert validated_review_identity(receipt) is not None
+    assert workflow._admitted_operational_partial(projected)
+    receipt["publication"]["original"]["operational_partial"] = 1
+    assert not workflow._admitted_operational_partial(projected)
+    publication = receipt["publication"]
+    publication["original"]["operational_partial"] = True
+    historical = _receipt_v11()
+    historical["publication"] = publication
+    assert validated_review_identity(historical) is None
+    publication["original"].pop("operational_partial")
+    assert validated_review_identity(historical) is not None
+    publication["original"]["operational_partial"] = True
+    publication["retained"]["comments"] = 0
+    assert not workflow._admitted_operational_partial(projected)
+    publication["retained"]["comments"] = 1
+    projected["status"] = "budget_exceeded"
+    projected["summary"] = {"budget_exceeded": True}
+    assert not workflow._admitted_operational_partial(projected)
+    publication["original"]["failed"] += 1
+    publication["original"]["selected"] += 1
+    assert workflow._admitted_operational_partial(projected)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", CURRENT_RANGE.head)
+    monkeypatch.setenv("CI_MERGE_REQUEST_DIFF_BASE_SHA", CURRENT_RANGE.base)
+    monkeypatch.setenv("OCR_AUTO_APPROVE", "true")
+    monkeypatch.setenv("OCR_POST_MODE", "direct")
+    monkeypatch.setattr(
+        workflow,
+        "validate_review_freshness",
+        lambda *_: freshness.ReviewFreshnessResult(DEFAULT_IDENTITY.policy_sha, False),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "collect_previous_bot_comment_refs",
+        lambda *_: BotCommentRefs(plain_note_ids=[53]),
+    )
+    findings, summaries = [], []
+    monkeypatch.setattr(
+        gitlab, "approve_merge_request", lambda *_: pytest.fail("partial review approved")
+    )
+
+    def discussion(*args, **kwargs):
+        findings.append((args, kwargs))
+        return gitlab.GitLabWriteResult("posted")
+
+    def note(_config, _title, body, _transaction):
+        summaries.append(body)
+        return {"id": 123}
+
+    monkeypatch.setattr(workflow, "post_review_discussion", discussion)
+    monkeypatch.setattr(workflow, "post_review_note_bounded", note)
+    monkeypatch.setattr(
+        workflow,
+        "delete_previous_bot_comments_if_collected",
+        lambda *_: pytest.fail("prior findings deleted"),
+    )
+    assert workflow.post_ocr_failure(gitlab_config(), tmp_path / "stderr", 1, path) == 1
+    assert len(findings) == len(summaries) == 1
+    assert "Review this line." in str(findings) and "hidden synthetic content" not in str(findings)
+    from ocr_toolkit.telemetry.publications.signals import parse_ocr_publication_dlp_signal
+
+    marker = next(
+        line for line in summaries[0].splitlines() if "ocr.publication-dlp-signal/v4" in line
+    )
+    signal, invalid = parse_ocr_publication_dlp_signal(marker)
+    assert "operational_partial" not in marker and signal is not None and not invalid

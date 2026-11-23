@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from . import core, execution, peer, settings
 
@@ -106,11 +107,7 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
         raise core.QualificationContractMismatch(
             "budget-limited review lost the partial coverage partition", reason="budget-contract"
         )
-    comments = sample.get("comments")
-    if not isinstance(comments, list) or not comments:
-        raise core.QualificationContractMismatch(
-            "budget-limited review lost its completed finding", reason="budget-contract"
-        )
+    _verify_completed_finding(sample, frozenset(paths))
     return {
         "completed": outcome.completed_count,
         "failed_budget": outcome.failed_count,
@@ -118,6 +115,43 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
         "result": "passed",
         "selected": outcome.selected_count,
     }
+
+
+def _verify_completed_finding(sample: dict[str, Any], fixture_paths: frozenset[str]) -> None:
+    """Join admitted comments to paths completed by the validated manifest."""
+
+    from ocr_toolkit.posting.comments import comment_line
+    from ocr_toolkit.posting.formatting import format_inline_comment
+
+    comments = sample.get("comments")
+    coverage = sample["manifest"]["coverage"]
+    selected_paths = [row.get("path") for row in coverage["selected"]]
+    if (
+        any(not isinstance(path, str) for path in selected_paths)
+        or len(selected_paths) != len(fixture_paths)
+        or set(selected_paths) != fixture_paths
+    ):
+        raise core.QualificationContractMismatch(
+            "budget-limited review selected paths outside its fixture", reason="budget-contract"
+        )
+    completed = {row["item_id"] for row in coverage["completed"]}
+    completed_paths = {
+        row.get("path") for row in coverage["selected"] if row["item_id"] in completed
+    }
+    if (
+        not isinstance(comments, list)
+        or any(not isinstance(row, dict) for row in comments)
+        or not any(
+            isinstance(row.get("path"), str)
+            and row["path"] in completed_paths
+            and comment_line(row) == 2
+            and "Synthetic compatibility finding" in format_inline_comment(row)
+            for row in comments
+        )
+    ):
+        raise core.QualificationContractMismatch(
+            "budget-limited review lost its completed finding", reason="budget-contract"
+        )
 
 
 def _run_numeric_preview_case(
@@ -166,12 +200,35 @@ def _run_numeric_preview_case(
         or len(completed.stderr.encode()) > settings.MAX_CLI_PROBE_BYTES
     ):
         core._fail(f"numeric CLI preview exceeded its output bound for {flag}")
+    if completed.returncode < 0:
+        core._fail(f"numeric CLI preview terminated by a signal for {flag}")
     return completed
+
+
+def _negative_pattern(flag: str) -> re.Pattern[str]:
+    return (
+        settings.MAX_TOOLS_NEGATIVE_RE
+        if flag == "--max-tools"
+        else settings.MAX_TOKENS_BUDGET_NEGATIVE_RE
+    )
+
+
+def _expect_negative_rejection(completed: subprocess.CompletedProcess[str], flag: str) -> None:
+    if completed.returncode == 0:
+        raise core.QualificationContractMismatch(
+            f"candidate {flag} accepted a negative value", reason="cli-contract"
+        )
+    if completed.returncode < 0 or not _negative_pattern(flag).fullmatch(completed.stderr):
+        core._fail(f"candidate {flag} did not provide a recognized rejection")
 
 
 def _accepted_numeric_preview(completed: subprocess.CompletedProcess[str], *, flag: str) -> None:
     """Require one clean accepted numeric preview without trusting help text."""
 
+    if completed.returncode > 0 and _negative_pattern(flag).fullmatch(completed.stderr):
+        raise core.QualificationContractMismatch(
+            f"candidate {flag} rejected an admitted value", reason="cli-contract"
+        )
     if completed.returncode != 0 or completed.stderr:
         core._fail(f"candidate {flag} preview did not pass without diagnostics")
     try:
@@ -341,13 +398,7 @@ def _numeric_cli_probe(
     )
     for completed in (max_tools_omitted, max_tools_sentinel):
         _accepted_numeric_preview(completed, flag="--max-tools")
-    if (
-        max_tools_invalid.returncode == 0
-        or settings.MAX_TOOLS_NEGATIVE_RE.fullmatch(max_tools_invalid.stderr) is None
-    ):
-        raise core.QualificationContractMismatch(
-            "candidate max-tools negative boundary did not fail closed", reason="cli-contract"
-        )
+    _expect_negative_rejection(max_tools_invalid, "--max-tools")
     normalization = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(discovery.stderr)
     if normalization is None:
         minimum = 1
@@ -485,12 +536,7 @@ def _numeric_cli_probe(
     }
     for name in ("omitted", "sentinel", "minimum", "representative"):
         _accepted_numeric_preview(budget_cases[name], flag="--max-tokens-budget")
-    if (
-        budget_cases["invalid_below"].returncode == 0
-        or settings.MAX_TOKENS_BUDGET_NEGATIVE_RE.fullmatch(budget_cases["invalid_below"].stderr)
-        is None
-    ):
-        core._fail("candidate max-tokens-budget negative boundary did not fail closed")
+    _expect_negative_rejection(budget_cases["invalid_below"], "--max-tokens-budget")
     return {
         "grace_rounds": {"task_done": grace_completion, "no_task_done": grace_incomplete},
         "max_tokens_budget": {
@@ -575,7 +621,9 @@ def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
         caps = peer._StubHandler.completion_caps
         if not caps:
             core._fail("completion-cap probe observed no model requests")
-        if label == "explicit" and any(value != expected for value in caps):
+        if label == "explicit" and any(
+            type(value) is not int or value != expected for value in caps
+        ):
             raise core.QualificationContractMismatch(
                 "explicit completion cap was lost on the wire", reason="provider-contract"
             )

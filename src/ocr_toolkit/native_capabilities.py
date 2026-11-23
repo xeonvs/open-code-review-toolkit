@@ -7,7 +7,9 @@ from importlib.resources import files
 from typing import Literal
 from urllib.parse import urlsplit
 
-NativeCapability = Literal["analysis", "diagram_output", "gitlink_projection", "inference_query"]
+NativeCapability = Literal[
+    "analysis", "chatgpt_auth", "diagram_output", "gitlink_projection", "inference_query"
+]
 
 # Generated during promotion from checksum-verified consumer evidence.
 _QUALIFIED_HANDOFFS: dict[str, frozenset[str]] = {

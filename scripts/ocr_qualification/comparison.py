@@ -88,6 +88,13 @@ def validate_tool_result(messages: object, case: ToolCase, identity: str) -> Non
     if core.canonical_json(arguments) != core.canonical_json(case.arguments):
         core._fail("comparison probe changed native tool arguments")
     content = results[0].get("content")
+    if isinstance(content, str) and any(
+        marker in content for marker in case.excludes if marker in MARKERS
+    ):
+        # Unique fixture content from a different Git object on this exact call.
+        raise core.QualificationContractMismatch(
+            "comparison tool returned content from the wrong revision", reason="range-contract"
+        )
     if (
         not isinstance(content, str)
         or any(value not in content for value in case.contains)
@@ -104,6 +111,7 @@ class ComparisonConversation:
         self.index = 0
         self.complete = False
         self.requests = 0
+        self.mismatch: core.QualificationContractMismatch | None = None
 
     def __call__(self, request: dict[str, Any]) -> tuple[dict[str, Any], str]:
         self.requests += 1
@@ -112,9 +120,15 @@ class ComparisonConversation:
         if self.index == 0:
             validate_side_schema(request.get("tools"))
         else:
-            validate_tool_result(
-                request.get("messages"), self.cases[self.index - 1], f"comparison-{self.index - 1}"
-            )
+            try:
+                validate_tool_result(
+                    request.get("messages"),
+                    self.cases[self.index - 1],
+                    f"comparison-{self.index - 1}",
+                )
+            except core.QualificationContractMismatch as exc:
+                self.mismatch = exc
+                raise
         if self.index == len(self.cases):
             self.complete = True
             return {"name": "task_done", "arguments": "{}"}, "comparison-done"
@@ -344,26 +358,33 @@ def comparison_sides_probe(binary: Path, directory: Path) -> dict[str, object]:
                 "OCR_TELEMETRY_ENABLED": "false",
             }
         )
-        output = execution._run(
-            [
-                str(binary),
-                "review",
-                "--from",
-                base,
-                "--to",
-                head,
-                "--effort",
-                "low",
-                "--concurrency",
-                "1",
-                "--format",
-                "json",
-                "--audience",
-                "agent",
-            ],
-            cwd=repo,
-            env=env,
-        )
+        try:
+            output = execution._run(
+                [
+                    str(binary),
+                    "review",
+                    "--from",
+                    base,
+                    "--to",
+                    head,
+                    "--effort",
+                    "low",
+                    "--concurrency",
+                    "1",
+                    "--format",
+                    "json",
+                    "--audience",
+                    "agent",
+                ],
+                cwd=repo,
+                env=env,
+            )
+        finally:
+            # The HTTP peer can only return an error response to the native
+            # client. Restore an already-proven mismatch to its qualification caller.
+            if script.mismatch is not None:
+                raise script.mismatch
+
     if (
         not script.complete
         or tuple(path.read_bytes() for path in preserved) != before

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+CLOSED_PROVIDER_FAILURE_SCHEMA = "ocr.toolkit-provider-failure/v1"
 RETRY_REPORT_SCHEMA = "ocr.llm-retry-report/v1"
 MAX_RETRY_REQUESTS = 10_000
 MAX_ATTEMPTS_PER_REQUEST = 100
@@ -177,13 +178,15 @@ def _attempt_failure(attempt: Mapping[str, Any]) -> _AttemptFailure | None:
     """Validate one attempt and return its closed error projection, if any."""
 
     outcome = attempt.get("outcome")
-    if outcome not in ATTEMPT_OUTCOMES:
+    if not isinstance(outcome, str) or outcome not in ATTEMPT_OUTCOMES:
         raise RetryReportError("retry report attempt outcome is invalid")
     status_value = attempt.get("status_code", 0)
     if type(status_value) is not int or not (status_value == 0 or 100 <= status_value <= 599):
         raise RetryReportError("retry report attempt status_code is invalid")
     error_class = attempt.get("error_class", "")
     failure_phase = attempt.get("failure_phase", "")
+    if not isinstance(error_class, str) or not isinstance(failure_phase, str):
+        raise RetryReportError("retry report attempt classification is invalid")
     if outcome == "success":
         if error_class or failure_phase or not 200 <= status_value <= 299:
             raise RetryReportError("retry report success attempt is inconsistent")
@@ -234,7 +237,7 @@ def _request_failure(request: Mapping[str, Any]) -> _AttemptFailure | None:
     """Validate one logical request and project only its terminal failure."""
 
     outcome = request.get("outcome")
-    if outcome not in REQUEST_OUTCOMES:
+    if not isinstance(outcome, str) or outcome not in REQUEST_OUTCOMES:
         raise RetryReportError("retry report request outcome is invalid")
     attempts = request.get("attempts")
     if not isinstance(attempts, list) or not 0 < len(attempts) <= MAX_ATTEMPTS_PER_REQUEST:
@@ -389,5 +392,14 @@ def provider_failure_projection(result: object) -> ProviderFailureProjection | N
 def provider_failure_reason(result: object) -> ProviderFailureReason | None:
     """Return a closed reason, degrading malformed private diagnostics to unavailable."""
 
+    if (
+        isinstance(result, dict)
+        and set(result) == {"schema_version", "reason"}
+        and result["schema_version"] == CLOSED_PROVIDER_FAILURE_SCHEMA
+    ):
+        try:
+            return ProviderFailureReason(result["reason"])
+        except (ValueError, TypeError):
+            return None
     projection = provider_failure_projection(result)
     return projection.reason if projection is not None else None

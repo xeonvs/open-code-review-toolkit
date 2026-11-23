@@ -543,7 +543,7 @@ def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, obj
     }
 
 
-def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"

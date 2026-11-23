@@ -82,6 +82,7 @@ from ocr_toolkit.reporting.usage import format_verified_mcp_usage
 from ocr_toolkit.reporting.usage import nonnegative_int as nonnegative_int
 from ocr_toolkit.reporting.usage import tool_call_counts_from_items as tool_call_counts_from_items
 from ocr_toolkit.reporting.usage import tool_call_name as tool_call_name
+from ocr_toolkit.review_model import admitted_model
 from ocr_toolkit.review_range import ReviewRange
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
 
@@ -382,7 +383,10 @@ def publication_dlp_signal(
             {
                 "retained": dict(publication["retained"]),
                 "omitted": dict(publication["omitted"]),
-                "original": dict(publication["original"]),
+                "original": {
+                    key: publication["original"][key]
+                    for key in ("outcome", "selected", "completed", "reused", "failed", "waived")
+                },
                 "carried_forward_comments": carried_forward_comments,
             }
         )
@@ -714,6 +718,7 @@ def summarize_result(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    review_model: str | None = None,
     ocr_core_advisory_summary: str = "",
     publication_dlp_details: str = "",
     reviewer_guide: str = "",
@@ -819,6 +824,8 @@ def summarize_result(
     ):
         if summary:
             technical.append(summary)
+    if (model := admitted_model(review_model)) is not None:
+        technical.append(f"- Review model v1: `{model}`")
     technical.append(f"- Review mode: `{post_mode()}`")
 
     def technical_lines() -> list[str]:

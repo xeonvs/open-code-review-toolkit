@@ -8,8 +8,23 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import assets, core, delivery, probes, promotion, qualification, settings
+from . import assets, core, delivery, probes, promotion, qualification, refresh, settings
 from . import contracts as contract_rules
+
+
+def _reserve_candidate_outputs(evidence: Path, status: Path, issue_body: Path | None) -> None:
+    """Reserve a fresh status slot before the attempt can overwrite retained evidence."""
+
+    outputs = [evidence, status, status.with_name("incompatibility.json")]
+    if issue_body is not None:
+        outputs.append(issue_body)
+    if len({path.resolve() for path in outputs}) != len(outputs):
+        core._fail("qualification output files must be distinct")
+    if any(path.is_symlink() or path.exists() for path in outputs):
+        core._fail("qualification outputs already exist; select a fresh output directory")
+    status.parent.mkdir(parents=True, exist_ok=True)
+    # A concurrent attempt with the same bundle must also fail the reservation.
+    status.touch(mode=0o600, exist_ok=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,7 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     discover = subparsers.add_parser("discover")
     discover.add_argument("--output", type=Path, required=True)
     discover.add_argument("--through-tag")
+    discover.add_argument("--after-tag")
+    discover.add_argument("--qualification-only", action="store_true")
     matrix = subparsers.add_parser("build-matrix")
+    matrix.add_argument("--after-tag")
     matrix.add_argument("--releases", type=Path, required=True)
     matrix.add_argument("--output", type=Path, required=True)
     qualify = subparsers.add_parser("qualify")
@@ -45,12 +63,20 @@ def main(argv: list[str] | None = None) -> int:
     matrix_results.add_argument("--matrix", type=Path, required=True)
     matrix_results.add_argument("--artifacts", type=Path, required=True)
     matrix_results.add_argument("--head", required=True)
+    matrix_results.add_argument("--after-tag")
+    matrix_results.add_argument("--issue-repository")
+    matrix_results.add_argument("--run-url")
     matrix_results.add_argument("--output", type=Path, required=True)
     prepare = subparsers.add_parser("prepare-update")
     prepare.add_argument("--evidence", type=Path, action="append", required=True)
     prepare.add_argument("--incompatible-status", type=Path, action="append", default=[])
     prepare.add_argument("--human-conclusion", action="append", default=[])
     prepare.add_argument("--fragment-number", type=int, required=True)
+    update_receipts = subparsers.add_parser("refresh-receipts")
+    update_receipts.add_argument("--artifacts", type=Path, required=True)
+    update_receipts.add_argument("--head", required=True)
+    update_receipts.add_argument("--after-tag", required=True)
+    update_receipts.add_argument("--through-tag", required=True)
     probe_local = subparsers.add_parser("probe-local")
     probe_local.add_argument("--binary", type=Path, required=True)
     probe_local.add_argument("--version", required=True)
@@ -64,6 +90,18 @@ def main(argv: list[str] | None = None) -> int:
     upsert_issue.add_argument("--output-number", type=Path, required=True)
     args = parser.parse_args(argv)
     manifest: dict[str, Any] | None = None
+
+    if args.command == "qualify" and args.status_output is not None:
+        try:
+            _reserve_candidate_outputs(args.output, args.status_output, args.issue_body)
+        except (OSError, RuntimeError, core.CompatibilityError) as exc:
+            detail = (
+                str(exc)
+                if isinstance(exc, core.CompatibilityError)
+                else "select a fresh output directory"
+            )
+            print(f"OCR qualification output reservation failed: {detail}", file=sys.stderr)
+            return 1
 
     if args.command == "record-setup-failure":
         status = contract_rules.qualification_status(
@@ -99,6 +137,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
+        if args.command == "refresh-receipts":
+            changed = refresh.refresh_receipts(
+                args.manifest,
+                args.artifacts,
+                args.head,
+                after_tag=args.after_tag,
+                through_tag=args.through_tag,
+            )
+            print(f"refreshed {len(changed)} tracked qualification files")
+            return 0
         if args.command == "upsert-issue" and args.status is not None:
             return finish_issue_upsert(status=core.load_json(args.status))
         manifest = core.load_json(args.manifest)
@@ -107,32 +155,52 @@ def main(argv: list[str] | None = None) -> int:
             print("OCR support manifest validated")
             return 0
         if args.command == "discover":
-            unseen = assets.discover_unseen(manifest, through_tag=args.through_tag)
+            if (
+                args.qualification_only
+                and args.after_tag
+                and args.through_tag
+                and core._version(args.through_tag) <= core._version(manifest["monitoring_floor"])
+            ):
+                unseen = assets.retained_window(
+                    manifest, after_tag=args.after_tag, through_tag=args.through_tag
+                )
+            else:
+                unseen = assets.discover_unseen(manifest, through_tag=args.through_tag)
             args.output.write_bytes(core.canonical_json({"releases": unseen}))
-            print(f"discovered {len(unseen)} unseen stable OCR release(s)")
+            print(f"found {len(unseen)} stable OCR release(s) in the requested window")
             return 0
         if args.command == "build-matrix":
             release_payload = core.load_json(args.releases)
             releases = release_payload.get("releases")
             if not isinstance(releases, list):
                 core._fail("discovery payload must contain a release list")
-            result = assets.qualification_matrix(manifest, releases)
+            result = assets.qualification_matrix(manifest, releases, after_tag=args.after_tag)
             args.output.write_bytes(core.canonical_json(result))
             print(f"built qualification matrix with {len(result['include'])} release(s)")
-            remaining = len(releases) - len(result["include"])
+            remaining = sum(
+                not args.after_tag
+                or core._version(item["tag_name"]) > core._version(args.after_tag)
+                for item in releases
+            ) - len(result["include"])
             if remaining:
                 print(f"{remaining} further stable release(s) remain after this batch")
             return 0
         if args.command == "assess-matrix":
-            result = delivery.assess_matrix(
-                manifest, core.load_json(args.matrix), args.artifacts, args.head
+            assessment = delivery.assess_matrix(
+                manifest,
+                core.load_json(args.matrix),
+                args.artifacts,
+                args.head,
+                after_tag=args.after_tag,
+                issue_repository=args.issue_repository,
+                run_url=args.run_url,
             )
             core.write_atomic_bytes(
-                args.output, core.canonical_json(result), label="qualification assessment"
+                args.output, core.canonical_json(assessment), label="qualification assessment"
             )
-            for tag, outcome in result["outcomes"].items():
+            for tag, outcome in assessment["outcomes"].items():
                 print(f"{tag}: {outcome}")
-            return int(result["classification"] == "incomplete")
+            return int(assessment["classification"] == "incomplete")
         if args.command == "assess-chain":
             evidences = [core.load_json(path) for path in args.evidence]
             result = promotion.assess_automatic_chain(manifest, evidences)
@@ -140,13 +208,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"assessed OCR chain: {result['classification']}")
             return 0
         if args.command == "prepare-update":
+            if (
+                len(args.evidence) + len(args.incompatible_status)
+                > settings.MAX_RELEASE_PAGES * settings.MAX_RELEASES_PER_PAGE
+            ):
+                core._fail("promotion exceeds the bounded discovery window")
+            dispositions = [
+                delivery.load_incompatible_receipt(path) for path in args.incompatible_status
+            ]
+            for receipt in dispositions:
+                assets.verify_disposition_asset(receipt["status"]["tag"], receipt["executable"])
             evidences = [core.load_json(path) for path in args.evidence]
             changed = promotion.prepare_update(
                 manifest_path=args.manifest,
                 evidence=evidences,
                 fragment_number=args.fragment_number,
                 human_conclusions=promotion.parse_human_conclusions(args.human_conclusion),
-                incompatible_statuses=[core.load_json(path) for path in args.incompatible_status],
+                incompatible_statuses=dispositions,
             )
             print("prepared OCR compatibility update:")
             for path in changed:
@@ -157,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             return finish_issue_upsert(evidence=core.load_json(args.evidence))
         if args.command == "probe-local":
             version = args.version.removeprefix("v")
-            contract_rules._require_live_qualification_version(version)
+            contract_rules.require_behavioral_version(version)
             binary = args.binary.resolve(strict=True)
             if not binary.is_file():
                 core._fail("local OCR binary must be a regular file")
@@ -246,6 +324,18 @@ def main(argv: list[str] | None = None) -> int:
                     phase=phase,
                     reason=reason,
                 )
+                if isinstance(exc, core.QualificationContractMismatch):
+                    receipt = {
+                        "schema": "ocr.incompatibility/v1",
+                        "status": status,
+                        "executable": exc.verified_executable,
+                    }
+                    contract_rules.validate_incompatible_receipt(receipt)
+                    core.write_atomic_bytes(
+                        args.status_output.with_name("incompatibility.json"),
+                        core.canonical_json(receipt),
+                        label="verified incompatible executable",
+                    )
                 core.write_atomic_bytes(
                     args.status_output,
                     core.canonical_json(status),
@@ -255,8 +345,13 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"OCR {status['version']} is incompatible: {reason}")
                     return 0
                 if args.public_log:
+                    probe_detail = (
+                        f" / {exc.probe} / {exc.category}"
+                        if isinstance(exc, core.QualificationStageError) and exc.probe
+                        else ""
+                    )
                     print(
-                        f"OCR {status['version']} qualification incomplete: {phase} / {reason}",
+                        f"OCR {status['version']} qualification incomplete: {phase} / {reason}{probe_detail}",
                         file=sys.stderr,
                     )
                     return 1

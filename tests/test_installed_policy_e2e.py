@@ -68,31 +68,25 @@ def _check_installed_ci_selector_dlp(
         for message in (safe_finding, discussion_text)
     ]
     model_result = root / "model-result.json"
-    model_result.write_text(
-        json.dumps(
-            {
-                "status": "complete",
-                "comments": findings,
-                "warnings": [],
-                "summary": {"test_diagnostic": private_diagnostic},
-                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
-                "manifest": {
-                    "schema_version": "ocr.run-manifest/v1",
-                    "operation": "review",
-                    "terminal_state": "complete",
-                    "input": native_range_input(base, head),
-                    "coverage": {
-                        "selected": [{"item_id": "src/sample.py"}],
-                        "completed": [{"item_id": "src/sample.py"}],
-                        "reused": [],
-                        "failed": [],
-                        "waived": [],
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    payload = {
+        "status": "complete",
+        "comments": findings,
+        "warnings": [],
+        "summary": {"test_diagnostic": private_diagnostic},
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "input": native_range_input(base, head),
+            "coverage": {
+                "selected": [{"item_id": "src/sample.py"}],
+                "completed": [{"item_id": "src/sample.py"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
     ocr = root / "ocr"
     ocr.write_text(
         f"#!/bin/sh\nexec {shlex.quote(str(python))} -I - "
@@ -109,23 +103,45 @@ from ocr_toolkit import __version__
 assert __version__ == "0.0.dev0"
 config = json.loads((Path.home() / ".opencodereview" / "config.json").read_text())
 server = config["mcp_servers"]["ocr_toolkit_evidence"]
-requests = [
-    {"id": 1, "method": "initialize", "params": {
+def exchange(calls):
+    requests = [{"id": 1, "method": "initialize", "params": {
         "protocolVersion": "2024-11-05", "capabilities": {},
         "clientInfo": {"name": "synthetic-ci-dlp-peer", "version": "1"},
-    }},
-    {"id": 2, "method": "tools/call", "params": {
-        "name": "ocr_toolkit_evidence", "arguments": {"action": "summary"},
-    }},
-]
-completed = subprocess.run(
-    [server["command"], *server["args"]],
-    input="".join(json.dumps({"jsonrpc": "2.0", **request}) + "\\n" for request in requests),
-    capture_output=True, text=True, check=True, timeout=15,
-)
-responses = {item["id"]: item for item in map(json.loads, completed.stdout.splitlines())}
-assert not responses[2]["result"].get("isError")
-print(Path(sys.argv[1]).read_text())
+    }}]
+    for index, (name, arguments) in enumerate(calls, 2):
+        requests.append({"id": index, "method": "tools/call", "params": {
+            "name": name, "arguments": arguments,
+        }})
+    completed = subprocess.run(
+        [server["command"], *server["args"]],
+        input="".join(json.dumps({"jsonrpc":"2.0", **request}) + "\\n" for request in requests),
+        capture_output=True, text=True, check=True, timeout=15,
+    )
+    outputs = [json.loads(line)["result"] for line in completed.stdout.splitlines()][1:]
+    assert len(outputs) == len(calls) and all(not item.get("isError") for item in outputs)
+    return [json.loads(item["content"][0]["text"]) for item in outputs]
+
+fixture = json.loads(Path(sys.argv[1]).read_text())
+summary, listed = exchange([
+    ("ocr_toolkit_evidence", {"action":"summary"}),
+    ("context_list", {"resource_class":"ci_outcome"}),
+])
+assert summary["head"] == sys.argv[sys.argv.index("--to") + 1]
+records = listed["records"]
+if fixture["expected_ci"]:
+    record, = records
+    fetched, = exchange([("context_get", {"handle": record["handle"]})])
+    ci = fetched["record"]["ci_outcome"]
+    assert (ci["check"], ci["status"], ci["revision"]) == ("test", "passed", "reviewed_head")
+    assert ci["scope"] == {"mode":"declared", "path_prefixes":["src/"]}
+else:
+    assert records == []
+payload = fixture["payload"]
+tools = {"ocr_toolkit_evidence": 1, "context_list": 1}
+if records:
+    tools["context_get"] = 1
+payload["tool_calls"] = {"total":sum(tools.values()), "by_tool":tools}
+print(json.dumps(payload))
 PY
 """,
         encoding="utf-8",
@@ -240,6 +256,15 @@ PY
             for scenario in ("without-ci", "with-ci", "with-protected-discussion"):
                 with_ci = scenario != "without-ci"
                 with_discussion = scenario == "with-protected-discussion"
+                model_matches = scenario != "without-ci"
+                payload["llm"] = {
+                    "model": environment["OCR_LLM_MODEL"]
+                    if model_matches
+                    else "openai/another-model"
+                }
+                model_result.write_text(
+                    json.dumps({"payload": payload, "expected_ci": with_ci}), encoding="utf-8"
+                )
                 delivered.clear()
                 result = root / f"{scenario}.json"
                 stderr = root / f"{scenario}.stderr"
@@ -264,6 +289,9 @@ PY
                 artifact = json.loads(raw)
                 assert stat.S_IMODE(result.stat().st_mode) == 0o600
                 metadata = artifact["_ocr_toolkit"]
+                assert metadata.get("review_model") == (
+                    environment["OCR_LLM_MODEL"] if model_matches else None
+                )
                 assert metadata["review"]["diff_base_sha"] == base
                 assert metadata["review"]["source_sha"] == head
                 assert metadata["context"]["per_source"]["forge:ci_outcomes"] == (
@@ -276,6 +304,10 @@ PY
                 ]
                 summary_bodies = [item["body"] for path, item in delivered if path == f"{mr}/notes"]
                 assert len(summary_bodies) == 1
+                assert (
+                    "- Review model v1: `openai/synthetic-model`" in summary_bodies[0]
+                ) == model_matches
+                assert "openai/another-model" not in summary_bodies[0]
                 assert len(inline_bodies) == (1 if with_discussion else 2)
                 assert safe_finding in inline_bodies[0]
                 if with_discussion:
@@ -496,6 +528,75 @@ def installed_wheel(
     return _install_artifact(wheel, requirements, tmp_path_factory.mktemp("installed-wheel"))
 
 
+@pytest.fixture(scope="module")
+def installed_rebuilt_wheel(
+    installed_artifacts: tuple[Path, Path, Path], tmp_path_factory: pytest.TempPathFactory
+) -> tuple[Path, Path]:
+    _, rebuilt, requirements = installed_artifacts
+    return _install_artifact(
+        rebuilt, requirements, tmp_path_factory.mktemp("installed-rebuilt-wheel")
+    )
+
+
+def test_installed_telemetry_cli(
+    installed_wheel: tuple[Path, Path],
+    installed_rebuilt_wheel: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Collect, update and render offline with both published package forms."""
+
+    calls = []
+
+    def catalog(handler: _GitLabHandler) -> None:
+        calls.append(handler.path)
+        body = json.dumps(
+            {
+                "data": [
+                    {
+                        "id": "openai/synthetic-model",
+                        "pricing": {
+                            "prompt": "0.001",
+                            "completion": "0.002",
+                        },
+                    },
+                    {
+                        "id": "openai/synthetic-run-model",
+                        "pricing": {"prompt": "0.002", "completion": "0.004"},
+                    },
+                ]
+            }
+        ).encode()
+        handler.send_response(200)
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+
+    monkeypatch.setattr(_GitLabHandler, "do_GET", catalog)
+    with _https_gitlab(tmp_path / "prices-tls") as api_root:
+        for name, (python, cli) in (("wheel", installed_wheel), ("sdist", installed_rebuilt_wheel)):
+            root = tmp_path / name
+            root.mkdir(mode=0o700)
+            _run(
+                [
+                    str(python),
+                    "-I",
+                    str(PROJECT_ROOT / "tests/providers/installed_telemetry.py"),
+                    str(cli),
+                ],
+                cwd=root,
+                env={
+                    "HOME": str(root),
+                    "PATH": "",
+                    "SSL_CERT_FILE": os.environ["SSL_CERT_FILE"],
+                    "OCR_LLM_MODELS_URL": f"{api_root}/models",
+                    "OCR_LLM_TOKEN": "synthetic-catalog-test",
+                },
+            )
+            assert calls == ["/api/v4/models"]
+            calls.clear()
+
+
 def test_installed_ci_selectors_preserve_gitlab_findings_and_private_result(
     installed_wheel: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -503,21 +604,18 @@ def test_installed_ci_selectors_preserve_gitlab_findings_and_private_result(
 
 
 def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
-    installed_artifacts: tuple[Path, Path, Path],
     installed_wheel: tuple[Path, Path],
+    installed_rebuilt_wheel: tuple[Path, Path],
     tmp_path: Path,
 ) -> None:
     """Prove both package paths under hostile imports, private state, and stdio MCP."""
 
     git_binary = shutil.which("git")
     assert git_binary is not None
-    _, rebuilt, requirements = installed_artifacts
     for label in ("wheel", "sdist"):
         root = tmp_path / label
         root.mkdir(mode=0o700)
-        python, cli = (
-            installed_wheel if label == "wheel" else _install_artifact(rebuilt, requirements, root)
-        )
+        python, cli = installed_wheel if label == "wheel" else installed_rebuilt_wheel
         binary_directory = python.parent
         installed_version = _run(
             [str(python), "-I", "-c", "import ocr_toolkit; print(ocr_toolkit.__version__)"],

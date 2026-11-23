@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit import cli, configure, local_chatgpt, preflight, review_runner
+from ocr_toolkit import cli, configure, local_chatgpt, native_capabilities, preflight, review_runner
 from ocr_toolkit.config_writer import read_ocr_config, write_ocr_config
 
 pytestmark = pytest.mark.usefixtures("isolated_review_workspace")
@@ -81,7 +81,7 @@ def test_invalid_explicit_auth_mode_never_defaults_to_api(
     monkeypatch.setenv("OCR_LLM_URL", "https://custom.example.invalid/v1")
     monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-api-secret")
     monkeypatch.setenv("OCR_LLM_MODEL", "synthetic-api-model")
-    monkeypatch.setattr(local_chatgpt, "native_store", lambda *_a: pytest.fail("auth touched"))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: pytest.fail("binary touched"))
     with pytest.raises(configure.OCRRuntimeConfigError, match="OCR_LLM_AUTH_MODE"):
         configure.build_config_updates(local=True)
@@ -114,7 +114,7 @@ def test_chatgpt_conflicts_reject_before_any_auth_access(
 ) -> None:
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
     monkeypatch.setenv(setting, "synthetic-private-value")
-    monkeypatch.setattr(local_chatgpt, "native_store", lambda *_a: pytest.fail("auth touched"))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
     with pytest.raises(configure.OCRRuntimeConfigError) as error:
         configure.build_config_updates(local=True)
     assert "synthetic-private-value" not in str(error.value)
@@ -139,7 +139,7 @@ def test_nonlocal_chatgpt_rejects_before_binary_provider_or_auth_access(
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
     monkeypatch.setenv("CI_PROJECT_ID", "7")
     monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
-    monkeypatch.setattr(local_chatgpt, "native_store", lambda *_a: pytest.fail("auth touched"))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: pytest.fail("binary touched"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: pytest.fail("GitLab touched"))
     assert cli.main(["preflight"]) == 1
@@ -156,7 +156,7 @@ def test_chatgpt_rejects_caller_provider_override_before_auth_access(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
-    monkeypatch.setattr(local_chatgpt, "native_store", lambda *_a: pytest.fail("auth touched"))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
     with pytest.raises(review_runner.ReviewRunnerError, match="cannot override"):
         review_runner.run_evidence_review(
             tmp_path / "result.json",
@@ -191,10 +191,23 @@ def test_chatgpt_native_contract_rejects_other_versions(version: str) -> None:
         local_chatgpt.require_supported_version(version)
 
 
+def test_chatgpt_supported_binary_without_auth_rejects_before_native_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    version = preflight.RECOMMENDED_OCR_VERSION
+    monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
+    monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: version)
+    monkeypatch.setitem(native_capabilities._QUALIFIED_HANDOFFS, version, frozenset({"analysis"}))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
+    assert cli.main(["preflight", "--local"]) == 1
+    assert "qualified for native" in capsys.readouterr().err
+
+
 def test_chatgpt_old_binary_rejects_before_native_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: "1.13.1")
-    monkeypatch.setattr(local_chatgpt, "native_store", lambda *_a: pytest.fail("auth touched"))
+    monkeypatch.setattr(preflight, "native_store", lambda *_a: pytest.fail("auth touched"))
     assert cli.main(["preflight", "--local"]) == 1
 
 
@@ -402,7 +415,7 @@ def test_local_review_process_receives_native_binding_and_cleans_only_private_ho
 import json, os, sys
 from pathlib import Path
 if sys.argv[1:] == ['--version']:
-    print('{preflight.RECOMMENDED_OCR_VERSION}')
+    print('open-code-review v{preflight.RECOMMENDED_OCR_VERSION}')
     raise SystemExit(0)
 home = Path(os.environ['HOME'])
 config = json.loads((home / '.opencodereview/config.json').read_text())

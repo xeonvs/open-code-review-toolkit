@@ -145,7 +145,7 @@ flowchart TD
     selected -- Yes --> no_work[Closed v6 no-model coverage;<br/>advisory post, strict mode nonzero]
     selected -- No --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
     review -. Analysis enabled .-> analysis[Investigate the same range with a separate token budget]
-    analysis -.-> analysis_private[Admit bounded status, usage and DLP-checked report<br/>to private result only]
+    analysis -. returns with main review .-> exit
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
     exit -- Other nonzero --> execution_cleanup
@@ -156,7 +156,9 @@ flowchart TD
     cleaned -- Yes --> successful_run{Exit zero or verified operational partial?}
     successful_run -- No --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
     successful_run -- Yes --> finalize[Enter result finalization]
-    finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
+    finalize --> analysis_admit{Native Analysis fields match request and main status?}
+    analysis_admit -- No --> integrity_error
+    analysis_admit -- Yes --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
     core -- No --> rejection_diag[Emit closed result shape and execution facts;<br/>missing contract vs zero evidence;<br/>independent summary counts when available]
     rejection_diag --> integrity_error
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]

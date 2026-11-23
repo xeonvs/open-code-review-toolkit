@@ -897,7 +897,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "gh auth setup-git" in workflow
     assert "git switch -C" in workflow
     assert "git push --force-with-lease" in workflow
-    assert workflow.count("upsert-issue") == 1
+    assert workflow.count("issues: write") == 1
     assert "continue-on-error: true" in workflow
     qualify_job = workflow.split("  qualify:\n", 1)[1].split("  aggregate:\n", 1)[0]
     dependency_sync = "uv sync --locked --group dev --python 3.14"
@@ -908,12 +908,19 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify"
     )
     assert "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify" in qualify_job
-    assert "PYTHONPATH=src python scripts/ocr_compat.py upsert-issue" in qualify_job
+    config = yaml.safe_load(workflow)
+    for name in ("discover", "qualify"):
+        permissions = config["jobs"][name].get("permissions", config["permissions"])
+        assert permissions == "read-all" or (
+            isinstance(permissions, dict) and set(permissions.values()) <= {"none", "read"}
+        )
+    assert config["jobs"]["aggregate"]["permissions"] == {"contents": "read", "issues": "write"}
+    assert "--issue-repository" not in qualify_job
+    aggregate = workflow.split("  aggregate:\n", 1)[1]
+    assert "issues: write" in aggregate and "--issue-repository" in aggregate
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
-    assert "compatible) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
-    assert "incompatible|failed) input=(--status /tmp/ocr-compat/status.json)" in workflow
+    assert "/tmp/ocr-compat/incompatibility.json" in qualify_job
     assert workflow.count("github.ref == 'refs/heads/main' && !inputs.qualification_only") == 2
-    assert "if: ${{ !cancelled() }}" in workflow
     assert "if: ${{ always() && !cancelled() }}" in workflow
     assert "if: steps.qualify.outcome == 'failure'" in workflow
     assert "run: exit 1" in workflow

@@ -37,7 +37,15 @@ def qualify_release(
     if tested_baseline != manifest["recommended_version"]:
         core._fail("candidate qualification tested baseline is stale")
     if core._version(comparison) < core._version(tested_baseline):
-        core._fail("candidate comparison version predates the tested baseline")
+        known = {row["version"] for row in manifest.get("releases", [])}
+        if (
+            version not in known
+            or comparison not in known
+            or not core._version(comparison)
+            < core._version(version)
+            <= core._version(tested_baseline)
+        ):
+            core._fail("candidate comparison version predates the tested baseline")
     verified_assets = [
         {"name": asset.name, "sha256": asset.sha256, "size": asset.size} for asset in assets
     ]
@@ -62,6 +70,11 @@ def qualify_release(
                 core._fail("retained qualification does not match release assets or chain")
             contract_rules._validate_evidence_contracts(version, observed)
             payload = source.read_bytes()
+            entry = next(
+                (row for row in manifest["releases"] if row.get("version") == version), None
+            )
+            if entry is None or hashlib.sha256(payload).hexdigest() != entry.get("evidence_sha256"):
+                core._fail("retained qualification lacks a matching reviewed manifest digest")
             if payload != core.canonical_json(observed):
                 core._fail("retained qualification is not the original canonical snapshot")
             return observed
@@ -95,11 +108,28 @@ def qualify_release(
         downloaded = core._qualification_stage(
             "artifact", "artifact-verification-failed", artifacts
         )
-        contracts = core._qualification_stage(
-            "contracts",
-            "contract-probe-failed",
-            lambda: probes.run_contracts(downloaded["opencodereview-linux-amd64"], version, temp),
-        )
+        executable = next(asset for asset in assets if asset.name == "opencodereview-linux-amd64")
+        try:
+            contracts = core._qualification_stage(
+                "contracts",
+                "contract-probe-failed",
+                lambda: probes.run_contracts(
+                    downloaded[executable.name], version, temp, executable
+                ),
+            )
+        except core.QualificationContractMismatch as exc:
+            exc.verified_executable = {
+                "name": executable.name,
+                "size": executable.size,
+                "sha256": executable.sha256,
+            }
+            raise
+        finally:
+            core._qualification_stage(
+                "artifact",
+                "artifact-verification-failed",
+                lambda: executable.verify_file(downloaded[executable.name]),
+            )
     raw_notes = release.get("body")
     notes = raw_notes if isinstance(raw_notes, str) else ""
     classification, reasons = promotion.classify_candidate(
@@ -109,7 +139,7 @@ def qualify_release(
         contracts_passed=True,
     )
     evidence = {
-        "schema_version": 4,
+        "schema_version": 5,
         "upstream_repository": settings.UPSTREAM_REPOSITORY,
         "version": version,
         "tag": tag,
