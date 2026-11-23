@@ -1,0 +1,398 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "407dc4c3ce50b296c6a6f77a5bad118c8278be22a379ce9ed0a897e02a0c2beb",
+      "size": 64026240
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "e8e4cd1aeaa95e845eb018c55b0c5985e182da172aa0d490292ec5a899064fbf",
+      "size": 60773602
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "3faf877bb78720269dd215215ab7cf4741bf188e163b8f18012cbe2d3ba3037d",
+      "size": 62185634
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "2dacf5f000f861075609ca91af420bc6904fb8f81bdf44bdea913a31edf5cc66",
+      "size": 58523810
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "951285a5fce602782b4c15407116360d2df90d4033fa5459336afe1c0133fbf3",
+      "size": 63724544
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "d114c643bcb86f2074c262500b73b82958ab9bfac0f80f44c355cdc4238386c8",
+      "size": 59317760
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "a997529fb71d64555bc98583fcfe9c130e48a65ccf63e97d4d62f7889c9ccc0f",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.13.13",
+  "contracts": {
+    "checks": {
+      "budget_partial": "passed",
+      "identity": "passed",
+      "mcp": "passed",
+      "numeric_controls": "passed",
+      "provider_controls": "passed",
+      "publication": "passed",
+      "range_preview": "passed",
+      "review_result": "passed",
+      "user_exclusion": "passed"
+    },
+    "native_handoffs": [
+      "analysis",
+      "chatgpt_auth",
+      "diagram_output",
+      "gitlink_projection"
+    ],
+    "observations": {
+      "budget": {
+        "completed": 2,
+        "failed_budget": 1,
+        "partial_findings_preserved": true,
+        "result": "passed",
+        "selected": 3
+      },
+      "builtin_selection": {
+        "fixture_paths": [
+          ".cpcache/cache.edn",
+          ".shadow-cljs/build.edn",
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "dist/generated.js",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "node_modules/example/index.ts",
+          "policies/authz.rego",
+          "resources/public/js/compiled/app.js",
+          "resources/public/js/compiled/config.edn",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/WidgetTest.fs",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/core_test.cljs",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/test/kotlin/scripts/Example.kts",
+          "src/test_helpers.py",
+          "src/types.cts",
+          "src/types.mts",
+          "test/nested/core.clj",
+          "test/parser.ml",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ],
+        "selected": [
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "policies/authz.rego",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/types.cts",
+          "src/types.mts",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ]
+      },
+      "comment_arguments": {
+        "comments_per_batch": 2,
+        "failure_arguments_preserved": true,
+        "intact_cases": [
+          "array",
+          "serialized",
+          "repaired"
+        ],
+        "repair_warning": true,
+        "result": "passed",
+        "suspect_batch_rejected": true
+      },
+      "comparison_sides": {
+        "default_side": "new",
+        "deleted_paths": "old-only",
+        "invalid_sides_rejected": true,
+        "new_ref": "resolved-head",
+        "old_ref": "resolved-base",
+        "renamed_paths": "side-relative",
+        "result": "passed",
+        "target_tip": "not-used",
+        "tools": [
+          "file_read",
+          "file_find",
+          "code_search"
+        ],
+        "worktree": "preserved"
+      },
+      "completion_cap": {
+        "explicit": 4096,
+        "inherited": 16384,
+        "result": "passed",
+        "wire_field": "max_completion_tokens"
+      },
+      "native_handoffs": {
+        "analysis": {
+          "citations_verified": true,
+          "status": "completed"
+        },
+        "chatgpt_auth": {
+          "login_required": true,
+          "store_admitted": true
+        },
+        "diagram_output": {
+          "consumer": "toolkit-local",
+          "rendered": true
+        },
+        "gitlink_projection": {
+          "consumer": "toolkit-local",
+          "immutable_range": true
+        }
+      },
+      "numeric_cli": {
+        "grace_rounds": {
+          "no_task_done": {
+            "completed": false,
+            "limit_warning": true
+          },
+          "task_done": {
+            "completed": true,
+            "limit_warning": true
+          }
+        },
+        "max_tokens_budget": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "minimum": {
+              "effective": 1,
+              "input": 1,
+              "outcome": "accepted"
+            },
+            "omitted": {
+              "effective": "unlimited",
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 30000,
+              "input": 30000,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": "unlimited",
+              "input": 0,
+              "outcome": "accepted"
+            }
+          },
+          "maximum": null,
+          "owner": "ocr-cli"
+        },
+        "max_tools": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "lower_override": {
+              "effective": 75,
+              "input": 75,
+              "outcome": "accepted"
+            },
+            "minimum": {
+              "effective": 50,
+              "input": 50,
+              "outcome": "accepted"
+            },
+            "minimum_minus_one": {
+              "effective": 50,
+              "input": 49,
+              "outcome": "normalized",
+              "reported_normalization": 50
+            },
+            "omitted": {
+              "effective": 100,
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 125,
+              "input": 125,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": 100,
+              "input": 0,
+              "outcome": "accepted"
+            },
+            "template_value": {
+              "effective": 100,
+              "input": 100,
+              "outcome": "accepted"
+            }
+          },
+          "manifest_limit_verified": true,
+          "maximum": null,
+          "owner": "ocr-cli-or-template-default",
+          "reported_minimum": 50
+        },
+        "result": "passed"
+      },
+      "reasoning_effort": {
+        "efforts": [
+          "unset",
+          "none",
+          "high"
+        ],
+        "protocols": [
+          "openai",
+          "openai-responses"
+        ],
+        "provider_acceptance": "not-tested",
+        "responses_siblings_preserved": true,
+        "result": "passed"
+      },
+      "stream_override": {
+        "explicit_false": "preserved",
+        "non_boolean": "omitted",
+        "protocols": [
+          "openai",
+          "openai-responses",
+          "anthropic"
+        ],
+        "provider_acceptance": "not-tested",
+        "result": "passed",
+        "unset": "omitted"
+      }
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ]
+  },
+  "published_at": "2026-11-21T07:17:08Z",
+  "release_changes": "## 🚀 Features\n\n- feat(rules,allowlist): exclude Cargo test/benchmark paths and refine Rust rules (#1971)\n- feat(review): add optional behavior and impact analysis (#1937)\n- feat(cli): order review and scan findings by severity (#2003)\n- feat(rules): add SQL review rules (#1941)\n- feat(rules): add Dhall review rules (#963)\n- feat(rules): add Ruby review rules (#1940)\n- feat(allowlist): add CUDA (.cu/.cuh) and HIP (.hip) review support (#1768)\n\n## 🐛 Bug Fixes\n\n- fix(viewer): keep the report header stable across tabs (#2022)\n- fix(review): include TypeScript module extensions (#1962)\n- fix(mcp): match tool definitions to their registered server (#1972)\n- fix(pages): recover partial-locale fallback and fragment navigation (#2000)\n- fix(gitlab_ci): stop posting a check-mark LGTM on a failed review (#1999)\n\n## 📖 Documentation\n\n- docs(configuration): explain remote Chat Completions providers (#2005)\n- docs(review-rules): explain specification-aware reviews (#2006)\n- docs(cli): sync severity ordering across translations (#2015)\n\n## Other Changes\n\n- perf(viewer): avoid copying owned JSONL records (#1967)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.13.13...v1.14.0",
+  "release_notes_sha256": "05e73f1f16066e041eb18a24c9dce5dce0d1ecaa64a5416abdb65d29dd438cc8",
+  "result": "compatible",
+  "schema_version": 5,
+  "tag": "v1.14.0",
+  "tested_baseline_version": "1.14.2",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.14.0"
+}

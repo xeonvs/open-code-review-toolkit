@@ -3353,10 +3353,11 @@
         "review_effort",
         "semantic_grouping"
       ],
-      "evidence": "compatibility/evidence/ocr-1.14.0.json",
-      "evidence_sha256": "245ad1b17e3cc39813609a6481c9952869e7b65b6a5411e6331adf89bda18d7f",
+      "evidence": "compatibility/evidence/ocr-1.14.0-444ebceb8d0f3caa9658bea28d9147106a687f6b.json",
+      "evidence_sha256": "7de9dbe722d8bc4a6e113bfc1c1c7662d754d57ec7380392027edb14640adc90",
       "human_conclusion": "New supported line. Reviewed opt-in Analysis and its separate budget and artifact boundary, changed file selection and rules, severity ordering and MCP discovery. Exact Linux candidate passed run 45200392627.",
       "published_at": "2026-11-21T07:17:08Z",
+      "qualification_checkout": "444ebceb8d0f3caa9658bea28d9147106a687f6b",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.0",
       "status": "tested",
       "version": "1.14.0"
@@ -3406,10 +3407,11 @@
         "review_effort",
         "semantic_grouping"
       ],
-      "evidence": "compatibility/evidence/ocr-1.14.1.json",
-      "evidence_sha256": "932839c02bd66cb16ab2685be607b42cb3586cdb573f14d87494a5d2edb4cb67",
+      "evidence": "compatibility/evidence/ocr-1.14.1-444ebceb8d0f3caa9658bea28d9147106a687f6b.json",
+      "evidence_sha256": "ca5d4c58807360e064ef99411d3d8f6007def878c8dd0b4761b1e05e5a1d48e2",
       "human_conclusion": "Supported patch. Reviewed Analysis usage and workspace FIFO handling. The private report and main-result contracts passed on Linux in run 45200392627.",
       "published_at": "2026-11-22T09:42:28Z",
+      "qualification_checkout": "444ebceb8d0f3caa9658bea28d9147106a687f6b",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.1",
       "status": "tested",
       "version": "1.14.1"
@@ -3459,10 +3461,11 @@
         "review_effort",
         "semantic_grouping"
       ],
-      "evidence": "compatibility/evidence/ocr-1.14.2.json",
-      "evidence_sha256": "b5a4d00b01acc84991c263d44e0fa7a2c001fa3043b9c84aa262fd85b1531294",
+      "evidence": "compatibility/evidence/ocr-1.14.2-444ebceb8d0f3caa9658bea28d9147106a687f6b.json",
+      "evidence_sha256": "f159056cbc4691d42892edf6dcc4d357d832a801f05561a3143adc30a2ba57ac",
       "human_conclusion": "Recommended. Reviewed BOM handling in Objective-C and native refactoring. Linux run 45200392627 and independent Darwin arm64 probes passed.",
       "published_at": "2026-11-23T03:44:24Z",
+      "qualification_checkout": "444ebceb8d0f3caa9658bea28d9147106a687f6b",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.2",
       "status": "tested",
       "version": "1.14.2"

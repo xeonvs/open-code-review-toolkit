@@ -28,7 +28,7 @@ Repair CI policy selector registration, qualify future stable versions by consum
 | REQ-001 | Public CI policy selectors no longer filter findings or private results | WQ-01 | done |
 | REQ-002 | Behavioral qualification, candidate disposition, safe batching and promotion | WQ-02 | done |
 | REQ-003 | Private opt-in Analysis and accurate operator documentation | WQ-03 | done |
-| REQ-004 | Hosted qualification, installed regressions, review and mandatory draft pause | WQ-04 | active |
+| REQ-004 | Hosted qualification, installed regressions, review and mandatory draft pause | WQ-04 | done |
 | REQ-005 | Protected delivery and immutable receipt readback | WQ-05 | pending |
 | REQ-006 | Private GitLab collection, current and historical toolkit publication contracts, offline English and Russian reports | WQ-06 | done |
 
@@ -85,6 +85,8 @@ New GitLab notes record the model when the native selection agrees with the run 
 
 A second own-tool pass reviewed the amended feature against its published parent: 90 of 93 files completed and 55 findings were triaged. A separate exact selection completed the three files affected by provider errors without findings.
 
+At `444ebce` the complete quality gate passed with 6,068 tests, 360 subtests, 80 skips and 90.06% coverage. [Hosted qualification run 45264920134](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45264920134) rechecked the three supported OCR releases on Linux. All candidates and the chain assessment succeeded. The manifest references their schema-5 receipts and preserves the original evidence files.
+
 The model-specific own-tool review covered five files across its initial pass and two-file provider retry. Review corrections preserve explicit zero usage, reject unsupported estimates, and bind the optional public label to both the receipt and available native model. The scoped threat-model review identified excess GitLab settings reads. Collection now limits the optional request to projects with usable historical usage that actually needs a model. The canonical security guide documents publication visibility, credential destinations, plaintext state and the limits of anonymization.
 
 ### Risks And Recovery
@@ -93,7 +95,7 @@ Bound qualification to v1.14.2. If a candidate fails, inspect its closed phase a
 
 ### Resume Point
 
-Refresh the hosted qualification receipts on the existing draft and wait for the owner's explicit resume instruction before WQ-05. The Codex Security diff scan rejected the branch checkout and its independent clone during startup. Resolve the missing scan before marking ready.
+The feature and refreshed hosted receipts are at the draft checkpoint. Wait for the owner's explicit resume instruction before WQ-05. The Codex Security diff scan rejected the branch checkout and its independent clone during startup. Resolve the missing scan before marking ready.
 
 ### Plan Fidelity Check
 
