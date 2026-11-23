@@ -37,7 +37,7 @@ Published historical evidence remains immutable. No automatic promotion of a new
 
 ### Constraints
 
-The user requires a stop immediately after opening the draft feature PR. Resume later release steps only on explicit instruction.
+The user requires a stop immediately after opening the draft feature PR. Resume later release steps only on explicit instruction. Ordinary operator guidance references the versioned manifest or example. Keep concrete versions where they identify a migration, artifact or release-specific behavior.
 
 ### Inputs And Sources
 
@@ -69,7 +69,7 @@ Exercise synthetic GitLab review/post, controlled model, installed wheel and act
 
 ### Latest Validation Results
 
-Hosted run 45148738452 produced compatible evidence for 1.13.11–13. Root retrieved those three artifacts before expiry.
+Hosted run 45148738452 produced compatible evidence for 1.13.11–13. Root retrieved those three artifacts before expiry. The CI-selector regression failed on the old code and passed after the source fix, with 239 tests in the surrounding suites. Posting tests cover a current operational partial, budget-only failure, missing receipt, wrong exit and terminal failure. All 305 posting tests and 205 subtests passed. The separate installed DLP acceptance is pending.
 
 ### Risks And Recovery
 

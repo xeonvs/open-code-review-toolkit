@@ -446,6 +446,44 @@ def test_current_partial_v11_posts_summary_without_replacing_old_findings(
     assert calls == ["summary", "finalize-partial"]
 
 
+@pytest.mark.parametrize(
+    ("code", "kind", "receipt", "failure_class", "expect_post"),
+    [
+        (1, "partial", True, "provider", True),
+        (1, "partial", True, "budget", False),
+        (1, "partial", False, "provider", False),
+        (1, "clean", True, "", False),
+        (1, "failed", True, "provider", False),
+        (2, "partial", True, "provider", False),
+    ],
+)
+def test_nonzero_result_routes_only_admitted_operational_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: int,
+    kind: str,
+    receipt: bool,
+    failure_class: str,
+    expect_post: bool,
+) -> None:
+    result = _result(kind, comments=True)
+    if not receipt:
+        result.pop("_ocr_toolkit")
+    if failure_class:
+        result["manifest"]["coverage"]["failed"][0]["classification"] = failure_class
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps(result))
+    path.chmod(0o600)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", CURRENT_RANGE.head)
+    monkeypatch.setenv("CI_MERGE_REQUEST_DIFF_BASE_SHA", CURRENT_RANGE.base)
+    calls: list[object] = []
+    monkeypatch.setattr(workflow, "post_results", lambda _config, payload: calls.append(payload))
+    assert workflow.post_ocr_failure(gitlab_config(), tmp_path / "stderr", code, path) == 1
+    assert bool(calls) == expect_post
+
+
 def test_current_failed_v11_is_job_only_after_freshness(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

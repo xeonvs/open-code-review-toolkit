@@ -1819,14 +1819,18 @@ def post_llm_provider_failure(
     return 1
 
 
-def _result_provider_failure_reason(result_path: Path) -> ProviderFailureReason | None:
-    """Hostile-read one bounded private result and return only its closed reason."""
+def _admitted_operational_partial(result: Any) -> bool:
+    """Recognize a current toolkit handoff eligible for normal posting checks."""
 
+    if not isinstance(result, dict):
+        return False
+    identity = validated_review_identity(result.get(TOOLKIT_RESULT_KEY))
+    if identity is None or identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS:
+        return False
     try:
-        result = load_ocr_result(result_path)
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
-        return None
-    return provider_failure_reason(result)
+        return parse_result_outcome(result).operational_partial
+    except OcrResultContractError:
+        return False
 
 
 def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
@@ -1857,12 +1861,11 @@ def post_ocr_failure(
     exit_code: int,
     result_path: Path | None = None,
 ) -> int:
-    """Keep an unbound OCR failure in job diagnostics without mutating MR notes.
+    """Handle an unsuccessful OCR invocation, including admitted partial reviews.
 
-    A non-zero OCR exit code means the JSON output may be partial or misleading,
-    so this script intentionally does not publish normal review comments. A
-    bounded retry-report v1 may contribute only a closed provider-failure
-    reason; its raw diagnostics and stderr remain private.
+    Current toolkit receipts can preserve completed findings from operational
+    partials. A bounded retry report can contribute a closed provider-failure
+    reason. Raw diagnostics and stderr remain private.
     Previous OCR bot notes are intentionally NOT cleaned up here: the last
     valid review must remain visible until a successful run replaces it.
 
@@ -1908,7 +1911,18 @@ def post_ocr_failure(
                 return 1
     if status is not None:
         return post_pre_execution_status(config, status)
-    reason = _result_provider_failure_reason(result_path) if result_path is not None else None
+    result = None
+    if result_path is not None:
+        try:
+            result = load_ocr_result(result_path)
+        except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
+            pass
+    if exit_code == 1 and _admitted_operational_partial(result):
+        # Posting still enforces live MR freshness, partial cleanup and approval policy.
+        # Keep the operational failure visible to the CI job even if posting succeeds.
+        post_results(config, result)
+        return 1
+    reason = provider_failure_reason(result)
     if reason is not None:
         return post_llm_provider_failure(config, reason)
     detail = "result artifact missing" if exit_code < 0 else "OCR process failed"
