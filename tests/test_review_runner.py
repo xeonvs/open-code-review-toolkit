@@ -394,10 +394,10 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     assert receipt.required_degraded is False
     assert receipt.mutable_admitted is False
     assert receipt.bootstrap_hints == {"required_passed": 1}
-    assert "functional-tests" in receipt.forbidden_publication
-    assert "src/" in receipt.forbidden_publication
-    assert "tests/" in receipt.forbidden_publication
     assert not {
+        "functional-tests",
+        "src/",
+        "tests/",
         "passed",
         "required",
         "reviewed_head",
@@ -406,7 +406,7 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     } & set(receipt.forbidden_publication)
     payload = {
         "status": "complete",
-        "comments": [{"content": "The required functional check passed."}],
+        "comments": [{"content": "Update tests/ for the latest change to src/app.py."}],
         "warnings": [],
         "manifest": {
             "schema_version": "ocr.run-manifest/v1",
@@ -427,12 +427,16 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     }
     projected, publication, filtered = review_runner._publication_projection(
         payload,
-        forbidden=receipt.forbidden_publication,
+        forbidden=receipt.forbidden_sources,
         allowed_tools=frozenset({"ocr_toolkit_evidence"}),
     )
     assert projected is payload
     assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert filtered is False
+    protected = ForbiddenMatcher.compile(
+        (*receipt.forbidden_sources, ForbiddenValue("src/", "operator_secret"))
+    )
+    assert protected.match_details("src/app.py") == ("forbidden", ("operator_secret",))
     restored = ContextStore.read(
         artifacts.context_store,
         expected_run_id=context_config.run_id,

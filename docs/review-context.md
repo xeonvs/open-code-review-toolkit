@@ -121,6 +121,11 @@ downloads logs or artifacts. A unique current passing job can challenge a narrow
 runtime claim for a declared path, but it cannot suppress a finding, establish a
 clean review, change severity/lifecycle, or authorize approval.
 
+Findings can mention check names and paths declared by the repository policy.
+The CI adapter admits closed outcome metadata. Private material supplied by
+other sources still receives publication DLP checks, including when its text
+also occurs in a policy selector.
+
 Start optional selectors with `required: false`. A stable complete snapshot with
 zero selected records is complete. When `required: true`, unavailable, mutated,
 DLP-rejected, or bounded-partial acquisition is required degradation and makes the

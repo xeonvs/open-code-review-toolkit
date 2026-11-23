@@ -3099,11 +3099,13 @@ def _prepare_enrichment(
     forbidden_values: list[str] = []
     forbidden_sources = [ForbiddenValue(v, "operator_secret") for v in adapter_secrets]
     for record in context_store.records:
+        # This closed projection contains policy selectors and typed outcome metadata.
+        # The provider adapter admits no free-text excerpt from the CI job.
+        if record.resource_class == "ci_outcome":
+            continue
         source_class = (
             "remediation_threads"
             if record.resource_class == "remediation_thread"
-            else "ci_outcomes"
-            if record.resource_class == "ci_outcome"
             else "forge_discussions"
             if record.source.startswith("forge:")
             else "external_context"
@@ -3112,14 +3114,6 @@ def _prepare_enrichment(
         for field, value in record.projections["model"].items():
             if field in published:
                 continue
-            if field == CI_OUTCOME_MODEL_FIELD and isinstance(value, dict):
-                scope = value.get("scope")
-                value = {
-                    "check": value.get("check"),
-                    "path_prefixes": (
-                        scope.get("path_prefixes") if isinstance(scope, dict) else None
-                    ),
-                }
             stack: list[tuple[object, tuple[str, ...]]] = [(value, ())]
             while stack:
                 nested, path = stack.pop()
