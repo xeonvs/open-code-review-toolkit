@@ -5,6 +5,23 @@ findings in a Markdown artifact and the console, without connecting the reposito
 Install the toolkit and its [qualified OCR binary](../compatibility/ocr-support.json),
 then configure the LLM environment described in [configuration.md](configuration.md).
 
+## Optional Behavior/Impact Analysis
+
+To investigate how a change affects callers, add `--analysis` to a local review.
+The investigation uses the same immutable range and may make one additional
+model request concurrently. Give it a separate soft token budget if required.
+
+```console
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
+ocr-ci review --local --analysis --analysis-max-tokens-budget 20000 --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
+```
+
+Read `toolkit_analysis` in the private result JSON. Its status describes the
+investigation; the main review's status and coverage describe the findings.
+Admitted Markdown is available when the investigation produces a report that
+passes DLP. Check declared completeness before using its conclusions. With Analysis enabled, the stderr artifact stays empty and the debug bundle omits native stdout, stderr, traces and result copies.
+
 ## Offline DLP audits
 
 For local DLP diagnosis, use [the `ocr-ci dlp-audit` commands](dlp-audit.md).
@@ -181,7 +198,7 @@ offline inference. OpenAI determines subscription eligibility, available models
 and usage limits. The toolkit does not import ChatGPT conversations or use a
 Codex credential cache. It keeps the same mandatory evidence, validation and
 DLP pipeline; a subscription does not bypass repository/service egress rules.
-See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.5/pages/src/content/docs/en/chatgpt-preview.md)
+See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/main/pages/src/content/docs/en/chatgpt-preview.md)
 and [OpenAI's token-sharing overview](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ```mermaid

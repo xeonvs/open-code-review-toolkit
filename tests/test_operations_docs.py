@@ -83,8 +83,8 @@ def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
     assert "not the installation\nsmoke test" in install
 
 
-def test_current_operator_guidance_uses_manifest_with_only_gitlink_ocr_literal() -> None:
-    """Keep general pins in the manifest while naming the fixed gitlink boundary."""
+def test_current_operator_guidance_uses_manifest_for_toolkit_and_ocr_pins() -> None:
+    """Keep release-specific installation pins in their canonical owners."""
 
     for document in (
         README,
@@ -95,10 +95,7 @@ def test_current_operator_guidance_uses_manifest_with_only_gitlink_ocr_literal()
     ):
         content = document.read_text(encoding="utf-8")
         assert "compatibility/ocr-support.json" in content
-        assert all(
-            match.group() == "OCR 1.13.3"
-            for match in re.finditer(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
-        )
+        assert not re.search(r"(?:OCR|Open Code Review|toolkit)\s+v?\d+\.\d+\.\d+", content, re.I)
         assert not re.search(r"open-code-review/releases/tag/v\d+\.\d+\.\d+", content)
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     assert "Qualified OCR pin for the example's toolkit release" in configuration
@@ -496,7 +493,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         "http-rate-limited",
         "not toolkit telemetry",
         "Neither setting is presented as the proven cause",
-        "does not create a potentially stale MR failure note",
+        "Provider diagnostics alone keep the failure in the job",
         "the previous successful review is preserved",
         "automatic approval is not attempted",
     ):

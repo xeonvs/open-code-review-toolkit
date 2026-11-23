@@ -1,20 +1,55 @@
 # Open Code Review compatibility
 
-The versioned support contract lives in [`compatibility/ocr-support.json`](../compatibility/ocr-support.json). Schema v2 records the recommended OCR version, every tested or observed release, exact upstream asset digests, normalized evidence hashes, and a rolling runtime window. The newest two qualified major/minor lines are supported; the preceding line is deprecated and emits a warning. Earlier lines and patches absent from the qualified manifest are rejected. `monitoring_floor` controls release discovery only and never grants runtime support. The toolkit package never downloads OCR; deployments keep using an explicitly pinned, checksum-verified binary.
+The [support manifest](../compatibility/ocr-support.json) identifies the recommended
+OCR version, qualified patches, asset hashes and evidence for this toolkit revision.
+Preflight accepts only tested patches in the recommended major/minor line.
+The monitoring floor determines what discovery inspects. A newly published tag
+requires its own qualification before installation.
+
+## Upgrading the toolkit and OCR
+
+Replace the 0.15.1 wheel and OCR 1.13.x binary together. For 0.15.2 the
+target pair is toolkit 0.15.2 and OCR 1.14.2. On Linux amd64, verify the
+download in a private directory before installing the executable:
+
+```sh
+(
+  set -eu
+  cd "$(mktemp -d)"
+  mkdir -p "$HOME/.local/bin"
+  curl --fail --location --proto '=https' --proto-redir '=https' \
+    -o ocr https://github.com/alibaba/open-code-review/releases/download/v1.14.2/opencodereview-linux-amd64
+  echo 'd4d718501742cad754210d85c6dcf8cb1664bd914fb370fa89c3776fc69e111f  ocr' | sha256sum --check --strict
+  install -m 0755 ocr "$HOME/.local/bin/ocr"
+)
+```
+
+Put `$HOME/.local/bin` on `PATH`. For another platform
+use the matching asset and SHA-256 in the same release entry. After installing
+the wheel, check `ocr --version` and run `ocr-ci preflight --local` in the
+configured local environment or `ocr-ci preflight` in GitLab CI. Preflight
+rejects the former 1.13.x binary. The GitLab example verifies both downloads;
+use the example from the tag matching the installed toolkit.
+[OCR 1.14.2 release assets](https://github.com/alibaba/open-code-review/releases/tag/v1.14.2)
+
+## Changes in OCR 1.13.11 through 1.14.2
+
+| OCR | Effect on toolkit users | Other upstream changes |
+| --- | --- | --- |
+| [1.13.11](https://github.com/alibaba/open-code-review/releases/tag/v1.13.11) | Move gains built-in review rules. | Branch-filtered session listing and path spelling affect native session management. Dotted names in native configuration editing, viewer path rendering, scan summaries, ACP diagnostics, VS Code status and onboarding are specific to those interfaces. |
+| [1.13.12](https://github.com/alibaba/open-code-review/releases/tag/v1.13.12) | An operational failure within a partial review returns a nonzero native exit after writing completed findings. A budget-only partial review still exits zero. Native tool reads are byte-bounded. | Separate session identity fields, telemetry initialization and bounded Git cancellation affect the native implementation. The Windows launcher test and site footer are upstream-only. |
+| [1.13.13](https://github.com/alibaba/open-code-review/releases/tag/v1.13.13) | Context compression reserves the full input budget. The native OAuth callback drains its response before closing, relevant to local ChatGPT sign-in. | Leaderboard, website loading and examples concern upstream documentation. |
+| [1.14.0](https://github.com/alibaba/open-code-review/releases/tag/v1.14.0) | Adds optional Behavior/Impact Analysis, rules for SQL, Dhall and Ruby, TypeScript modules (`.mts` and `.cts`), CUDA and HIP file selection, and Cargo test/benchmark exclusions. Native reports group findings by severity; references to findings should use their identities. Native MCP discovery matches the advertised tool schema to the registered server. | The upstream GitLab CI script, viewer, Pages and translations have separate delivery paths. Toolkit posts with `ocr-ci post`. |
+| [1.14.1](https://github.com/alibaba/open-code-review/releases/tag/v1.14.1) | Analysis reports include token usage. Native workspace tools reject named pipes before opening them. | Skill guidance and GitFlic/Gerrit example scripts concern upstream integrations. |
+| [1.14.2](https://github.com/alibaba/open-code-review/releases/tag/v1.14.2) | A byte-order mark is accepted when detecting Objective-C source, improving native rule selection. | Turkish documentation and editor localization and Go standard-library refactoring add no toolkit configuration. |
 
 ## Qualification lanes
 
-Live qualification runs one forward-only probe implementation and validates its
-observations against the consumed review contract owned by the candidate epoch.
-Historical evidence before the suite boundary uses frozen expectations from
-`scripts/ocr_compat_history.py`. Fresh qualification of a frozen epoch is refused
-before downloads or binary execution; frozen readback never supplies executable code. Generic promotion tests
-use a frozen baseline. See
-[qualification maintenance](development.md#maintaining-ocr-qualification).
-Historical readback is not promotion authority: every newly promoted candidate
-must provide the current evidence schema and its complete version-selected
-consumed contract. The current epoch includes explicit reasoning wire capture and
-the current built-in language/test-exclusion inventory.
+The live suite exercises the interfaces used by the toolkit on a verified
+candidate binary. Changes to rule text, glob spellings and new supported
+extensions are observations for release review. A blocking result identifies
+the toolkit operation that failed. Historical evidence remains available for
+readback. [Qualification maintenance](development.md#maintaining-ocr-qualification)
 
 The **OCR compatibility** workflow checks stable upstream releases every Monday
 at 07:15 UTC and qualifies candidates newer than the manifest monitoring floor.
@@ -34,18 +69,23 @@ Built-in MCP qualification follows the protocol revisions supported by the recom
 
 The built-in stdio entry uses the toolkit's current absolute Python executable in isolated mode. OCR therefore does not depend on `PATH` lookup, and untrusted repository modules cannot shadow the installed toolkit when the MCP subprocess starts.
 
-Candidates then take one of two lanes:
+Compatible candidates enter one of two promotion lanes.
 
 Before selecting a lane, classify every upstream changelog item as a toolkit-consumed contract change, a demonstrated future-backlog impact, or release-note-only context. For each added capability, record whether the toolkit consumes it, which runtime or CI boundary it can affect, whether adaptation is required, and which source/probe supports that conclusion. Only consumed contracts justify toolkit code or release scope; a new upstream capability does not create roadmap work unless the toolkit has a demonstrated need for it. If qualification requires a CI behavior change beyond version and checksum pins, record that impact in its own Towncrier fragment rather than hiding it inside the compatibility-version entry.
 
 Classify a pin-only promotion and its machine or human qualification evidence as Maintenance. If the qualification exposes an existing toolkit incompatibility and the delivery corrects it, classify that outcome as a Bug Fix. If the toolkit begins exposing or consuming an upstream capability, classify that outcome as a Feature. Effective built-in rule or reviewable-file changes remain Rules even when they arrive with an otherwise maintenance-only OCR promotion.
 
 - `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence and runtime preflight version. GitLab example version/checksum pins move together in the release PR. It never writes directly to `main`.
-- `human-review-required`: every minor/major release, skipped or non-increasing patch, changed or failed contract, feature-bearing release, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
+- `human-review-required`: every minor/major release, skipped or non-increasing patch, changed contract requiring operator review, feature-bearing release, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
 
 Each OCR version owns one stable HTML marker and one qualification issue. The workflow performs a single upsert through bounded direct issue listing rather than GitHub's eventually consistent search index. Reuse requires the exact marker on the first line and a GitHub-reported author matching the repository's individual owner or the verified GitHub Actions bot identity. Marker copies, quoted mentions and membership associations confer no write authority. Other manually created issues require operator reconciliation. Historical issues closed with the `duplicate` label remain as incident evidence but do not compete for canonical identity. Any other duplicate among eligible issues fails closed instead of creating another issue; after operators select and reconcile the canonical issue, reruns update it in place.
 
-The qualification step writes evidence, public issue text, and its closed status through same-directory atomic replacements. The step outcome is authoritative: a successful step publishes validated evidence, while a failed step publishes only the closed failure status even if retained evidence exists from work completed before the failure. Status-based recovery validates no support manifest because it does not consume support metadata. The workflow publishes the issue and diagnostic artifact before restoring the failed job outcome; dependent aggregation and promotion jobs therefore remain blocked. Raw exceptions and subprocess output stay in the private job log and never enter the status or issue projection.
+Qualification reports a compatible candidate with its evidence, or a demonstrated
+incompatibility with a closed reason identifying the failed consumer check.
+Both outcomes complete candidate classification. An incompatible candidate blocks
+automatic promotion. Setup, integrity, harness and incomplete-matrix failures
+leave the run red. The issue and artifact retain the available bounded status.
+Raw process output stays out of the issue and status projection.
 
 Evidence records optional capabilities separately from required compatibility. OCR 1.8.7 and later expose per-run provider/model overrides and additive `llm` result identity; older tested releases remain valid without these fields. OCR 1.9.4 additionally prints its session ID only in human-readable terminal summaries; JSON output and the toolkit-consumed result contract are unchanged. OCR 1.9.5 makes the existing aggregate budget flag visible in `scan` JSON, while the toolkit remains on `review` and separately qualifies that review's partial manifest, completed findings, and budget-attributed coverage. OCR 1.9.8 adds Bedrock as an upstream provider, moves human-audience JSON/SARIF progress to stderr, and changes only upstream skill guidance to consume native severity. The toolkit configures none of the Bedrock credential boundary, invokes review with agent audience, and already consumes the same tolerant structured severity/category result fields. Session identity and scan-only output remain OCR-owned signals rather than toolkit metrics. Profile or telemetry work must require the capability it consumes rather than treating the recommended version alone as proof.
 

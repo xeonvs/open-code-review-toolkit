@@ -111,8 +111,8 @@ query-preservation qualification before review. The toolkit's independent
 metadata client may use an explicit queried URL and sends the configured model
 credential/headers to that operator-selected endpoint.
 
-The trusted OCR child inherits the operator environment except
-`OCR_RAW_LOGGING`. Its fresh private HOME isolates session/configuration files;
+Before launching OCR, the toolkit removes `OCR_RAW_LOGGING` and consumes
+`OCR_ANALYSIS` and `OCR_ANALYSIS_MAX_TOKENS_BUDGET`. The child inherits the remaining operator environment. Its fresh private HOME isolates session/configuration files;
 it does not clear environment variables or sandbox the executable. Gateway
 credentials stay out of OCR configuration and arguments, but corresponding
 operator variables can remain in the inherited environment. Trust the installed
@@ -159,6 +159,12 @@ old finding-thread cleanup; the native OCR manifest retains its own meaning.
 `post` independently rechecks the original Git trees and selected native work
 before a GitLab write. A v6 no-model status contains only closed counts or a
 closed unqualified reason, with the authenticated MR identity.
+With Behavior/Impact Analysis enabled, the private JSON can contain admitted
+report Markdown, status, declared completeness and bounded token counts. Treat
+that artifact as private repository material. Native session paths, raw
+observations and traces belong to the isolated execution directory. GitLab
+findings, approval and coverage derive from the main review.
+
 If publication DLP removes a finding or warning, the filtered handoff omits
 the native manifest. Only after validating that manifest, the toolkit carries
 a path-free selection proof made of item digests and the source-artifact digest;

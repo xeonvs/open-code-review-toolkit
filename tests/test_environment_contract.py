@@ -33,6 +33,8 @@ RUNTIME_DEFAULTS = {
     "OCR_LLM_MAX_COMPLETION_TOKENS": "Unset (inherits OCR)",
     "OCR_ANTHROPIC_DISABLE_THINKING": "false",
     "OCR_REVIEW_LANGUAGE": "English",
+    "OCR_ANALYSIS": "false",
+    "OCR_ANALYSIS_MAX_TOKENS_BUDGET": "0",
     "OCR_REVIEW_EFFORT": "medium",
     "OCR_REVIEW_DIAGRAM_MODE": "on",
     "OCR_REVIEW_PROGRESS": "Empty / `false`",
@@ -80,7 +82,7 @@ EXAMPLE_DEFAULTS = {
     # Integration contracts check the selected qualified pair and release transition.
     "OCR_VERSION": "Qualified OCR pin for the example's toolkit release",
     "OCR_SHA256": "Manifest SHA-256 for `opencodereview-linux-amd64`",
-    "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
+    "OCR_TOOLKIT_VERSION": "Toolkit release pinned in the pipeline",
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
     "OCR_TOOLKIT_WHEEL_SHA256": "Matching value from `SHA256SUMS`",
@@ -316,6 +318,8 @@ def test_example_local_defaults_match_the_pipeline() -> None:
     )
     for name, value in {
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
+        "OCR_ANALYSIS": "false",
+        "OCR_ANALYSIS_MAX_TOKENS_BUDGET": "0",
         "OCR_MAX_TOOLS": "0",
         "OCR_MAX_TOKENS_BUDGET": "0",
         "OCR_REVIEW_EFFORT": "medium",

@@ -144,14 +144,16 @@ flowchart TD
     preview_ok -- Yes --> selected{Qualified gitlink and<br/>no ordinary file selected?}
     selected -- Yes --> no_work[Closed v6 no-model coverage;<br/>advisory post, strict mode nonzero]
     selected -- No --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
+    review -. Analysis enabled .-> analysis[Investigate the same range with a separate token budget]
+    analysis -.-> analysis_private[Admit bounded status, usage and DLP-checked report<br/>to private result only]
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
-    exit -- Non-zero --> execution_cleanup
-    exit -- Zero --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
+    exit -- Other nonzero --> execution_cleanup
+    exit -- Zero or admitted exit-one operational partial --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
     diagram_snapshot --> execution_cleanup[Capture bounded local debug inputs and trace;<br/>remove ephemeral inputs and native HOME]
     execution_cleanup --> cleaned{Mandatory cleanup succeeded?}
     cleaned -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
-    cleaned -- Yes --> successful_run{Review exit zero?}
+    cleaned -- Yes --> successful_run{Exit zero or verified operational partial?}
     successful_run -- No --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
     successful_run -- Yes --> finalize[Enter result finalization]
     finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
