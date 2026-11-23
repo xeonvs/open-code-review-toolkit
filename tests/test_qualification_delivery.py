@@ -1,6 +1,7 @@
 """Qualification lookup enforces authorship before privileged issue reuse."""
 
 from copy import deepcopy
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -176,6 +177,119 @@ def test_retained_qualification_checks_current_asset_identity_before_replay(
     with pytest.raises(module.core.QualificationStageError, match="release assets"):
         module.qualification.qualify_release(candidate, manifest, output)
     assert not output.exists()
+
+
+@pytest.mark.parametrize("skipped_version", [None, "1.14.0"])
+def test_behavioral_promotion_preserves_observations_and_packages_exact_handoffs(
+    tmp_path: Path, skipped_version: str | None
+) -> None:
+    module = load_script()
+    baseline = "1.13.13"
+    version = "1.14.1" if skipped_version else "1.14.0"
+    compatibility = tmp_path / "compatibility"
+    evidence_dir = compatibility / "evidence"
+    evidence_dir.mkdir(parents=True)
+    source = MANIFEST.parent / "evidence" / f"ocr-{baseline}.json"
+    legacy = module.core.load_json(source)
+    legacy_bytes = source.read_bytes()
+    (evidence_dir / source.name).write_bytes(legacy_bytes)
+    manifest_path = compatibility / "ocr-support.json"
+    manifest = {
+        "schema_version": 2,
+        "upstream_repository": module.settings.UPSTREAM_REPOSITORY,
+        "recommended_version": baseline,
+        "monitoring_floor": baseline,
+        "runtime_support": module.contracts._rolling_runtime_support(baseline),
+        "releases": [
+            {
+                "version": baseline,
+                "status": "tested",
+                "assets": legacy["assets"],
+                "evidence": f"compatibility/evidence/{source.name}",
+                "evidence_sha256": sha256(legacy_bytes).hexdigest(),
+            }
+        ],
+    }
+    manifest_bytes = module.core.canonical_json(manifest)
+    manifest_path.write_bytes(manifest_bytes)
+    preflight = tmp_path / "src" / "ocr_toolkit" / "preflight.py"
+    preflight.parent.mkdir(parents=True)
+    preflight.write_text(
+        f'RECOMMENDED_OCR_VERSION = "{baseline}"\n'
+        f'SUPPORTED_OCR_VERSIONS = ("{baseline}",)\n'
+        "DEPRECATED_OCR_VERSIONS = ()\n"
+    )
+    evidence = {
+        **legacy,
+        "schema_version": 4,
+        "version": version,
+        "tag": f"v{version}",
+        "comparison_version": skipped_version or baseline,
+        "tested_baseline_version": baseline,
+        "classification": "human-review-required",
+        "contracts": {
+            "checks": dict.fromkeys(module.settings.BEHAVIORAL_CHECKS, "passed"),
+            "native_handoffs": ["analysis", "diagram_output", "gitlink_projection"],
+            "observations": {
+                "builtin_selection": {
+                    "selected": ["src/query.sql", "src/kernel.hip"],
+                    "rules": {"src/query.sql": {"pattern": "sql/**", "heading": "Query checks"}},
+                }
+            },
+        },
+    }
+    prepare = module.promotion.prepare_update
+    options = {
+        "manifest_path": manifest_path,
+        "fragment_number": 328,
+        "human_conclusions": {version: "Reviewed adjacent native behavior."},
+        "root": tmp_path,
+    }
+    if skipped_version:
+        with pytest.raises(module.core.CompatibilityError, match="contiguous release sequence"):
+            prepare(evidence=evidence, **options)
+        status = module.contracts.qualification_status(
+            tag=f"v{skipped_version}",
+            comparison_version=baseline,
+            tested_baseline_version=baseline,
+            result="incompatible",
+            phase="contracts",
+            reason="analysis-contract",
+        )
+        wrong = status | {"result": "failed", "reason": "unexpected-error"}
+        with pytest.raises(module.core.CompatibilityError, match="as incompatible"):
+            prepare(evidence=evidence, incompatible_statuses=[wrong], **options)
+        with pytest.raises(module.core.CompatibilityError, match="requires a bounded conclusion"):
+            prepare(evidence=evidence, incompatible_statuses=[status], **options)
+        options["incompatible_statuses"] = [status]
+        options["human_conclusions"][skipped_version] = "Rejected Analysis contract."
+    broken = deepcopy(evidence)
+    broken["contracts"]["checks"].pop("publication")
+    with pytest.raises(module.core.CompatibilityError, match="required consumer check"):
+        prepare(evidence=broken, **options)
+    assert manifest_path.read_bytes() == manifest_bytes
+    assert not (evidence_dir / f"ocr-{version}.json").exists()
+
+    prepare(evidence=evidence, **options)
+    promoted = module.core.load_json(manifest_path)
+    module.contracts.validate_manifest(promoted, tmp_path)
+    assert module.contracts.qualified_runtime_versions(promoted) == ([version], [])
+    assert module.core.load_json(evidence_dir / f"ocr-{version}.json") == evidence
+    assert (evidence_dir / source.name).read_bytes() == legacy_bytes
+    if skipped_version:
+        rejected = next(item for item in promoted["releases"] if item["version"] == skipped_version)
+        assert rejected["status"] == "incompatible"
+        retained_status = tmp_path / rejected["evidence"]
+        assert module.core.load_json(retained_status) == status
+        retained_status.write_text("{}")
+        with pytest.raises(module.core.CompatibilityError, match="evidence hash mismatch"):
+            module.contracts.validate_manifest(promoted, tmp_path)
+        retained_status.write_bytes(module.core.canonical_json(status))
+    inventory = preflight.with_name("_qualified_handoffs.json")
+    assert module.core.load_json(inventory) == {version: evidence["contracts"]["native_handoffs"]}
+    inventory.write_text("{}")
+    with pytest.raises(module.core.CompatibilityError, match="packaged native handoffs"):
+        module.contracts.validate_manifest(promoted, tmp_path)
 
 
 @pytest.mark.parametrize("mismatch", [True, False])

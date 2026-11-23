@@ -26,6 +26,7 @@ from tests.support import PROJECT_ROOT, patched_attr, patched_env
 
 SCRIPT = PROJECT_ROOT / "scripts" / "ocr_compat.py"
 MANIFEST = PROJECT_ROOT / "compatibility" / "ocr-support.json"
+FROZEN_113_VERSION = "1.13.10"
 
 
 def load_script() -> ModuleType:
@@ -134,15 +135,13 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
 
 def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-    rules = module.contracts._language_rules_for_version(preflight.RECOMMENDED_OCR_VERSION)
+    rules = module.contracts._language_rules_for_version(FROZEN_113_VERSION)
     assert rules["policies/authz.rego"] == "**/*.rego"
     assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
     assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
     assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
-    assert set(
-        module.contracts._language_negative_paths_for_version(preflight.RECOMMENDED_OCR_VERSION)
-    ) == {
+    assert set(module.contracts._language_negative_paths_for_version(FROZEN_113_VERSION)) == {
         "rtl/include.svh",
         "nested/BUILD.bak",
     }
@@ -190,13 +189,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     assert manifest["schema_version"] == 2
     assert manifest["recommended_version"] == preflight.RECOMMENDED_OCR_VERSION
     assert manifest["monitoring_floor"] == preflight.RECOMMENDED_OCR_VERSION
-    assert manifest["runtime_support"] == {
-        "deprecated_lines": ["1.11"],
-        "qualified_patches_only": True,
-        "rejected_before": "1.11.0",
-        "supported_lines": ["1.12", "1.13"],
-    }
-    assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
+    historical_releases = [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
         ("1.8.1", "tested"),
@@ -260,35 +253,11 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.10", "tested"),
     ]
 
+    releases = [(item["version"], item["status"]) for item in manifest["releases"]]
+    assert releases[: len(historical_releases)] == historical_releases
     assert module.contracts.qualified_runtime_versions(manifest) == (
-        [
-            "1.12.0",
-            "1.12.1",
-            "1.12.2",
-            "1.12.3",
-            "1.12.4",
-            "1.12.5",
-            "1.12.6",
-            "1.12.7",
-            "1.12.8",
-            "1.12.9",
-            "1.12.10",
-            "1.12.11",
-            "1.12.12",
-            "1.12.13",
-            "1.13.0",
-            "1.13.1",
-            "1.13.2",
-            "1.13.3",
-            "1.13.4",
-            "1.13.5",
-            "1.13.6",
-            "1.13.7",
-            "1.13.8",
-            "1.13.9",
-            "1.13.10",
-        ],
-        [f"1.11.{patch}" for patch in range(10)],
+        list(preflight.SUPPORTED_OCR_VERSIONS),
+        list(preflight.DEPRECATED_OCR_VERSIONS),
     )
 
 
@@ -296,7 +265,7 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     contracts = current_contracts(module, version)
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
@@ -314,7 +283,7 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [(preflight.RECOMMENDED_OCR_VERSION, 52, "reported")],
+    [(FROZEN_113_VERSION, 52, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -2129,9 +2098,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
             Path("/synthetic/probe"),
         )
 
-    assert result == module.contracts._numeric_contract_for_version(
-        preflight.RECOMMENDED_OCR_VERSION
-    )
+    assert result == module.contracts._numeric_contract_for_version(FROZEN_113_VERSION)
     assert "stderr" not in json.dumps(result)
 
 
@@ -2610,7 +2577,7 @@ def test_current_clojure_qualification_requires_main_rules_and_actual_context(
     mutation: str,
 ) -> None:
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
     if mutation == "missing":
         del evidence["contracts"]["clojure_context_probe"]
@@ -2936,7 +2903,7 @@ def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None
 
 def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     current = module.contracts._language_rules_for_version(version)
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",

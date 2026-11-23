@@ -25,6 +25,35 @@ from . import (
 )
 
 
+def _result_object(output: str, *, reason: str) -> dict[str, Any]:
+    try:
+        value = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise core.QualificationContractMismatch(
+            "candidate did not emit JSON", reason=reason
+        ) from exc
+    if not isinstance(value, dict):
+        raise core.QualificationContractMismatch(
+            "candidate did not emit a JSON object", reason=reason
+        )
+    return value
+
+
+def _fixture_selection(output: str) -> bool:
+    payload = _result_object(output, reason="invalid-preview")
+    files = payload.get("files")
+    if not isinstance(files, list) or any(not isinstance(item, dict) for item in files):
+        raise core.QualificationContractMismatch(
+            "invalid preview inventory", reason="invalid-preview"
+        )
+    matches = [item for item in files if item.get("path") == "example.py"]
+    if len(matches) != 1 or not isinstance(matches[0].get("will_review"), bool):
+        raise core.QualificationContractMismatch(
+            "preview lost the changed file", reason="invalid-preview"
+        )
+    return matches[0]["will_review"]
+
+
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
     """Run deterministic CLI and JSON-consumer probes against one OCR binary."""
 
@@ -36,8 +65,8 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     if re.search(rf"(?<![0-9.])v?{re.escape(version)}(?![0-9.])", version_output) is None:
         core._fail(f"OCR binary did not report candidate version {version}")
     help_output = execution._run([str(binary), "review", "--help"], cwd=repo, env=git_env)
-    required_review_flags = set(settings.REQUIRED_REVIEW_FLAGS)
-    missing = sorted(flag for flag in required_review_flags if flag not in help_output)
+    flags = set(re.findall(r"^\s+(?:-\w, )?(--[a-z0-9-]+)(?:\s|$)", help_output, re.M))
+    missing = sorted(settings.REQUIRED_REVIEW_FLAGS - flags)
     if missing:
         raise core.QualificationContractMismatch(
             f"missing CLI flags: {missing}", reason="cli-contract"
@@ -47,28 +76,21 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     preview_command = [str(binary), "review", "--from", base, "--to", head, "--preview"]
     preview_command.extend(["--format", "json"])
     preview = execution._run(preview_command, cwd=repo, env=preview_env)
-    try:
-        preview_payload = json.loads(preview)
-    except json.JSONDecodeError as exc:
+    if not _fixture_selection(preview):
         raise core.QualificationContractMismatch(
-            "candidate JSON preview did not emit JSON", reason="invalid-preview"
-        ) from exc
-    preview_files = preview_payload.get("files") if isinstance(preview_payload, dict) else None
-    if not isinstance(preview_files, list) or not any(
-        isinstance(item, dict) and item.get("path") == "example.py" for item in preview_files
-    ):
-        raise core.QualificationContractMismatch(
-            "preview lost changed file", reason="invalid-preview"
+            "preview excluded the changed file", reason="invalid-preview"
         )
     if os.path.lexists(preview_home / ".opencodereview" / "sessions"):
         raise core.QualificationContractMismatch(
             "candidate preview created a review session store", reason="invalid-preview"
         )
 
-    excluded = json.loads(
-        execution._run([*preview_command, "--exclude", "example.py"], cwd=repo, env=preview_env)
+    user_rules = directory / "user-rules.json"
+    user_rules.write_bytes(core.canonical_json({"exclude": ["example.py"]}))
+    excluded = execution._run(
+        [*preview_command, "--rule", str(user_rules)], cwd=repo, env=preview_env
     )
-    if selection._preview_file_selection(excluded, "example.py")[0]:
+    if _fixture_selection(excluded):
         raise core.QualificationContractMismatch("user exclusion ignored", reason="invalid-preview")
 
     review_home = directory / "review-home"
@@ -101,15 +123,11 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             cwd=repo,
             env=env,
         )
+    sample = _result_object(result_output, reason="invalid-result")
     try:
-        sample = json.loads(result_output)
-    except json.JSONDecodeError as exc:
-        raise core.QualificationContractMismatch(
-            "candidate full review did not emit JSON", reason="invalid-result"
-        ) from exc
-    if not isinstance(sample, dict):
-        raise core.QualificationContractMismatch("invalid review object", reason="invalid-result")
-    optional_capabilities = contract_rules.detect_optional_capabilities(help_output, sample)
+        optional_capabilities = contract_rules.detect_optional_capabilities(help_output, sample)
+    except core.CompatibilityError as exc:
+        raise core.QualificationContractMismatch(str(exc), reason="invalid-result") from exc
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
@@ -153,20 +171,26 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         )
     token_summary = format_token_usage_summary(sample)
     if not token_summary or "total" not in token_summary:
-        core._fail("toolkit token summary rejected the candidate result contract")
+        raise core.QualificationContractMismatch(
+            "toolkit token summary rejected the candidate result", reason="publication-contract"
+        )
     if not format_tool_calls_summary(sample.get("tool_calls")):
-        core._fail("toolkit tool-call summary rejected the candidate result contract")
+        raise core.QualificationContractMismatch(
+            "toolkit tool-call summary rejected the candidate result", reason="publication-contract"
+        )
     if "Synthetic private compatibility reasoning." in rendered:
-        core._fail("toolkit posting consumer exposed private comment thinking")
+        raise core.QualificationContractMismatch(
+            "toolkit posting consumer exposed private thinking", reason="publication-contract"
+        )
     demonstrated = handoffs.consumer_handoffs(binary, version, directory)
     if handoffs.chatgpt_auth_handoff(binary, repo, base, head, directory):
         demonstrated.append("chatgpt_auth")
-    if "--analysis" in help_output:
+    if "--analysis" in flags:
         from ocr_toolkit.review_analysis import admit_analysis
 
         with peer._stub_gateway() as gateway:
             env["OCR_LLM_URL"] = gateway
-            combined = json.loads(
+            combined = _result_object(
                 execution._run(
                     [
                         str(binary),
@@ -187,14 +211,23 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
                     ],
                     cwd=repo,
                     env=env,
-                )
+                ),
+                reason="analysis-contract",
             )
-        meta = combined.get("analysis_meta") if isinstance(combined, dict) else None
+        meta = combined.get("analysis_meta")
         if not isinstance(meta, dict):
-            core._fail("advertised Analysis did not emit report metadata")
+            raise core.QualificationContractMismatch(
+                "advertised Analysis did not emit report metadata", reason="analysis-contract"
+            )
         observations = meta.get("observation_ids")
         citations = meta.get("cited_observation_ids")
-        admitted = admit_analysis(combined, requested=True, forbidden=())
+        try:
+            admitted = admit_analysis(combined, requested=True, forbidden=())
+            combined_outcome = parse_result_outcome(combined)
+        except ValueError as exc:
+            raise core.QualificationContractMismatch(
+                "toolkit rejected combined Analysis result", reason="analysis-contract"
+            ) from exc
         if (
             admitted is not None
             and admitted.get("status") == "completed"
@@ -206,13 +239,17 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             and bool(citations)
             and all(citation in observations for citation in citations)
             and admitted.get("usage")
-            and parse_result_outcome(combined).kind == "clean"
+            and combined_outcome.kind == "clean"
         ):
             demonstrated.append("analysis")
         else:
-            core._fail("advertised Analysis did not complete the controlled report exchange")
+            raise core.QualificationContractMismatch(
+                "advertised Analysis did not complete the controlled report exchange",
+                reason="analysis-contract",
+            )
 
     budget = numeric._budget_result_probe(binary, directory)
+    numeric_cli = numeric._numeric_cli_probe(binary, repo, base, head, directory)
     cap = numeric._completion_cap_probe(binary, directory)
     effort = numeric._reasoning_effort_probe(binary, directory)
     stream = wire_controls.stream_override_probe(binary, directory)
@@ -225,6 +262,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             "review_result": "passed",
             "publication": "passed",
             "budget_partial": "passed",
+            "numeric_controls": "passed",
             "provider_controls": "passed",
             "mcp": "passed",
         },
@@ -233,6 +271,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         "observations": {
             "builtin_selection": selection._language_rule_probe(binary, version, directory),
             "budget": budget,
+            "numeric_cli": numeric_cli,
             "completion_cap": cap,
             "reasoning_effort": effort,
             "stream_override": stream,

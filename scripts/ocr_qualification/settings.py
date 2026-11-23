@@ -11,6 +11,19 @@ ROOT = Path(__file__).resolve().parents[2]
 
 BEHAVIORAL_EPOCH = (1, 14, 0)
 NATIVE_HANDOFFS = frozenset({"analysis", "chatgpt_auth", "diagram_output", "gitlink_projection"})
+BEHAVIORAL_CHECKS = frozenset(
+    {
+        "identity",
+        "range_preview",
+        "user_exclusion",
+        "review_result",
+        "publication",
+        "budget_partial",
+        "numeric_controls",
+        "provider_controls",
+        "mcp",
+    }
+)
 
 DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
 
@@ -68,6 +81,9 @@ MAX_QUALIFICATION_CHAIN = 10
 
 
 MAX_CLI_PROBE_BYTES = 100_000
+
+
+MAX_NUMERIC_PROBE_ROUNDS = 1_000
 
 
 MAX_GROUPING_INVENTORY_ENTRIES = 100
@@ -306,6 +322,7 @@ CONTRACT_MISMATCH_REASONS = frozenset(
         "budget-contract",
         "provider-contract",
         "mcp-contract",
+        "analysis-contract",
     }
 )
 

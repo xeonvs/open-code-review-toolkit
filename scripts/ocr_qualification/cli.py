@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     matrix_results.add_argument("--output", type=Path, required=True)
     prepare = subparsers.add_parser("prepare-update")
     prepare.add_argument("--evidence", type=Path, action="append", required=True)
+    prepare.add_argument("--incompatible-status", type=Path, action="append", default=[])
     prepare.add_argument("--human-conclusion", action="append", default=[])
     prepare.add_argument("--fragment-number", type=int, required=True)
     probe_local = subparsers.add_parser("probe-local")
@@ -145,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
                 evidence=evidences,
                 fragment_number=args.fragment_number,
                 human_conclusions=promotion.parse_human_conclusions(args.human_conclusion),
+                incompatible_statuses=[core.load_json(path) for path in args.incompatible_status],
             )
             print("prepared OCR compatibility update:")
             for path in changed:

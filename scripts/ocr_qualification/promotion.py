@@ -156,6 +156,7 @@ def prepare_update(
     evidence: dict[str, Any] | list[dict[str, Any]],
     fragment_number: int,
     human_conclusions: dict[str, str] | None = None,
+    incompatible_statuses: list[dict[str, Any]] | None = None,
     root: Path = settings.ROOT,
 ) -> list[Path]:
     """Prepare one cumulative promotion from a validated adjacent evidence chain."""
@@ -167,13 +168,23 @@ def prepare_update(
     old_version = str(manifest["recommended_version"])
     old_supported, old_deprecated = contract_rules.qualified_runtime_versions(manifest)
     evidences = [evidence] if isinstance(evidence, dict) else list(evidence)
-    if not evidences or len(evidences) > settings.MAX_QUALIFICATION_CHAIN:
+    statuses = [
+        contract_rules.validate_qualification_status(status)
+        for status in incompatible_statuses or []
+    ]
+    if not evidences or len(evidences) + len(statuses) > settings.MAX_QUALIFICATION_CHAIN:
         core._fail("candidate evidence chain must be a non-empty bounded list")
     evidences.sort(key=lambda item: core._version(str(item.get("version", ""))))
+    chain = sorted(
+        [(item, False) for item in evidences] + [(status, True) for status in statuses],
+        key=lambda attempt: core._version(str(attempt[0].get("version", ""))),
+    )
+    if chain[-1][1]:
+        core._fail("candidate chain must end in a compatible release")
     conclusions = human_conclusions or {}
     expected_comparison = old_version
     versions: list[str] = []
-    for item in evidences:
+    for item, incompatible in chain:
         version = item.get("version")
         if not isinstance(version, str):
             core._fail("candidate evidence version must be a string")
@@ -184,26 +195,22 @@ def prepare_update(
         transition = core._release_transition(comparison, candidate)
         if transition is None:
             core._fail("candidate evidence chain is not a contiguous release sequence")
-        if transition != "patch" and item.get("schema_version") not in {2, 3, 4}:
-            core._fail("minor and major promotions require chain-aware evidence schema 2 or later")
-        if item.get("result") != "compatible":
-            core._fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")
-        if schema_version in {2, 3, 4}:
+        if not incompatible and transition != "patch" and schema_version not in {2, 3, 4}:
+            core._fail("minor and major promotions require chain-aware evidence schema 2 or later")
+        expected_result = "incompatible" if incompatible else "compatible"
+        if item.get("result") != expected_result:
+            core._fail(f"candidate evidence does not qualify {version} as {expected_result}")
+        if incompatible or schema_version in {2, 3, 4}:
             if item.get("tested_baseline_version") != old_version:
                 core._fail(f"candidate evidence {version} has a stale tested baseline")
             if item.get("comparison_version") != expected_comparison:
                 core._fail(f"candidate evidence {version} has a non-adjacent comparison version")
-        elif schema_version != 1 or len(evidences) != 1:
+        elif schema_version != 1 or len(chain) != 1:
             core._fail("multi-release promotion requires chain-aware evidence schema 2 or later")
-        classification = item.get("classification")
+        classification = "human-review-required" if incompatible else item.get("classification")
         conclusion = conclusions.get(version)
-        if conclusion is not None and (
-            not isinstance(conclusion, str)
-            or not conclusion.strip()
-            or len(conclusion) > 2_000
-            or any(ord(character) < 32 and character not in "\n\t" for character in conclusion)
-        ):
+        if conclusion is not None and not contract_rules._valid_human_conclusion(conclusion):
             core._fail(f"candidate {version} conclusion must be bounded plain text")
         if classification == "human-review-required":
             if conclusion is None:
@@ -314,6 +321,21 @@ def prepare_update(
                 "version": candidate_version,
             }
         )
+    for status in statuses:
+        candidate_version = status["version"]
+        evidence_name = f"ocr-{candidate_version}-incompatible.json"
+        payload = core.canonical_json(status)
+        destinations.append(root / "compatibility" / "evidence" / evidence_name)
+        evidence_payloads.append(payload)
+        releases.append(
+            {
+                "evidence": f"compatibility/evidence/{evidence_name}",
+                "evidence_sha256": hashlib.sha256(payload).hexdigest(),
+                "human_conclusion": conclusions[candidate_version].strip(),
+                "status": "incompatible",
+                "version": candidate_version,
+            }
+        )
     releases.sort(
         key=lambda item: (
             core._version(str(item["version"])) if isinstance(item, dict) else (0, 0, 0)
@@ -362,10 +384,17 @@ def prepare_update(
     # runtime support has actually been delivered.
     changelog_dir = root / "changelog.d"
     fragment = changelog_dir / f"{fragment_number}.maintenance.md"
-    qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
-    fragment_text = (
-        f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
-    )
+    if statuses:
+        excluded = ", ".join(status["version"] for status in statuses)
+        fragment_text = (
+            f"Target checksum-verified Open Code Review {version}; "
+            f"record incompatible releases {excluded}.\n"
+        )
+    else:
+        qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
+        fragment_text = (
+            f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
+        )
     outputs = [
         *zip(destinations, evidence_payloads, strict=True),
         (fragment, fragment_text.encode()),

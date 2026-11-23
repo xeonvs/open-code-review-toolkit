@@ -174,18 +174,10 @@ def _validate_contracts_for_version(version: str, contracts: Any) -> None:
     if version_tuple >= settings.BEHAVIORAL_EPOCH:
         if not isinstance(contracts, dict):
             core._fail("behavioral qualification requires a contracts object")
-        required = {
-            "identity",
-            "range_preview",
-            "user_exclusion",
-            "review_result",
-            "publication",
-            "budget_partial",
-            "provider_controls",
-            "mcp",
-        }
         checks = contracts.get("checks")
-        if not isinstance(checks, dict) or any(checks.get(name) != "passed" for name in required):
+        if not isinstance(checks, dict) or any(
+            checks.get(name) != "passed" for name in settings.BEHAVIORAL_CHECKS
+        ):
             core._fail("behavioral qualification omitted a required consumer check")
         handoffs = contracts.get("native_handoffs")
         if (
@@ -328,7 +320,10 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
     if not isinstance(releases, list) or not releases:
         core._fail("manifest releases must be a non-empty list")
     versions: set[str] = set()
+    tested_versions: set[str] = set()
     recommended_found = False
+    native_handoffs = {}
+    incompatible_statuses = []
     for entry in releases:
         if not isinstance(entry, dict):
             core._fail("each release entry must be an object")
@@ -340,8 +335,20 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
         if version in versions:
             core._fail(f"duplicate release version: {version}")
         versions.add(version)
-        if status not in {"tested", "observed-candidate"}:
+        if status not in {"tested", "observed-candidate", "incompatible"}:
             core._fail(f"invalid support status for {version}: {status!r}")
+        if status == "incompatible":
+            conclusion = entry.get("human_conclusion")
+            if not _valid_human_conclusion(conclusion):
+                core._fail(f"incompatible candidate {version} requires a bounded human conclusion")
+            evidence = _read_manifest_evidence(entry, root, version)
+            checked = validate_qualification_status(evidence)
+            if checked["result"] != "incompatible" or checked["version"] != version:
+                core._fail(f"disposition does not identify incompatible candidate {version}")
+            incompatible_statuses.append(checked)
+            continue
+        if status == "tested":
+            tested_versions.add(version)
         capabilities = entry.get("capabilities", [])
         if (
             not isinstance(capabilities, list)
@@ -374,24 +381,12 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
                 core._fail(f"invalid SHA-256 for {version}/{name}")
         if asset_names != settings.REQUIRED_ASSETS:
             core._fail(f"{version} asset set does not match the supported upstream matrix")
-        evidence_rel = entry.get("evidence")
-        evidence_hash = entry.get("evidence_sha256")
-        if not isinstance(evidence_rel, str) or not isinstance(evidence_hash, str):
-            core._fail(f"{version} evidence path and hash are required")
-        evidence_path = (root / evidence_rel).resolve()
-        compatibility_root = (root / "compatibility").resolve()
-        if not evidence_path.is_relative_to(compatibility_root):
-            core._fail(f"{version} evidence path escapes compatibility/")
-        try:
-            payload = evidence_path.read_bytes()
-        except OSError as exc:
-            raise core.CompatibilityError(f"cannot read evidence for {version}: {exc}") from exc
-        if hashlib.sha256(payload).hexdigest() != evidence_hash:
-            core._fail(f"evidence hash mismatch for {version}")
-        evidence = core.load_json(evidence_path)
+        evidence = _read_manifest_evidence(entry, root, version)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             core._fail(f"evidence does not qualify {version} as compatible")
         _validate_evidence_contracts(version, evidence)
+        if core._version(version) >= settings.BEHAVIORAL_EPOCH and status == "tested":
+            native_handoffs[version] = evidence["contracts"]["native_handoffs"]
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             core._fail(f"evidence assets are missing for {version}")
@@ -409,7 +404,49 @@ def validate_manifest(manifest: dict[str, Any], root: Path = settings.ROOT) -> N
             core._fail(f"manifest and evidence assets disagree for {version}")
     if not recommended_found:
         core._fail("recommended_version is missing from releases")
+    for checked in incompatible_statuses:
+        version = checked["version"]
+        baseline = checked["tested_baseline_version"]
+        comparison = checked["comparison_version"]
+        if (
+            baseline not in tested_versions
+            or comparison not in versions
+            or core._version(comparison) < core._version(baseline)
+            or core._release_transition(core._version(comparison), core._version(version)) is None
+        ):
+            core._fail(f"incompatible candidate {version} has invalid chain provenance")
     _validate_runtime_support(manifest, recommended)
+    if core._version(recommended) >= settings.BEHAVIORAL_EPOCH:
+        supported, _deprecated = qualified_runtime_versions(manifest)
+        packaged = root / "src" / "ocr_toolkit" / "_qualified_handoffs.json"
+        if core.load_json(packaged) != {version: native_handoffs[version] for version in supported}:
+            core._fail("packaged native handoffs disagree with exact supported evidence")
+
+
+def _read_manifest_evidence(entry: dict[str, Any], root: Path, version: str) -> dict[str, Any]:
+    evidence_rel = entry.get("evidence")
+    evidence_hash = entry.get("evidence_sha256")
+    if not isinstance(evidence_rel, str) or not isinstance(evidence_hash, str):
+        core._fail(f"{version} evidence path and hash are required")
+    evidence_path = (root / evidence_rel).resolve()
+    if not evidence_path.is_relative_to((root / "compatibility").resolve()):
+        core._fail(f"{version} evidence path escapes compatibility/")
+    try:
+        payload = evidence_path.read_bytes()
+    except OSError as exc:
+        raise core.CompatibilityError(f"cannot read evidence for {version}: {exc}") from exc
+    if hashlib.sha256(payload).hexdigest() != evidence_hash:
+        core._fail(f"evidence hash mismatch for {version}")
+    return core.load_json(evidence_path)
+
+
+def _valid_human_conclusion(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and len(value) <= 2_000
+        and all(ord(character) >= 32 or character in "\n\t" for character in value)
+    )
 
 
 def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> list[str]:

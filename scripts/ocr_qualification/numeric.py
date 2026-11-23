@@ -73,20 +73,27 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
-        raise core.CompatibilityError("budget-limited review did not emit JSON") from exc
+        raise core.QualificationContractMismatch(
+            "budget-limited review did not emit JSON", reason="budget-contract"
+        ) from exc
     if not isinstance(sample, dict):
-        core._fail("budget-limited review emitted an unsupported result object")
+        raise core.QualificationContractMismatch(
+            "budget-limited review emitted an unsupported result object", reason="budget-contract"
+        )
     summary = sample.get("summary")
     if not isinstance(summary, dict) or summary.get("budget_exceeded") is not True:
-        core._fail("budget-limited review omitted summary.budget_exceeded")
+        raise core.QualificationContractMismatch(
+            "budget-limited review omitted summary.budget_exceeded", reason="budget-contract"
+        )
 
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
         outcome = parse_result_outcome(sample)
     except OcrResultContractError as exc:
-        raise core.CompatibilityError(
-            f"budget-limited review emitted an unsupported result object: {exc}"
+        raise core.QualificationContractMismatch(
+            f"budget-limited review emitted an unsupported result object: {exc}",
+            reason="budget-contract",
         ) from exc
     if (
         outcome.kind != "partial"
@@ -338,39 +345,60 @@ def _numeric_cli_probe(
         max_tools_invalid.returncode == 0
         or settings.MAX_TOOLS_NEGATIVE_RE.fullmatch(max_tools_invalid.stderr) is None
     ):
-        core._fail("candidate max-tools negative boundary did not fail closed")
+        raise core.QualificationContractMismatch(
+            "candidate max-tools negative boundary did not fail closed", reason="cli-contract"
+        )
     normalization = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(discovery.stderr)
-    if discovery.returncode != 0 or normalization is None:
-        core._fail("candidate max-tools minimum could not be qualified behaviorally")
-    requested, minimum, normalized = (int(value) for value in normalization.groups())
-    if requested != 1 or minimum <= 1 or normalized != minimum:
-        core._fail("candidate max-tools minimum diagnostic is inconsistent")
-    below = minimum - 1
-    below_preview = _run_numeric_preview_case(
-        binary, repo, base, head, directory, flag="--max-tools", value=below
-    )
-    below_match = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(below_preview.stderr)
-    if (
-        below_preview.returncode != 0
-        or below_match is None
-        or tuple(int(value) for value in below_match.groups()) != (below, minimum, minimum)
-    ):
-        core._fail("candidate max-tools minimum-minus-one boundary is inconsistent")
-    minimum_preview = _run_numeric_preview_case(
-        binary, repo, base, head, directory, flag="--max-tools", value=minimum
-    )
+    if normalization is None:
+        minimum = 1
+        minimum_preview = discovery
+    else:
+        requested, minimum, normalized = (int(value) for value in normalization.groups())
+        if discovery.returncode != 0 or requested != 1 or minimum <= 1 or normalized != minimum:
+            raise core.QualificationContractMismatch(
+                "candidate max-tools minimum diagnostic is inconsistent", reason="cli-contract"
+            )
+        if minimum > settings.MAX_NUMERIC_PROBE_ROUNDS:
+            core._fail("candidate max-tools minimum exceeds the probe work bound")
+        minimum_preview = _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tools", value=minimum
+        )
     _accepted_numeric_preview(minimum_preview, flag="--max-tools")
+    below = minimum - 1
+    if minimum > 1:
+        below_preview = (
+            discovery
+            if below == 1
+            else _run_numeric_preview_case(
+                binary, repo, base, head, directory, flag="--max-tools", value=below
+            )
+        )
+        below_match = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(below_preview.stderr)
+        if (
+            below_preview.returncode != 0
+            or below_match is None
+            or tuple(int(value) for value in below_match.groups()) != (below, minimum, minimum)
+        ):
+            raise core.QualificationContractMismatch(
+                "candidate max-tools minimum-minus-one boundary is inconsistent",
+                reason="cli-contract",
+            )
     observed_cases: dict[str, dict[str, object]] = {}
     grace_completion: dict[str, object] | None = None
-    for name, requested_value in (
+    lower_override = max(75, minimum + 1)
+    template_value = max(100, lower_override + 1)
+    representative = max(125, template_value + 1)
+    numeric_cases = [
         ("omitted", None),
         ("sentinel", 0),
         ("minimum", minimum),
-        ("minimum_minus_one", below),
-        ("lower_override", 75),
-        ("template_value", 100),
-        ("representative", 125),
-    ):
+        ("lower_override", lower_override),
+        ("template_value", template_value),
+        ("representative", representative),
+    ]
+    if minimum > 1:
+        numeric_cases.insert(3, ("minimum_minus_one", below))
+    for name, requested_value in numeric_cases:
         if name in {"lower_override", "template_value", "representative"}:
             _accepted_numeric_preview(
                 _run_numeric_preview_case(
@@ -392,9 +420,16 @@ def _numeric_cli_probe(
         if grace_completion is None:
             grace_completion = verdict
         elif verdict != grace_completion:
-            core._fail("candidate max-tools grace verdict changed with the numeric boundary")
-        if name not in {"omitted", "sentinel"} and rounds != max(minimum, requested_value):
-            core._fail("candidate max-tools override was not applied exactly")
+            raise core.QualificationContractMismatch(
+                "candidate max-tools grace verdict changed with the numeric boundary",
+                reason="cli-contract",
+            )
+        if requested_value is not None and requested_value > 0 and rounds != max(
+            minimum, requested_value
+        ):
+            raise core.QualificationContractMismatch(
+                "candidate max-tools override was not applied exactly", reason="cli-contract"
+            )
         observed_cases[name] = {
             "effective": rounds,
             "input": requested_value,
@@ -404,7 +439,9 @@ def _numeric_cli_probe(
             observed_cases[name]["reported_normalization"] = minimum
     template_default = observed_cases["omitted"]["effective"]
     if observed_cases["sentinel"]["effective"] != template_default or template_default < minimum:
-        core._fail("candidate max-tools sentinel/default observations disagree")
+        raise core.QualificationContractMismatch(
+            "candidate max-tools sentinel/default observations disagree", reason="cli-contract"
+        )
     observed_cases["invalid_below"] = {"effective": None, "input": -1, "outcome": "rejected"}
     incomplete_rounds, grace_incomplete = _effective_max_tools_probe(
         binary,
@@ -416,8 +453,16 @@ def _numeric_cli_probe(
         expected_diagnostic=None,
         grace_task_done=False,
     )
-    if incomplete_rounds != minimum:
-        core._fail("candidate max-tools non-completion changed the effective round limit")
+    if (
+        incomplete_rounds != minimum
+        or grace_completion is None
+        or grace_completion["completed"] is not True
+        or grace_incomplete["completed"] is not False
+    ):
+        raise core.QualificationContractMismatch(
+            "candidate max-tools grace completion disagrees with the controlled result",
+            reason="cli-contract",
+        )
 
     budget_cases: dict[str, subprocess.CompletedProcess[str]] = {
         "omitted": _run_numeric_preview_case(
@@ -624,8 +669,9 @@ def _reasoning_effort_probe(binary: Path, directory: Path) -> dict[str, object]:
                     or request[f"{prefix}_effort"] != (effort or None)
                     or (protocol == "openai-responses" and effort and request["summary"] != "auto")
                 ):
-                    core._fail(
-                        f"reasoning wire fields differ from configured controls: {protocol}/{label}"
+                    raise core.QualificationContractMismatch(
+                        f"reasoning wire fields differ from configured controls: {protocol}/{label}",
+                        reason="provider-contract",
                     )
     return {
         "result": "passed",
