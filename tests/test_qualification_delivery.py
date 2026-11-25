@@ -16,6 +16,38 @@ ACTIONS = {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"}
 OUTSIDER = {"login": "contributor", "id": 19, "type": "User"}
 
 
+@pytest.mark.parametrize("expected_count, present", [(1, []), (1, [0]), (2, [1]), (2, [0, 1])])
+def test_assess_downloaded_layouts(tmp_path, expected_count, present):
+    module = load_script()
+    manifest = {"recommended_version": "1.13.8"}
+    tags = ["v1.13.9", "v1.13.10"][:expected_count]
+    matrix = module.assets.qualification_matrix(manifest, [{"tag_name": tag} for tag in tags])
+    if not present:
+        (tmp_path / "checkout.txt").write_text("a" * 40)
+    for index in present:
+        entry = matrix["include"][index]
+        candidate = tmp_path if len(present) == 1 else tmp_path / f"ocr-compatibility-{tags[index]}"
+        candidate.mkdir(exist_ok=True)
+        (candidate / "checkout.txt").write_text("a" * 40)
+        status = module.contracts.qualification_status(
+            **entry, result="incompatible", reason="invalid-result", phase="contracts"
+        )
+        (candidate / "status.json").write_bytes(module.core.canonical_json(status))
+        (candidate / "incompatibility.json").write_bytes(
+            module.core.canonical_json(incompatible_receipt(status))
+        )
+    result = module.delivery.assess_matrix(manifest, matrix, tmp_path, "a" * 40)
+    assert result["classification"] == (
+        "incompatible" if len(present) == expected_count else "incomplete"
+    )
+    for index, tag in enumerate(tags):
+        assert result["outcomes"][tag] == (
+            "incompatible (invalid-result)"
+            if index in present
+            else "missing or inconsistent qualification artifact"
+        )
+
+
 def upsert(module, issues, *, failed=False):
     calls = []
 

@@ -97,6 +97,33 @@ def _candidate_record(
     return status, evidence
 
 
+def _normalize_single_download(artifacts: Path, expected: set[str]) -> None:
+    """Restore the candidate directory when download-artifact extracts one archive flat."""
+
+    if not artifacts.is_dir():
+        return
+    files = list(artifacts.iterdir())
+    if all(item.name in expected for item in files):
+        return
+    allowed = {"checkout.txt", "status.json", "evidence.json", "incompatibility.json"}
+    if any(item.name not in allowed or item.is_symlink() or not item.is_file() for item in files):
+        core._fail("qualification artifacts include an unexpected candidate")
+    try:
+        status = contracts.validate_qualification_status(
+            _artifact_json(artifacts / "status.json", 4096)
+        )
+    except (OSError, core.CompatibilityError):
+        # No trustworthy tag. The regular assessment records every missing candidate.
+        return
+    name = f"ocr-compatibility-{status['tag']}"
+    if name not in expected:
+        core._fail("qualification artifacts include an unexpected candidate")
+    destination = artifacts / name
+    destination.mkdir()
+    for item in files:
+        item.rename(destination / item.name)
+
+
 def assess_matrix(
     manifest: dict[str, Any],
     matrix: dict[str, Any],
@@ -125,8 +152,7 @@ def assess_matrix(
     if matrix != assets.qualification_matrix(manifest, releases, after_tag=after_tag):
         core._fail("expected qualification matrix does not match the active baseline")
     expected = {f"ocr-compatibility-{entry['tag']}" for entry in entries}
-    if artifacts.is_dir() and any(item.name not in expected for item in artifacts.iterdir()):
-        core._fail("qualification artifacts include an unexpected candidate")
+    _normalize_single_download(artifacts, expected)
 
     outcomes = {}
     evidences = []
