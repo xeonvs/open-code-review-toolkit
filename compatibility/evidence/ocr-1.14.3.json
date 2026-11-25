@@ -1,0 +1,397 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "4559ca97a316fecc50b8acbdd0955d48941840daaa501dcd573e8026f6a8eb3f",
+      "size": 64279680
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "76c78dcc108a7c46249fef6ea572ae3b188a93bfa35a0b149bd49a0dad221d35",
+      "size": 61012498
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "17ee32cdf0af6c006a199d758defb6c2abe05ec5b4d164df3a703c0208d5155e",
+      "size": 62423202
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "873b2c2e0ece1a9db19104f6e2b2a8caebbb2c6db0f09d8978c43d50a215d8e6",
+      "size": 58785954
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "5531c50080feec9bc2b966c83e1498a3b910ac23bd907651c0cfe4e7f7463631",
+      "size": 63974400
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "5d0e0dd77086df1828a5a1e563722d6d61d337e3d39ed45e484aa87c67d1b578",
+      "size": 59550720
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "39935afbf7fc903dc27f81d35322d6706ad2c5d7de96c146ef64eb768dcfe2f4",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.14.2",
+  "contracts": {
+    "checks": {
+      "budget_partial": "passed",
+      "identity": "passed",
+      "mcp": "passed",
+      "numeric_controls": "passed",
+      "provider_controls": "passed",
+      "publication": "passed",
+      "range_preview": "passed",
+      "review_result": "passed",
+      "user_exclusion": "passed"
+    },
+    "native_handoffs": [
+      "analysis",
+      "chatgpt_auth",
+      "diagram_output",
+      "gitlink_projection"
+    ],
+    "observations": {
+      "budget": {
+        "completed": 2,
+        "failed_budget": 1,
+        "partial_findings_preserved": true,
+        "result": "passed",
+        "selected": 3
+      },
+      "builtin_selection": {
+        "fixture_paths": [
+          ".cpcache/cache.edn",
+          ".shadow-cljs/build.edn",
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "dist/generated.js",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "node_modules/example/index.ts",
+          "policies/authz.rego",
+          "resources/public/js/compiled/app.js",
+          "resources/public/js/compiled/config.edn",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/WidgetTest.fs",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/core_test.cljs",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/test/kotlin/scripts/Example.kts",
+          "src/test_helpers.py",
+          "src/types.cts",
+          "src/types.mts",
+          "test/nested/core.clj",
+          "test/parser.ml",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ],
+        "selected": [
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "policies/authz.rego",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/types.cts",
+          "src/types.mts",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ]
+      },
+      "comment_arguments": {
+        "comments_per_batch": 2,
+        "failure_arguments_preserved": true,
+        "intact_cases": [
+          "array",
+          "serialized",
+          "repaired"
+        ],
+        "repair_warning": true,
+        "result": "passed",
+        "suspect_batch_rejected": true
+      },
+      "comparison_sides": {
+        "default_side": "new",
+        "deleted_paths": "old-only",
+        "invalid_sides_rejected": true,
+        "new_ref": "resolved-head",
+        "old_ref": "resolved-base",
+        "renamed_paths": "side-relative",
+        "result": "passed",
+        "target_tip": "not-used",
+        "tools": [
+          "file_read",
+          "file_find",
+          "code_search"
+        ],
+        "worktree": "preserved"
+      },
+      "completion_cap": {
+        "explicit": 4096,
+        "inherited": 16384,
+        "result": "passed",
+        "wire_field": "max_completion_tokens"
+      },
+      "native_handoffs": {
+        "analysis": {
+          "citations_verified": true,
+          "status": "completed"
+        },
+        "chatgpt_auth": {
+          "login_required": true,
+          "store_admitted": true
+        },
+        "diagram_output": {
+          "consumer": "toolkit-local",
+          "rendered": true
+        },
+        "gitlink_projection": {
+          "consumer": "toolkit-local",
+          "immutable_range": true
+        }
+      },
+      "numeric_cli": {
+        "grace_rounds": {
+          "no_task_done": {
+            "completed": false,
+            "limit_warning": true
+          },
+          "task_done": {
+            "completed": true,
+            "limit_warning": true
+          }
+        },
+        "max_tokens_budget": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "minimum": {
+              "effective": 1,
+              "input": 1,
+              "outcome": "accepted"
+            },
+            "omitted": {
+              "effective": "unlimited",
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 30000,
+              "input": 30000,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": "unlimited",
+              "input": 0,
+              "outcome": "accepted"
+            }
+          },
+          "maximum": null,
+          "owner": "ocr-cli"
+        },
+        "max_tools": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "lower_override": {
+              "effective": 75,
+              "input": 75,
+              "outcome": "accepted"
+            },
+            "minimum": {
+              "effective": 50,
+              "input": 50,
+              "outcome": "accepted"
+            },
+            "minimum_minus_one": {
+              "effective": 50,
+              "input": 49,
+              "outcome": "normalized",
+              "reported_normalization": 50
+            },
+            "omitted": {
+              "effective": 100,
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 125,
+              "input": 125,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": 100,
+              "input": 0,
+              "outcome": "accepted"
+            },
+            "template_value": {
+              "effective": 100,
+              "input": 100,
+              "outcome": "accepted"
+            }
+          },
+          "manifest_limit_verified": true,
+          "maximum": null,
+          "owner": "ocr-cli-or-template-default",
+          "reported_minimum": 50
+        },
+        "result": "passed"
+      },
+      "reasoning_effort": {
+        "efforts": [
+          "unset",
+          "none",
+          "high"
+        ],
+        "protocols": [
+          "openai",
+          "openai-responses"
+        ],
+        "provider_acceptance": "not-tested",
+        "responses_siblings_preserved": true,
+        "result": "passed"
+      },
+      "stream_override": {
+        "explicit_false": "preserved",
+        "non_boolean": "omitted",
+        "protocols": [
+          "openai",
+          "openai-responses",
+          "anthropic"
+        ],
+        "provider_acceptance": "not-tested",
+        "result": "passed",
+        "unset": "omitted"
+      }
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ]
+  },
+  "published_at": "2026-11-24T08:25:00Z",
+  "release_changes": "## 🐛 Bug Fixes\n\n- fix(tool): return a model-facing error for invalid code_search regex (#1811)\n- fix(deps): update OpenTelemetry to v1.47.0 (#2067)\n\n## 📖 Documentation\n\n- docs(actions): explain how to allow pull_request_target (#2068)\n- docs(review-rules): note that include also overrides the extension allowlist (#1913)\n- docs: add French translation of the README (#2042)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.14.2...v1.14.3",
+  "release_notes_sha256": "aab4a565b1aa660962339b87421405348459e8da1568194e84d26779d3fcdbcb",
+  "result": "compatible",
+  "schema_version": 5,
+  "tag": "v1.14.3",
+  "tested_baseline_version": "1.14.2",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.14.3"
+}

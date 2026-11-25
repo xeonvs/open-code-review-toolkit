@@ -7,11 +7,11 @@ Status: active
 Release classification: release-required
 Target release: 0.15.2
 Next development marker: 0.16.0
-Last Updated: 2026-11-23
+Last Updated: 2026-11-25
 
 ### Goal
 
-Deliver issue #324, qualify the six stable OCR releases through 1.14.2, expose opt-in Behavior/Impact Analysis and deliver private bilingual offline reports for GitLab MR telemetry.
+Deliver issue #324, qualify the seven stable OCR releases through 1.14.3, expose opt-in Behavior/Impact Analysis and deliver private bilingual offline reports for GitLab MR telemetry.
 
 ### Plan Origin
 
@@ -42,7 +42,7 @@ The user requires a stop at the draft feature PR. For the telemetry update, revi
 
 ### Inputs And Sources
 
-Toolkit issues #324–330, upstream releases 1.13.11 through 1.14.2, compatibility run 45148738452, repository development and release contracts.
+Toolkit issues #324–330, upstream releases 1.13.11 through 1.14.3, compatibility run 45148738452, repository development and release contracts.
 
 ### User Decisions And Answers
 
@@ -89,9 +89,11 @@ At `444ebce` the complete quality gate passed with 6,068 tests, 360 subtests, 80
 
 The model-specific own-tool review covered five files across its initial pass and two-file provider retry. Review corrections preserve explicit zero usage, reject unsupported estimates, and bind the optional public label to both the receipt and available native model. The scoped threat-model review identified excess GitLab settings reads. Collection now limits the optional request to projects with usable historical usage that actually needs a model. The canonical security guide documents publication visibility, credential destinations, plaintext state and the limits of anonymization.
 
+[The single-tag qualification](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45652414177) passed all native candidate probes for 1.14.3 against 1.14.2. Aggregation exposed single-artifact extraction directly into the download root. The workflow selects the destination from the actual uploaded candidates, including a single surviving artifact from a partial matrix. Recheck hosted aggregation before delivering the release.
+
 ### Risks And Recovery
 
-Bound qualification to v1.14.2. If a candidate fails, inspect its closed phase and disposition before retry. Keep stale or incomplete evidence out of promotion.
+Bound qualification to v1.14.3. If a candidate fails, inspect its closed phase and disposition before retry. Keep stale or incomplete evidence out of promotion.
 
 ### Resume Point
 
@@ -111,7 +113,7 @@ Archive in the protected release PR. Verify the immutable release and close the 
 
 ### Post-Close Delivery
 
-Release CI owns registry and attestation verification and issue closure. After publication, independently read back the release, registry, attestations and issue state against the archived plan.
+Release CI owns registry and attestation verification and issue closure. After publication, independently read back the release, registry, attestations and issue state against the archived plan. After verified publication, inventory project build and review scratch directories and Docker containers, images and build caches created for this release. Remove disposable release-owned resources, preserve private reports still needed for review and shared Docker resources, then verify the checkout and remaining Docker inventory.
 
 ### Handoff Notes
 

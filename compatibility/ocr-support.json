@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.14.2",
-  "recommended_version": "1.14.2",
+  "monitoring_floor": "1.14.3",
+  "recommended_version": "1.14.3",
   "releases": [
     {
       "assets": [
@@ -3469,6 +3469,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.2",
       "status": "tested",
       "version": "1.14.2"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "4559ca97a316fecc50b8acbdd0955d48941840daaa501dcd573e8026f6a8eb3f",
+          "size": 64279680
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "76c78dcc108a7c46249fef6ea572ae3b188a93bfa35a0b149bd49a0dad221d35",
+          "size": 61012498
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "17ee32cdf0af6c006a199d758defb6c2abe05ec5b4d164df3a703c0208d5155e",
+          "size": 62423202
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "873b2c2e0ece1a9db19104f6e2b2a8caebbb2c6db0f09d8978c43d50a215d8e6",
+          "size": 58785954
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "5531c50080feec9bc2b966c83e1498a3b910ac23bd907651c0cfe4e7f7463631",
+          "size": 63974400
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "5d0e0dd77086df1828a5a1e563722d6d61d337e3d39ed45e484aa87c67d1b578",
+          "size": 59550720
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "39935afbf7fc903dc27f81d35322d6706ad2c5d7de96c146ef64eb768dcfe2f4",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.14.3.json",
+      "evidence_sha256": "25f5d3e853f689d5a07d737f68308be25faf3ecf12b322c3087ae819c8c88242",
+      "human_conclusion": "Reviewed the native code search error recovery, embedded OpenTelemetry update and documentation changes. The tested review and provider handoffs remain compatible.",
+      "published_at": "2026-11-24T08:25:00Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.14.3",
+      "status": "tested",
+      "version": "1.14.3"
     }
   ],
   "runtime_support": {
