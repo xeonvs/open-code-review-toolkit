@@ -14,16 +14,19 @@ Behavior/Impact Analysis requires the wheel and qualified binary described in
 the [paired upgrade instructions](compatibility.md#upgrading-the-toolkit-and-ocr).
 Use the example from the matching release tag once published. The preceding
 release’s example still pins the older wheel and ignores the Analysis setting.
-The new example defaults to the main review alone. Set `OCR_ANALYSIS=true`
-on a review job to investigate the impact of the same MR diff alongside its
-ordinary review. Set `OCR_ANALYSIS_MAX_TOKENS_BUDGET` to a positive integer
-for a separate soft cost ceiling. When present, read `toolkit_analysis` in
-`/tmp/ocr-result-${CI_JOB_ID}.json` inside the trusted job before it ends.
-If the optional report would exceed `OCR_MAX_RESULT_BYTES`, the runner can
-omit it and preserve the main result. Use the main review status for CI. The
-example leaves this private file on the runner. Keep the raw result out of job
-logs and uploaded artifacts. The MR discussion, findings and approval decision use the main
-review.
+Set `OCR_ANALYSIS=true` on the ordinary review job to investigate the same MR diff alongside the main review. Set `OCR_ANALYSIS_MAX_TOKENS_BUDGET` to cap the investigation separately. By default the result stays in the private job JSON. The example uploads no report artifact.
+
+To show the investigation to MR readers, add one flag to the existing post command in that job:
+
+```sh
+ocr-ci post --include-analysis --result "/tmp/ocr-result-${CI_JOB_ID}.json" --stderr "/tmp/ocr-stderr-${CI_JOB_ID}.log"
+```
+
+The standard GitLab job token binds the admitted text to this job and its review identity. Both commands must run in the same job for Analysis publication. The MR displays report text literally to keep model-generated mentions and markup inert.
+
+The summary includes a collapsed Behavior/Impact Analysis section with its own status and completeness. DLP-filtered text stays private. If the section exceeds the remaining comment budget the summary includes a short omission notice when it fits. Without publication the private result expires with the runner. Findings and approval continue to use the main review.
+
+A successful rerun may replace the previous review of the same source commit. A new source commit starts a new review history entry. Human discussions and old notes lacking verifiable revision metadata are preserved.
 
 The complete variable inventory, owner, requirement, exact default, and behavior are in [Environment configuration](configuration.md). The principal secrets are:
 

@@ -26,7 +26,7 @@ GitLab uses the same admitted model with expanded or collapsed presentation.
 Neither report appends a textual node, message or edge listing. Source references
 remain in the typed candidate and GitLab receipt; an explicit private debug
 bundle retains the submitted candidate in `diagram.json`.
-No external rendering service is required.
+The host Markdown viewer supplies its own viewing controls. Use browser zoom when a separate diagram toolbar is unavailable. No external rendering service is required.
 
 The two summary forms look like these simplified examples:
 

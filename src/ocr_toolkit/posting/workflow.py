@@ -14,6 +14,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit import review_analysis
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import neutralize_quick_actions
 from ocr_toolkit.context.dlp import ForbiddenMatcher
@@ -97,6 +98,7 @@ from ocr_toolkit.posting.gitlab import (
 )
 from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
 from ocr_toolkit.posting.markers import (
+    REVIEW_REVISION,
     SETUP_PENDING_MARKER,
     TERMINAL_MR_MARKER,
     annotate_comment_fingerprints,
@@ -110,7 +112,6 @@ from ocr_toolkit.posting.result import (
 )
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
-    collect_previous_bot_comment_refs,
     collect_terminal_status_note_ids,
     delete_previous_bot_comments_if_collected,
     delete_previous_summary_notes,
@@ -121,6 +122,9 @@ from ocr_toolkit.posting.snapshot import (
     print_posting_failure_banner,
     publish_failure_exit,
     rollback_current_run_comments,
+)
+from ocr_toolkit.posting.snapshot import (
+    collect_review_refs as collect_previous_bot_comment_refs,
 )
 from ocr_toolkit.posting.source_suggestions import SuggestionSourceReader
 from ocr_toolkit.posting.suggestions import (
@@ -1048,9 +1052,24 @@ def publication_range_and_diagram(
     return review_range, diagram
 
 
-def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
-    """Post OCR result comments to GitLab and return a process exit code."""
+def post_results(
+    config: GitLabConfig, result: dict[str, Any], *, include_analysis: bool = False
+) -> int:
+    """Scope this publication and its cleanup to the validated GitLab diff version."""
+    identity = validated_review_identity(result.get(TOOLKIT_RESULT_KEY))
+    revision = (
+        (identity.source_sha, identity.diff_version_id)
+        if identity and identity.diff_version_id
+        else None
+    )
+    token = REVIEW_REVISION.set(revision)
+    try:
+        return _post_results(config, result, include_analysis=include_analysis)
+    finally:
+        REVIEW_REVISION.reset(token)
 
+
+def _post_results(config: GitLabConfig, result: dict[str, Any], *, include_analysis: bool) -> int:
     try:
         post_diagram_mode = parse_diagram_mode(
             os.environ.get("OCR_REVIEW_DIAGRAM_MODE"), local=False
@@ -1155,6 +1174,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     mcp_usage_summary = format_mcp_usage_summary(result.get(TOOLKIT_RESULT_KEY))
     token_usage_summary = format_token_usage_summary(result)
     review_model = toolkit_metadata.get("review_model") if toolkit_metadata is not None else None
+    analysis_section = ""
+    if receipt_identity is not None and toolkit_metadata is not None and include_analysis:
+        analysis_section = review_analysis.public_section(
+            result.get(review_analysis.PRIVATE_RESULT_KEY),
+            toolkit_metadata.get("analysis_hmac_sha256"),
+            toolkit_metadata["review"],
+        )
     native_llm = result.get("llm")
     if not isinstance(native_llm, dict) or native_llm.get("model") != review_model:
         review_model = None
@@ -1317,6 +1343,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
                 review_model=review_model,
+                analysis_section=analysis_section,
                 ocr_core_advisory_summary=ocr_core_advisory_summary,
                 publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
@@ -1554,6 +1581,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
             review_model=review_model,
+            analysis_section=analysis_section,
             ocr_core_advisory_summary=ocr_core_advisory_summary,
             publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
@@ -1679,8 +1707,18 @@ def finalize_previous_review_state(
             draft_ids = previous_refs.summary_draft_note_ids
             discussion_refs: list[tuple[str, int]] = []
         else:
-            note_ids = previous_refs.plain_note_ids
-            draft_ids = previous_refs.draft_note_ids
+            note_ids = list(
+                dict.fromkeys(
+                    [
+                        *previous_refs.plain_note_ids,
+                        *previous_refs.setup_plain_note_ids,
+                        *previous_refs.terminal_plain_note_ids,
+                    ]
+                )
+            )
+            draft_ids = list(
+                dict.fromkeys([*previous_refs.draft_note_ids, *previous_refs.setup_draft_note_ids])
+            )
             discussion_refs = previous_refs.discussion_note_refs
         for note_id in note_ids:
             if not remove_if_current(gitlab_api.delete_plain_note, note_id):
@@ -1903,6 +1941,8 @@ def post_ocr_failure(
     stderr_path: Path,
     exit_code: int,
     result_path: Path | None = None,
+    *,
+    include_analysis: bool = False,
 ) -> int:
     """Handle an unsuccessful OCR invocation, including admitted partial reviews.
 
@@ -1963,7 +2003,7 @@ def post_ocr_failure(
     if exit_code == 1 and _admitted_operational_partial(result):
         # Posting still enforces live MR freshness, partial cleanup and approval policy.
         # Keep the operational failure visible to the CI job even if posting succeeds.
-        post_results(config, result)
+        post_results(config, result, **({"include_analysis": True} if include_analysis else {}))
         return 1
     reason = provider_failure_reason(result)
     if reason is not None:
@@ -2068,6 +2108,16 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
 def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
     """Render static toolkit text for one already hostile-validated closed outcome."""
 
+    version = (status.review or {}).get("diff_version_id")
+    revision = (status.source_sha, version) if type(version) is int and version > 0 else None
+    token = REVIEW_REVISION.set(revision)
+    try:
+        return _post_pre_execution_status(config, status)
+    finally:
+        REVIEW_REVISION.reset(token)
+
+
+def _post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
     if status.reason == GITLAB_MERGE_REQUEST_TERMINAL:
         return post_terminal_merge_request_status(config, status)
     if status.reason == REVIEWED_REVISION_NO_LONGER_CURRENT:
@@ -2322,7 +2372,7 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
     return 1 if strict_posting() else 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, include_analysis: bool = False) -> int:
     """CLI entrypoint."""
 
     args = argv if argv is not None else sys.argv[1:]
@@ -2357,7 +2407,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if exit_code != 0:
-        return post_ocr_failure(config, stderr_path, exit_code, result_path)
+        return post_ocr_failure(
+            config,
+            stderr_path,
+            exit_code,
+            result_path,
+            **({"include_analysis": True} if include_analysis else {}),
+        )
 
     try:
         result = load_ocr_result(result_path)
@@ -2379,4 +2435,4 @@ def main(argv: list[str] | None = None) -> int:
         print("OCR result JSON must be an object.", file=sys.stderr)
         return invalid_ocr_schema_exit(config, "top-level JSON value must be an object")
 
-    return post_results(config, result)
+    return post_results(config, result, **({"include_analysis": True} if include_analysis else {}))

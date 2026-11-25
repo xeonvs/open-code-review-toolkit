@@ -360,6 +360,8 @@ def test_analysis_cli_runs_plain_preview_and_delivers_only_admitted_private_mark
     assert journal["artifacts"]["raw-result.json"]["status"] == "not-run"
     assert journal["artifacts"]["raw-stderr.log"]["status"] == "not-run"
     assert not (debug / "safe-result.json").exists()
+    if expected_exit in (0, 1) and markdown == REPORT_TEXT and (exit_code == 0 or partial):
+        assert REPORT_TEXT in Path(str(result) + ".md").read_text()
     output = capsys.readouterr()
     for text in (output.out, output.err, (debug / "summary.md").read_text()):
         assert RAW_MARKER not in text and REPORT_TEXT not in text and FORBIDDEN_REPORT not in text

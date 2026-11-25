@@ -351,7 +351,7 @@ def load_ocr_result(path: Path) -> Any:
                 scalar_metadata = {
                     key: value
                     for key, value in metadata.items()
-                    if key not in {"diagram", "review_model"}
+                    if key not in {"diagram", "review_model", "analysis_hmac_sha256"}
                 }
                 if scalar_metadata != sanitize_ocr_value(scalar_metadata):
                     raise OcrResultMalformed("OCR toolkit receipt changed during redaction")
@@ -416,6 +416,8 @@ def load_ocr_result(path: Path) -> Any:
                 # omitting the whole optional channel on admission failure.
                 sanitized = sanitize_ocr_value(raw)
                 sanitized[TOOLKIT_RESULT_KEY] = metadata
+                if "analysis_hmac_sha256" in metadata and "toolkit_analysis" in raw:
+                    sanitized["toolkit_analysis"] = raw["toolkit_analysis"]
             else:
                 sanitized = sanitize_ocr_value(raw)
             return sanitized
@@ -483,6 +485,7 @@ def transform_ocr_result(
 
         encoded = encode()
         if len(encoded) > limit:
+            with_model = transformed.copy()
             receipt = transformed.get(TOOLKIT_RESULT_KEY)
             if isinstance(receipt, dict) and "review_model" in receipt:
                 publication = receipt.get("publication")
@@ -497,8 +500,20 @@ def transform_ocr_result(
                 }
                 encoded = encode()
         if len(encoded) > limit and optional_field is not None and optional_field in transformed:
+            without_model = transformed
+            transformed = with_model
             del transformed[optional_field]
+            receipt = transformed.get(TOOLKIT_RESULT_KEY)
+            if isinstance(receipt, dict):
+                transformed[TOOLKIT_RESULT_KEY] = {
+                    k: v for k, v in receipt.items() if k != "analysis_hmac_sha256"
+                }
             encoded = encode()
+            if len(encoded) > limit and "review_model" in with_model.get(TOOLKIT_RESULT_KEY, {}):
+                transformed = without_model
+                transformed.pop(optional_field, None)
+                transformed[TOOLKIT_RESULT_KEY].pop("analysis_hmac_sha256", None)
+                encoded = encode()
         if len(encoded) > limit:
             raise OcrResultTooLarge(
                 f"transformed OCR result JSON exceeds OCR_MAX_RESULT_BYTES={limit}"

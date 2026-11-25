@@ -359,6 +359,12 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             and model_slug(toolkit_metadata.get("review_model"))
             else set()
         )
+        | (
+            {"analysis_hmac_sha256"}
+            if receipt_version in {RECEIPT_V13, RECEIPT_V14}
+            and _sha256(toolkit_metadata.get("analysis_hmac_sha256"))
+            else set()
+        )
         | ({"repository_coverage"} if receipt_version in {RECEIPT_V12, RECEIPT_V14} else set())
         | ({"range", "diagram"} if receipt_version in {RECEIPT_V13, RECEIPT_V14} else set())
     ):

@@ -2010,6 +2010,10 @@ def _finalize_ocr_result(
             metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
         if provider_receipt:
+            if analysis_result is not None and (
+                signature := review_analysis.publication_digest(analysis_result, metadata["review"])
+            ):
+                metadata["analysis_hmac_sha256"] = signature
             native_identity = payload.get("llm")
             if (
                 configured_model
@@ -3452,6 +3456,9 @@ def run_evidence_review(
                     "reason": state.provider_failure.value,
                 }
             ).encode("utf-8")
+        analysis_output = None
+        if state.analysis.enabled and state.result_admitted and admitted is not None:
+            analysis_output = json.loads(admitted).get(review_analysis.PRIVATE_RESULT_KEY)
         if admitted is not None:
             try:
                 write_private_bytes(result_path, admitted)
@@ -3475,8 +3482,17 @@ def run_evidence_review(
             state.enter("reporting")
             try:
                 assert report_destination is not None
-                publish_local_report(report, report_destination)
-                if state.debug is not None:
+                if state.analysis.enabled:
+                    publish_local_report(
+                        report,
+                        report_destination,
+                        review_analysis.markdown_section(analysis_output),
+                    )
+                    if state.debug is not None:
+                        state.debug.capture_parts("summary.md", local_report_parts(report))
+                else:
+                    publish_local_report(report, report_destination)
+                if state.debug is not None and not state.analysis.enabled:
                     state.debug.capture("summary.md", report_destination)
             except (OSError, ValueError) as exc:
                 failure = failed_report("reporting")
@@ -3489,6 +3505,10 @@ def run_evidence_review(
                 raise ReviewRunnerError("local report artifact output failed") from exc
             try:
                 write_local_report(report, sys.stdout)
+                if state.analysis.enabled:
+                    print(
+                        f"Behavior/Impact Analysis: {review_analysis.describe(analysis_output)}; report {str(report_destination)!a}"
+                    )
             except (OSError, ValueError) as exc:
                 raise ReviewRunnerError("local report output failed") from exc
             state.observe("reporting", "passed", facts={"report_artifact": True, "console": True})
@@ -3514,9 +3534,13 @@ def run_evidence_review(
                 state.debug.capture_parts("summary.md", local_report_parts(failure))
             if report_destination is not None:
                 try:
-                    publish_local_report(failure, report_destination)
+                    publish_local_report(
+                        failure,
+                        report_destination,
+                        review_analysis.markdown_section(None) if state.analysis.enabled else "",
+                    )
                     artifact_delivered = True
-                    if state.debug is not None:
+                    if state.debug is not None and not state.analysis.enabled:
                         state.debug.capture("summary.md", report_destination)
                 except (OSError, ValueError):
                     try:
@@ -3525,6 +3549,9 @@ def run_evidence_review(
                         pass
             try:
                 write_local_report(failure, sys.stdout)
+                if state.analysis.enabled:
+                    location = f"; report {str(report_destination)!a}" if artifact_delivered else ""
+                    print("Behavior/Impact Analysis: unavailable" + location)
                 console_delivered = True
             except (OSError, ValueError):
                 try:

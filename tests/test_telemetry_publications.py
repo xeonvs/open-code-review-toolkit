@@ -18,6 +18,7 @@ from ocr_toolkit.posting.formatting import (
     publication_dlp_signal,
     summarize_result,
 )
+from ocr_toolkit.posting.markers import REVIEW_REVISION
 from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.workflow import summary_with_run_marker
 from ocr_toolkit.reporting.federation import format_federation, reconcile
@@ -749,3 +750,38 @@ def test_duplicate_summary_markers_cannot_authorize_a_model_identity():
     parsed = parse_publication(build_marked_note_body(marked))
     assert parsed is not None and parsed["recognized"]
     assert "model" not in parsed
+
+
+def test_analysis_is_separate_from_public_telemetry(monkeypatch):
+    from ocr_toolkit import review_analysis
+
+    value = {"status": "partial", "markdown": "Token usage: 10000 total"}
+    monkeypatch.setenv("CI_JOB_TOKEN", "synthetic-job-value")
+    signature = review_analysis.publication_digest(value, {"diff_version_id": 7})
+    monkeypatch.setenv("CI_JOB_TOKEN", "different-job")
+    assert not review_analysis.public_section(value, signature, {"diff_version_id": 7})
+    monkeypatch.setenv("CI_JOB_TOKEN", "synthetic-job-value")
+    assert not review_analysis.public_section(value, signature, {"diff_version_id": 8})
+    section = review_analysis.public_section(value, signature, {"diff_version_id": 7})
+    assert "Analysis (partial)" in section
+    assert (
+        review_analysis.public_section(
+            {**value, "markdown": "different"},
+            review_analysis.publication_digest(value, {"diff_version_id": 7}),
+            {"diff_version_id": 7},
+        )
+        == ""
+    )
+
+    def publication(section):
+        summary = summarize_result(0, 0, 0, 0, analysis_section=section)
+        token = REVIEW_REVISION.set(("a" * 40, 7))
+        try:
+            return build_marked_note_body(summary_with_run_marker(summary, "d" * 32))
+        finally:
+            REVIEW_REVISION.reset(token)
+
+    visible = publication(section)
+    assert section in visible
+    parsed = parse_publication(visible)
+    assert parsed and parsed == parse_publication(publication(""))

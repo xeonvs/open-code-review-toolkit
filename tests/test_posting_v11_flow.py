@@ -395,8 +395,11 @@ def test_v11_findings_use_exact_receipt_diff_tuple_and_protected_anchor(
     assert identity.policy_branch not in notes[0]
 
 
+@pytest.mark.parametrize("include_analysis", [False, True])
 def test_v11_no_findings_summary_uses_protected_anchor(
     monkeypatch: pytest.MonkeyPatch,
+    include_analysis: bool,
+    tmp_path: Path,
 ) -> None:
     """A clean fallback still explains target protection and immutable authority."""
 
@@ -421,7 +424,26 @@ def test_v11_no_findings_summary_uses_protected_anchor(
     result = _result("clean")
     result["_ocr_toolkit"] = receipt
 
-    assert workflow.post_results(gitlab_config(), result) == 0
+    from ocr_toolkit.review_analysis import publication_digest
+
+    result["toolkit_analysis"] = {
+        "status": "partial",
+        "markdown": "The API key is required.",
+    }
+    monkeypatch.setenv("CI_JOB_TOKEN", "synthetic-job-value")
+    receipt["analysis_hmac_sha256"] = publication_digest(
+        result["toolkit_analysis"], receipt["review"]
+    )
+    path = tmp_path / "review.json"
+    path.write_text(json.dumps(result))
+    assert (
+        workflow.post_results(
+            gitlab_config(), load_ocr_result(path), include_analysis=include_analysis
+        )
+        == 0
+    )
+    assert ("The API key is required." in notes[0]) is include_analysis
+    assert ("<summary>Behavior/Impact Analysis (partial)</summary>" in notes[0]) is include_analysis
     assert len(notes) == 1
     assert "protected policy anchor" in notes[0]
     assert receipt["review"]["policy_sha"] in notes[0]

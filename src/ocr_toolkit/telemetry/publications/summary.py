@@ -111,7 +111,11 @@ def parse_publication(body: str) -> dict[str, Any] | None:
 
     if len(body) > 128 * 1024:
         return None
-    body = body.replace("\r\n", "\n")
+    body = re.sub(
+        r"\A<!-- open-code-review-bot head=[0-9a-f]{40} version=[1-9][0-9]{0,18} -->",
+        "<!-- open-code-review-bot -->",
+        body.replace("\r\n", "\n"),
+    )
     if "\x00" in body or not is_ocr_summary(body):
         return None
     if status_note := parse_status_note(body):

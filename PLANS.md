@@ -89,7 +89,7 @@ At `444ebce` the complete quality gate passed with 6,068 tests, 360 subtests, 80
 
 The model-specific own-tool review covered five files across its initial pass and two-file provider retry. Review corrections preserve explicit zero usage, reject unsupported estimates, and bind the optional public label to both the receipt and available native model. The scoped threat-model review identified excess GitLab settings reads. Collection now limits the optional request to projects with usable historical usage that actually needs a model. The canonical security guide documents publication visibility, credential destinations, plaintext state and the limits of anonymization.
 
-[The single-tag qualification](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45652414177) passed all native candidate probes for 1.14.3 against 1.14.2. Aggregation exposed single-artifact extraction directly into the download root. The workflow selects the destination from the actual uploaded candidates, including a single surviving artifact from a partial matrix. Recheck hosted aggregation before delivering the release.
+[The single-tag qualification](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45652414177) passed all native candidate probes for 1.14.3 against 1.14.2. Aggregation exposed single-artifact extraction directly into the download root. The workflow selects the destination from the actual uploaded candidates, including a single surviving artifact from a partial matrix. The [single-artifact hosted recheck](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/45660885585) passed candidate qualification and final aggregation.
 
 ### Risks And Recovery
 

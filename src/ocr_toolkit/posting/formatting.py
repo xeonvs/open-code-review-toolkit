@@ -719,6 +719,7 @@ def summarize_result(
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
     review_model: str | None = None,
+    analysis_section: str = "",
     ocr_core_advisory_summary: str = "",
     publication_dlp_details: str = "",
     reviewer_guide: str = "",
@@ -844,8 +845,22 @@ def summarize_result(
         # Reserve the existing 1000-character/byte envelope for immutable note
         # and transaction markers. Never let the note limiter cut a condition.
         if max(len(candidate), len(candidate.encode("utf-8"))) <= FALLBACK_NOTE_CHUNK_BUDGET:
-            return candidate
+            return _append_analysis(candidate, analysis_section)
         if diagram_state_index is not None:
             technical[diagram_state_index] = "- Change diagram: `omitted-invalid` (note budget)"
         diagram_warning()
-    return "\n".join([*lines, *technical_lines()])
+    return _append_analysis("\n".join([*lines, *technical_lines()]), analysis_section)
+
+
+def _append_analysis(summary: str, section: str) -> str:
+    if not section:
+        return summary
+    available = FALLBACK_NOTE_CHUNK_BUDGET - len(summary.encode()) - 2
+    if len(section.encode()) > available:
+        section = (
+            section.partition("</summary>")[0]
+            + "</summary>\n\nReport omitted for space.\n\n</details>"
+        )
+    if len(section.encode()) > available:
+        return summary
+    return summary + "\n\n" + section

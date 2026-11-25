@@ -79,7 +79,9 @@ def build_parser() -> argparse.ArgumentParser:
         "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
     )
 
-    post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
+    post_parser = subparsers.add_parser(
+        "post", allow_abbrev=False, help="Publish an OCR result artifact to GitLab."
+    )
     post_parser.add_argument(
         # The public GitLab example writes this fixed path inside an isolated CI job.
         "--result",
@@ -91,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--stderr",
         default="/tmp/ocr-stderr.log",  # nosec B108
         help="OCR stderr log path.",
+    )
+    post_parser.add_argument(
+        "--include-analysis",
+        action="store_true",
+        help="Include admitted impact analysis in the MR summary.",
     )
     return parser
 
@@ -143,5 +150,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2
     if args.command == "post":
-        return posting_main([args.result, args.stderr])
+        return posting_main(
+            [args.result, args.stderr],
+            **({"include_analysis": True} if args.include_analysis else {}),
+        )
     raise AssertionError(f"unhandled command: {args.command}")

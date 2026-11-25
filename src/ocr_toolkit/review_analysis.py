@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import hmac
+import json
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from ocr_toolkit.common.markdown import (
+    markdown_code_block,
+    neutralize_quick_actions,
+    neutralize_suggestion_fences,
+)
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import ForbiddenValue, check_text
 
@@ -131,3 +139,64 @@ def admit_analysis(
         else:
             result["report_state"] = "filtered"
     return result
+
+
+def publication_digest(value: object, identity: object) -> str | None:
+    """Bind the optional MR publication to the exact review-time admitted result."""
+    key = os.environ.get("CI_JOB_TOKEN")
+    if not key:
+        return None
+    message = (
+        b"toolkit-analysis-v1\0"
+        + json.dumps([identity, value], sort_keys=True, separators=(",", ":")).encode()
+    )
+    return hmac.digest(key.encode(), message, "sha256").hex()
+
+
+def describe(value: object) -> str:
+    if not isinstance(value, dict):
+        return "unavailable"
+    status = value.get("status")
+    if status not in ("completed", "skipped", "failed", "partial", "unavailable"):
+        return "unavailable"
+    details = [str(status)]
+    if value.get("declared_completion") in ("complete", "partial", "unknown"):
+        details.append("declared " + value["declared_completion"])
+    if value.get("report_state") in ("filtered", "unavailable"):
+        details.append(value["report_state"])
+    return ", ".join(details)
+
+
+def markdown_section(value: object) -> str:
+    """Render already admitted Analysis for a private Markdown destination."""
+    text = value.get("markdown") if isinstance(value, dict) else None
+    return (
+        "## Behavior/Impact Analysis\n\nStatus: "
+        + describe(value)
+        + ("\n\n" + markdown_code_block("text", text) if isinstance(text, str) and text else "")
+        + "\n"
+    )
+
+
+def public_section(value: object, digest: object, identity: object) -> str:
+    """Recheck the receipt-bound text before placing it inside a GitLab note."""
+    if (
+        not isinstance(value, dict)
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        or not hmac.compare_digest(publication_digest(value, identity) or "", digest)
+    ):
+        return ""
+
+    title = "Behavior/Impact Analysis (" + describe(value) + ")"
+    body = value.get("markdown")
+    if isinstance(body, str):
+        checked = check_text(body, publication=True, enabled=True, budgets=_MARKDOWN_BUDGETS)
+        if not checked.admitted or checked.text != body:
+            body = "Report text filtered at publication."
+        body = neutralize_quick_actions(
+            neutralize_suggestion_fences(markdown_code_block("text", body))
+        )
+    else:
+        body = "No report text available."
+    return f"<details>\n<summary>{title}</summary>\n\n{body}\n\n</details>"

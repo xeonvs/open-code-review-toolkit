@@ -175,7 +175,7 @@ before a GitLab write. A v6 no-model status contains only closed counts or a
 closed unqualified reason, with the authenticated MR identity.
 With Behavior/Impact Analysis enabled, the private JSON can contain admitted
 report Markdown, status, declared completeness and bounded token counts. Treat
-that artifact as private repository material. Native session paths, raw
+that artifact as private repository material. Only an explicit `post --include-analysis` can publish admitted report text in the MR. The posting path verifies the HMAC over the report and validated review identity with the current GitLab job token and rechecks DLP before rendering. The standard job uploads no Analysis artifact. Native session paths, raw
 observations and traces belong to the isolated execution directory. GitLab
 findings, approval and coverage derive from the main review.
 

@@ -18,10 +18,10 @@ review_dir=$(cd "$review_dir" && pwd -P)
 ocr-ci review --local --analysis --analysis-max-tokens-budget 20000 --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
 
-Read `toolkit_analysis` in the private result JSON. Its status describes the
+Read the Behavior/Impact Analysis section at the end of the private Markdown report. The console gives the investigation status and report path. The private result JSON also contains `toolkit_analysis`. Its status describes the
 investigation; the main review's status and coverage describe the findings.
 Admitted Markdown is available when the investigation produces a report that
-passes DLP. Check declared completeness before using its conclusions. With Analysis enabled, the stderr artifact stays empty and the debug bundle omits native stdout, stderr, traces and result copies. An empty stderr artifact cannot establish which reads succeeded in either part of the original run. For diagnostics on a fresh main review, rerun the same range with Analysis disabled and inspect that run’s stderr.
+passes DLP. Check declared completeness before using its conclusions. OCR can report `skipped` when Git environment overrides prevent it from reproducing the checkout. Run from an ordinary checkout with its intended Git configuration. With Analysis enabled, the stderr artifact stays empty and the debug bundle omits native stdout, stderr, traces and result copies. An empty stderr artifact cannot establish which reads succeeded in either part of the original run. For diagnostics on a fresh main review, rerun the same range with Analysis disabled and inspect that run’s stderr.
 
 ## Offline DLP audits
 
