@@ -9,7 +9,7 @@ requires its own qualification before installation.
 ## Upgrading the toolkit and OCR
 
 Replace the 0.15.1 wheel and OCR 1.13.x binary together. For 0.15.2 the
-target pair is toolkit 0.15.2 and OCR 1.14.3. Once 0.15.2 is published,
+target pair is toolkit 0.15.2 and OCR 1.14.4. Once 0.15.2 is published,
 run the following inside the toolkit virtual environment and check that it prints
 `ocr-ci 0.15.2`:
 
@@ -27,8 +27,8 @@ download in a private directory before installing the executable:
   cd "$(mktemp -d)"
   mkdir -p "$HOME/.local/bin"
   curl --fail --location --proto '=https' --proto-redir '=https' \
-    -o ocr https://github.com/alibaba/open-code-review/releases/download/v1.14.3/opencodereview-linux-amd64
-  echo '17ee32cdf0af6c006a199d758defb6c2abe05ec5b4d164df3a703c0208d5155e  ocr' | sha256sum --check --strict
+    -o ocr https://github.com/alibaba/open-code-review/releases/download/v1.14.4/opencodereview-linux-amd64
+  echo '1dc6b1ea37611a2c10d61cb755ab03f07dc3c1a88872963669443937211e7f3a  ocr' | sha256sum --check --strict
   install -m 0755 ocr "$HOME/.local/bin/ocr"
 )
 ```
@@ -39,9 +39,9 @@ the wheel, check `ocr --version` and run `ocr-ci preflight --local` in the
 configured local environment or `ocr-ci preflight` in GitLab CI. Preflight
 rejects the former 1.13.x binary. The GitLab example verifies both downloads;
 use the example from the tag matching the installed toolkit.
-[OCR 1.14.3 release assets](https://github.com/alibaba/open-code-review/releases/tag/v1.14.3)
+[OCR 1.14.4 release assets](https://github.com/alibaba/open-code-review/releases/tag/v1.14.4)
 
-## Changes in OCR 1.13.11 through 1.14.3
+## Changes in OCR 1.13.11 through 1.14.4
 
 | OCR | Effect on toolkit users | Other upstream changes |
 | --- | --- | --- |
@@ -52,6 +52,7 @@ use the example from the tag matching the installed toolkit.
 | [1.14.1](https://github.com/alibaba/open-code-review/releases/tag/v1.14.1) | Analysis reports include token usage. Native workspace tools reject named pipes before opening them. | Skill guidance and GitFlic/Gerrit example scripts concern upstream integrations. |
 | [1.14.2](https://github.com/alibaba/open-code-review/releases/tag/v1.14.2) | A byte-order mark is accepted when detecting Objective-C source, improving native rule selection. | Turkish documentation and editor localization and Go standard-library refactoring add no toolkit configuration. |
 | [1.14.3](https://github.com/alibaba/open-code-review/releases/tag/v1.14.3) | Native `code_search` gives the model a recovery hint for an invalid Perl regular expression. The model can correct it or retry with literal matching. | OCR updates its embedded OpenTelemetry dependency. Upstream documents the extension override for rule includes and its own GitHub Actions trigger, and adds a French README. |
+| [1.14.4](https://github.com/alibaba/open-code-review/releases/tag/v1.14.4) | Default selection excludes common C and C++ test and benchmark paths, including `src/parser_test.cpp` and headers under `tests/`. Native code search preserves binary matches. OCR trims and validates the configured LLM URL. | Retry reports are stored in the private native session. The upstream GitHub review skill and Vietnamese translation do not change toolkit commands. |
 
 ## Qualification lanes
 

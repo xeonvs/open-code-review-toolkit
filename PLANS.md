@@ -11,7 +11,7 @@ Last Updated: 2026-11-25
 
 ### Goal
 
-Deliver issue #324, qualify the seven stable OCR releases through 1.14.3, expose opt-in Behavior/Impact Analysis and deliver private bilingual offline reports for GitLab MR telemetry.
+Deliver issue #324, qualify the eight stable OCR releases through 1.14.4, expose opt-in Behavior/Impact Analysis and deliver private bilingual offline reports for GitLab MR telemetry.
 
 ### Plan Origin
 
@@ -42,7 +42,7 @@ The user requires a stop at the draft feature PR. For the telemetry update, revi
 
 ### Inputs And Sources
 
-Toolkit issues #324–330, upstream releases 1.13.11 through 1.14.3, compatibility run 45148738452, repository development and release contracts.
+Toolkit issues #324–330, upstream releases 1.13.11 through 1.14.4, compatibility run 45148738452, repository development and release contracts.
 
 ### User Decisions And Answers
 
@@ -93,7 +93,7 @@ The model-specific own-tool review covered five files across its initial pass an
 
 ### Risks And Recovery
 
-Bound qualification to v1.14.3. If a candidate fails, inspect its closed phase and disposition before retry. Keep stale or incomplete evidence out of promotion.
+[Issue #333 qualification](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/46124170477) passed for OCR 1.14.4 against 1.14.3, including chain assessment. Reviewed the C/C++ selection change and promoted the candidate. Bound qualification to v1.14.4. If a candidate fails, inspect its closed phase and disposition before retry. Keep stale or incomplete evidence out of promotion.
 
 ### Resume Point
 

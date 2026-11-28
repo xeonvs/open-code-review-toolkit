@@ -22,5 +22,11 @@
     "chatgpt_auth",
     "diagram_output",
     "gitlink_projection"
+  ],
+  "1.14.4": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
   ]
 }
