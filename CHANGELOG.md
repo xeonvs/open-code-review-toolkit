@@ -1,3 +1,33 @@
+## 0.15.2 - 2026-11-28
+
+### 🚀 Features
+
+- Local and GitLab reviews can request a private Behavior/Impact report with `ocr-ci review --analysis`. Set `--analysis-max-tokens-budget` to give its additional model work a separate soft token budget. Zero is unlimited.
+
+  Include impact analysis in private local Markdown and optionally in the GitLab summary with `ocr-ci post --include-analysis`. Keep reviews of previous source revisions visible. ([#328](https://github.com/xeonvs/open-code-review-toolkit/issues/328))
+- Added local GitLab collection and offline reports with English or Russian HTML and language-independent aggregate JSON through `ocr-ci telemetry collect` and `ocr-ci telemetry report`, with private snapshots and optional anonymization.
+  GitLab review summaries can record the selected model. Cost estimates distinguish that run's model from the current project setting used for older messages. ([#331](https://github.com/xeonvs/open-code-review-toolkit/issues/331))
+
+### 🐛 Bug Fixes
+
+- GitLab review publication preserves findings and private result fields that mention CI job names or paths from the repository's context policy. Protected content from other sources continues to be filtered. ([#324](https://github.com/xeonvs/open-code-review-toolkit/issues/324))
+- GitLab review posting can retain completed findings when OCR exits with status 1 for an operationally partial review. The runner verifies the native manifest before publication DLP. If DLP removes the manifest, the filtered toolkit handoff must still prove the operational partial and current MR identity before posting the admitted findings. The job still reports failure and preserves previous findings. ([#325](https://github.com/xeonvs/open-code-review-toolkit/issues/325))
+- OCR qualification records which sampled fixture paths the binary selects. Candidate issues report a closed phase and reason for incompatibility. Integrity and infrastructure failures keep the GitHub Actions run red. ([#329](https://github.com/xeonvs/open-code-review-toolkit/issues/329))
+
+### 🛠 Maintenance
+
+- Qualified eight stable OCR releases and recommend the checksum-verified 1.14.4 binary. Native code search now gives recovery guidance for invalid regular expressions and preserves binary matches. ([#330](https://github.com/xeonvs/open-code-review-toolkit/issues/330), [#332](https://github.com/xeonvs/open-code-review-toolkit/issues/332), [#333](https://github.com/xeonvs/open-code-review-toolkit/issues/333))
+
+### 🧩 Rules
+
+- The recommended OCR line adds Move, SQL, Dhall and Ruby rules, selects TypeScript module, CUDA and HIP sources, and excludes Cargo test and benchmark paths by default. BOM-prefixed Objective-C sources use the native Objective-C rule. ([#328](https://github.com/xeonvs/open-code-review-toolkit/issues/328))
+- Default OCR selection now excludes common C and C++ test and benchmark paths, including GoogleTest and Google Benchmark filename conventions. ([#333](https://github.com/xeonvs/open-code-review-toolkit/issues/333))
+
+### Removals
+
+- Toolkit 0.15.2 preflight requires a tested patch on the OCR 1.14 line. Upgrade the wheel and checksum-verified OCR binary together when migrating from 0.15.1. ([#330](https://github.com/xeonvs/open-code-review-toolkit/issues/330))
+
+
 ## 0.15.1 - 2026-11-16
 
 ### 🐛 Bug Fixes

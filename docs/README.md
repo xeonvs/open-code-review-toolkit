@@ -17,6 +17,7 @@ This page routes readers to the canonical document for each topic. It does not r
 - [review-context.md](review-context.md)
 - [review-decision-flow.md](review-decision-flow.md)
 - [security.md](security.md)
+- [telemetry.md](telemetry.md)
 <!-- engineering-workflow:index:end -->
 
 ## Use and operate the toolkit

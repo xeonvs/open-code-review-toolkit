@@ -9,8 +9,7 @@ requires its own qualification before installation.
 ## Upgrading the toolkit and OCR
 
 Replace the 0.15.1 wheel and OCR 1.13.x binary together. For 0.15.2 the
-target pair is toolkit 0.15.2 and OCR 1.14.4. Once 0.15.2 is published,
-run the following inside the toolkit virtual environment and check that it prints
+target pair is toolkit 0.15.2 and OCR 1.14.4. Run the following inside the toolkit virtual environment and check that it prints
 `ocr-ci 0.15.2`:
 
 ```sh
