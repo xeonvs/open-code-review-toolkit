@@ -1,0 +1,363 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "e7b4e8bd0ee3c9c97ef2317483773e065eec520a2efc3c8ca6b2a1105b4ddcfb",
+      "size": 64046704
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "5f4cf6c7684b1333248fc63b2ebd65f0884f9c884160bd01c8c4f82afabf2cc0",
+      "size": 60790098
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "d4d718501742cad754210d85c6dcf8cb1664bd914fb370fa89c3776fc69e111f",
+      "size": 62202018
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "9b02a873fbde8bbb30ffc8457cf89f04896363a02dd2a4299fef1919f83209e5",
+      "size": 58523810
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "614151f4c280910f6fc501a2793e1dd1b59483eea0144f10550092ccd533f652",
+      "size": 63743488
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "15f99eb9084624eabbf7fbcac112140aef003d577321c79100773adce9f1c910",
+      "size": 59333632
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "749ab6799592aa59d6778c78689099902c21a054ef761fe9a49b668a73c8abee",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.14.1",
+  "contracts": {
+    "checks": {
+      "budget_partial": "passed",
+      "identity": "passed",
+      "mcp": "passed",
+      "numeric_controls": "passed",
+      "provider_controls": "passed",
+      "publication": "passed",
+      "range_preview": "passed",
+      "review_result": "passed",
+      "user_exclusion": "passed"
+    },
+    "native_handoffs": [
+      "analysis",
+      "chatgpt_auth",
+      "diagram_output",
+      "gitlink_projection"
+    ],
+    "observations": {
+      "budget": {
+        "completed": 2,
+        "failed_budget": 1,
+        "partial_findings_preserved": true,
+        "result": "passed",
+        "selected": 3
+      },
+      "builtin_selection": {
+        "fixture_paths": [
+          ".cpcache/cache.edn",
+          ".shadow-cljs/build.edn",
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "dist/generated.js",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "node_modules/example/index.ts",
+          "policies/authz.rego",
+          "resources/public/js/compiled/app.js",
+          "resources/public/js/compiled/config.edn",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/WidgetTest.fs",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/core_test.cljs",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/test/kotlin/scripts/Example.kts",
+          "src/test_helpers.py",
+          "src/types.cts",
+          "src/types.mts",
+          "test/nested/core.clj",
+          "test/parser.ml",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ],
+        "selected": [
+          "BUILD",
+          "WORKSPACE",
+          "app/src/Program.cs",
+          "bazel/config.star",
+          "bazel/defs.bazel",
+          "bazel/rules.bzl",
+          "config/settings.jsonc",
+          "deps.edn",
+          "infra/main.tofu",
+          "native/header.hxx",
+          "native/object.mm",
+          "native/source.cxx",
+          "nested/BUILD",
+          "nested/WORKSPACE",
+          "policies/authz.rego",
+          "rtl/entity.vhd",
+          "rtl/entity.vhdl",
+          "rtl/include.vh",
+          "rtl/module.sv",
+          "rtl/module.v",
+          "scripts/check.fsx",
+          "scripts/module.psd1",
+          "scripts/module.psm1",
+          "scripts/setup.kts",
+          "scripts/setup.nu",
+          "scripts/setup.ps1",
+          "shaders/main.glsl",
+          "shaders/main.hlsl",
+          "shaders/main.metal",
+          "shaders/main.wgsl",
+          "src/Main.scala",
+          "src/Program.fs",
+          "src/Program.fsi",
+          "src/component.re",
+          "src/component.rei",
+          "src/config.dhall",
+          "src/contract.move",
+          "src/core.clj",
+          "src/kernel.cu",
+          "src/kernel.hip",
+          "src/model.rb",
+          "src/module.cjs",
+          "src/module.mjs",
+          "src/nested/view.cljs",
+          "src/parser.ml",
+          "src/parser.mli",
+          "src/query.sql",
+          "src/shared.cljc",
+          "src/types.cts",
+          "src/types.mts",
+          "types/interface.pyi",
+          "views/component.j2",
+          "views/page.ejs",
+          "views/page.erb",
+          "views/page.haml",
+          "views/page.jinja2",
+          "views/page.liquid",
+          "views/page.njk",
+          "views/page.pug",
+          "views/page.slim"
+        ]
+      },
+      "comment_arguments": {
+        "comments_per_batch": 2,
+        "failure_arguments_preserved": true,
+        "intact_cases": [
+          "array",
+          "serialized",
+          "repaired"
+        ],
+        "repair_warning": true,
+        "result": "passed",
+        "suspect_batch_rejected": true
+      },
+      "completion_cap": {
+        "explicit": 4096,
+        "inherited": 16384,
+        "result": "passed",
+        "wire_field": "max_completion_tokens"
+      },
+      "numeric_cli": {
+        "grace_rounds": {
+          "no_task_done": {
+            "completed": false,
+            "limit_warning": true
+          },
+          "task_done": {
+            "completed": true,
+            "limit_warning": true
+          }
+        },
+        "max_tokens_budget": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "minimum": {
+              "effective": 1,
+              "input": 1,
+              "outcome": "accepted"
+            },
+            "omitted": {
+              "effective": "unlimited",
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 30000,
+              "input": 30000,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": "unlimited",
+              "input": 0,
+              "outcome": "accepted"
+            }
+          },
+          "maximum": null,
+          "owner": "ocr-cli"
+        },
+        "max_tools": {
+          "cases": {
+            "invalid_below": {
+              "effective": null,
+              "input": -1,
+              "outcome": "rejected"
+            },
+            "lower_override": {
+              "effective": 75,
+              "input": 75,
+              "outcome": "accepted"
+            },
+            "minimum": {
+              "effective": 50,
+              "input": 50,
+              "outcome": "accepted"
+            },
+            "minimum_minus_one": {
+              "effective": 50,
+              "input": 49,
+              "outcome": "normalized",
+              "reported_normalization": 50
+            },
+            "omitted": {
+              "effective": 100,
+              "input": null,
+              "outcome": "accepted"
+            },
+            "representative": {
+              "effective": 125,
+              "input": 125,
+              "outcome": "accepted"
+            },
+            "sentinel": {
+              "effective": 100,
+              "input": 0,
+              "outcome": "accepted"
+            },
+            "template_value": {
+              "effective": 100,
+              "input": 100,
+              "outcome": "accepted"
+            }
+          },
+          "manifest_limit_verified": true,
+          "maximum": null,
+          "owner": "ocr-cli-or-template-default",
+          "reported_minimum": 50
+        },
+        "result": "passed"
+      },
+      "reasoning_effort": {
+        "efforts": [
+          "unset",
+          "none",
+          "high"
+        ],
+        "protocols": [
+          "openai",
+          "openai-responses"
+        ],
+        "provider_acceptance": "not-tested",
+        "responses_siblings_preserved": true,
+        "result": "passed"
+      },
+      "stream_override": {
+        "explicit_false": "preserved",
+        "non_boolean": "omitted",
+        "protocols": [
+          "openai",
+          "openai-responses",
+          "anthropic"
+        ],
+        "provider_acceptance": "not-tested",
+        "result": "passed",
+        "unset": "omitted"
+      }
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ]
+  },
+  "published_at": "2026-11-23T03:44:24Z",
+  "release_changes": "## 🚀 Features\n\n- feat(i18n): add Turkish README, site docs and VS Code localization (#1986)\n\n## 🐛 Bug Fixes\n\n- fix(rules): recognize BOM-prefixed Objective-C source (#1964)\n\n## 🔧 Refactoring\n\n- refactor: adopt modern Go stdlib helpers (#1566)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.14.1...v1.14.2",
+  "release_notes_sha256": "77fd8e0baa79ec791afbcecf6bb4c6e56ea140e119060c186e6524e8d8e859ba",
+  "result": "compatible",
+  "schema_version": 4,
+  "tag": "v1.14.2",
+  "tested_baseline_version": "1.13.10",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.14.2"
+}

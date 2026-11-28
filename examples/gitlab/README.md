@@ -1,6 +1,6 @@
 # GitLab operating modes
 
-[`ocr-review.gitlab-ci.yml`](ocr-review.gitlab-ci.yml) is the complete checksum-pinned pipeline. It defaults to identity-only review and leaves `OCR_GITLAB_TARGET_PROTECTION_MODE` unset so the pinned toolkit wheel supplies its own default. In toolkit 0.13.0, that default is `auto`: an unprotected target uses the same project's captured protected default branch as policy authority and remains comment-only. Earlier wheels retain their own documented default until the example pin advances. Set exact `required` to reject unprotected targets. The pipeline contains the install, preflight, configure, review, and post lifecycle. To select a mode below, copy its `variables` entries into the main pipeline's top-level `variables` mapping, replacing any keys already there. Check the resulting values before running the job. Do not merely `include` a mode file alongside the main example: [GitLab merges the main configuration after included files](https://docs.gitlab.com/ci/yaml/includes/#override-included-configuration-values), so the main file's overlapping variables win.
+[`ocr-review.gitlab-ci.yml`](ocr-review.gitlab-ci.yml) is the complete checksum-pinned pipeline. It defaults to identity-only review and leaves `OCR_GITLAB_TARGET_PROTECTION_MODE` unset so the pinned toolkit wheel supplies its own default. The default is `auto`: an unprotected target uses the same project's captured protected default branch as policy authority and remains comment-only. Set exact `required` to reject unprotected targets. The pipeline contains the install, preflight, configure, review, and post lifecycle. To select a mode below, copy its `variables` entries into the main pipeline's top-level `variables` mapping, replacing any keys already there. Check the resulting values before running the job. Do not merely `include` a mode file alongside the main example: [GitLab merges the main configuration after included files](https://docs.gitlab.com/ci/yaml/includes/#override-included-configuration-values), so the main file's overlapping variables win.
 
 The example uses GitLab's predefined detached MR event and checked-out
 `CI_COMMIT_SHA` as the source head. Merged-results and merge-train jobs stop
@@ -8,8 +8,8 @@ before model execution; no new project variable is needed.
 
 The pipeline pins the exact qualified OCR release from the [compatibility manifest](../../compatibility/ocr-support.json) and explicitly sets `OCR_REVIEW_EFFORT=medium`, which permits two review rounds. Use `low` for one round when latency/cost is the priority, or `high` for three only after accepting the additional provider work. OCR uses a 15-minute subtask base and scales it to 15/30/45 minutes for low/medium/high; the example's 45-minute job timeout accommodates every preset without adding another environment control. Semantic grouping and filtering are OCR behavior shared by every context mode; they do not change which merge-request text a mode admits. Omitted `OCR_MAX_TOOLS` or `0` selects the embedded template default `100`; values `1-49` normalize to `50`, and explicit `50` or `75` remains effective. `OCR_MAX_TOKENS_BUDGET` and the optional completion cap remain independent controls.
 
-Toolkit 0.13.1 automatically handles safely separable changed Git submodule
-pointers with its qualified OCR 1.13.3 binary. Selected ordinary files can
+The toolkit automatically handles safely separable changed Git submodule
+pointers with its qualified OCR binary. Selected ordinary files can
 receive findings, while changed pointers and submodule contents remain
 unreviewed and the GitLab summary explicitly reports partial repository
 coverage. This route cannot automatically approve or resolve prior finding
@@ -17,7 +17,7 @@ threads. A gitlink-only diff starts no model review and posts an advisory
 status; set the existing `OCR_STRICT_POSTING=true` only if that advisory should
 fail the job. No extra CI variable or MCP capability is needed.
 
-Starting with toolkit 0.14.0, unset `OCR_REVIEW_DIAGRAM_MODE` requests one
+An unset `OCR_REVIEW_DIAGRAM_MODE` requests one
 expanded flowchart or sequence summary in GitLab. To collapse it, add this to
 the main pipeline's variables (use `off` to suppress it):
 
@@ -44,7 +44,7 @@ pipeline timing and merge-policy implications. It does not replace manual readin
 | Enriched discussions | [`modes/enriched-discussions.gitlab-ci.yml`](modes/enriched-discussions.gitlab-ci.yml) | Metadata plus protected-policy GitLab discussions and remediation threads | GitLab reads before OCR | Explicitly disabled in the recipe |
 | Governed MCP federation | [`modes/direct-mcp.gitlab-ci.yml`](modes/direct-mcp.gitlab-ci.yml) | Metadata plus model-selected, gateway-admitted tool results | Registry-v2 HTTPS upstream through the bounded gateway | Used advisory tools are comment-only; unused services and successful `review_read` use are not independent blockers |
 
-With toolkit 0.13.0, the default `auto` profile can use `off`, `metadata`, `enriched`, and configured registry-v2 federation for a single MR targeting an unprotected branch; its Rules and context policy come from the protected default branch P, while the actual diff and target stay separate. It never adds an approval for that unprotected target. The explicit `unprotected` recipe retains the earlier limited profile: only `off` or `metadata`, Rules at the exact captured target SHA as untrusted guidance, no accepted decisions or structured guidance, and no enriched context or external federation. Its limitation line does not make a complete result incomplete. A protected target keeps normal behavior in either profile.
+The default `auto` profile can use `off`, `metadata`, `enriched`, and configured registry-v2 federation for a single MR targeting an unprotected branch; its Rules and context policy come from the protected default branch P, while the actual diff and target stay separate. It never adds an approval for that unprotected target. The explicit `unprotected` recipe retains the earlier limited profile: only `off` or `metadata`, Rules at the exact captured target SHA as untrusted guidance, no accepted decisions or structured guidance, and no enriched context or external federation. Its limitation line does not make a complete result incomplete. A protected target keeps normal behavior in either profile.
 
 The enriched-discussions mode uses [`context/policy-discussions.json`](context/policy-discussions.json). Copy the selected policy to `.opencodereview/review-context-policy.json` on the protected policy branch. Governed federation is operator configuration: upstream descriptions, schemas, model-chosen arguments, and admitted results enter the OCR session only through the bounded gateway. Do not combine mode files until the resulting union has been reviewed deliberately.
 

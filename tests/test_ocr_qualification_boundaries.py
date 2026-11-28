@@ -10,9 +10,8 @@ from copy import deepcopy
 
 import pytest
 
-from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 from tests.support import PROJECT_ROOT
-from tests.test_ocr_compat import current_contracts, load_script
+from tests.test_ocr_compat import FROZEN_113_VERSION, current_contracts, load_script
 
 
 @pytest.mark.parametrize("version", ("1.13.5", "1.13.7", "1.13.8"))
@@ -57,7 +56,7 @@ def test_frozen_fresh_execution_is_refused_before_a_probe(version):
 
 def test_current_live_selection_retains_csharp_and_nested_starlark():
     module = load_script()
-    rules = module.contracts._language_rules_for_version(RECOMMENDED_OCR_VERSION)
+    rules = module.contracts._language_rules_for_version(FROZEN_113_VERSION)
     assert rules["app/src/Program.cs"] == "**/*.cs"
     for path in ("bazel/rules.bzl", "bazel/defs.bazel", "bazel/config.star"):
         assert rules[path] == "**/*.{bzl,bazel,star}"
@@ -76,10 +75,10 @@ def test_1136_missing_consumed_proof_cannot_be_promoted(field):
 
 def test_current_epoch_requires_comparison_side_proof():
     module = load_script()
-    observed = current_contracts(module, RECOMMENDED_OCR_VERSION)
+    observed = current_contracts(module, FROZEN_113_VERSION)
     observed.pop("comparison_sides_probe")
     with pytest.raises(module.core.CompatibilityError, match="comparison_sides_probe"):
-        module.contracts._validate_contracts_for_version(RECOMMENDED_OCR_VERSION, observed)
+        module.contracts._validate_contracts_for_version(FROZEN_113_VERSION, observed)
 
 
 def test_extensionless_selection_has_paths_without_invented_extensions():

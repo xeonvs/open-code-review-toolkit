@@ -144,17 +144,21 @@ flowchart TD
     preview_ok -- Yes --> selected{Qualified gitlink and<br/>no ordinary file selected?}
     selected -- Yes --> no_work[Closed v6 no-model coverage;<br/>advisory post, strict mode nonzero]
     selected -- No --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
+    review -. Analysis enabled .-> analysis[Investigate the same range with a separate token budget]
+    analysis -. returns with main review .-> exit
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
-    exit -- Non-zero --> execution_cleanup
-    exit -- Zero --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
+    exit -- Other nonzero --> execution_cleanup
+    exit -- Zero or admitted exit-one operational partial --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
     diagram_snapshot --> execution_cleanup[Capture bounded local debug inputs and trace;<br/>remove ephemeral inputs and native HOME]
     execution_cleanup --> cleaned{Mandatory cleanup succeeded?}
     cleaned -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
-    cleaned -- Yes --> successful_run{Review exit zero?}
+    cleaned -- Yes --> successful_run{Exit zero or verified operational partial?}
     successful_run -- No --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
     successful_run -- Yes --> finalize[Enter result finalization]
-    finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
+    finalize --> analysis_admit{Native Analysis fields match request and main status?}
+    analysis_admit -- No --> integrity_error
+    analysis_admit -- Yes --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
     core -- No --> rejection_diag[Emit closed result shape and execution facts;<br/>missing contract vs zero evidence;<br/>independent summary counts when available]
     rejection_diag --> integrity_error
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
@@ -171,13 +175,14 @@ flowchart TD
     partial --> mode
     mode -- Local --> local_result[Validated receipt-less local result]
     local_result --> local_output{Explicit local provider?}
-    local_output -- Yes --> local_file[Shared admitted summary and all findings<br/>to fresh private Markdown artifact and console]
+    local_output -- Yes --> local_file[Shared summary and findings to private Markdown and console;<br/>optional Analysis text in private Markdown]
     local_file --> local_delivery{Artifact and console delivery succeed?}
     local_delivery -- Yes --> local_done[Local delivery complete;<br/>no platform actions]
     local_delivery -- No --> local_error[Nonzero delivery failure;<br/>preserve any completed artifact]
     runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
     integrity_error -- Explicit local --> local_failure
     local_output -- No --> local_handoff[Private JSON handoff only]
+    mode -. Explicit post --include-analysis .-> analysis_summary[Receipt-bound Analysis in collapsed MR section]
     mode -- GitLab MR --> receipt[Attach exact v13 ordinary or v14 partial receipt:<br/>diff, target T, policy P and CI job]
     receipt --> post{Posting input valid at readback?}
     post -- No --> posting_error[Job-local publication-policy error;<br/>findings transaction not started]

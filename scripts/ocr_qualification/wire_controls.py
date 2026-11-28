@@ -90,7 +90,10 @@ def stream_override_probe(binary: Path, directory: Path) -> dict[str, object]:
                     or request["stream_boolean"] != (False if label == "false" else None)
                     or request["stream_options_present"] is not False
                 ):
-                    core._fail(f"stream wire fields disagree: {protocol}/{label}")
+                    raise core.QualificationContractMismatch(
+                        f"stream wire fields disagree: {protocol}/{label}",
+                        reason="provider-contract",
+                    )
     return {
         "result": "passed",
         "protocols": list(protocols),

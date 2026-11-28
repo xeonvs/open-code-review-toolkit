@@ -33,6 +33,8 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_LLM_REASONING_EFFORT` | Operator / configure and preflight | No | Unset (no overlay) | Case-insensitive `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; explicit `none` is sent, not omitted. Nonempty values require an OpenAI protocol. |
 | `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
 | `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
+| `OCR_ANALYSIS` | Operator / review runner | No | `false` | Requires the new wheel and qualified OCR binary in the [paired upgrade instructions](compatibility.md#upgrading-the-toolkit-and-ocr). The preceding release’s GitLab pipeline ignores this setting. Enable a separate Behavior/Impact investigation on the reviewed range in GitLab or local review. It is private by default. GitLab publication requires the explicit `ocr-ci post --include-analysis` flag. |
+| `OCR_ANALYSIS_MAX_TOKENS_BUDGET` | Operator / review runner | No | `0` | Soft token budget for the additional investigation. Supply a non-negative decimal integer up to 9223372036854775807. Zero is unlimited. An explicitly blank value fails validation, including when Analysis is off. The main review has its own budget. |
 | `OCR_REVIEW_EFFORT` | Operator / `ocr-ci configure` | No | `medium` | Closed OCR quality preset: `low`, `medium`, or `high`; maps to one, two, or three review rounds. |
 | `OCR_REVIEW_DIAGRAM_MODE` | Operator / review and posting | No | `on` | Unset selects the default. Exact `on`, `off`, `spoiler`, or `local`; blank/unknown fails before acquisition. GitLab requests expanded/collapsed output with `on`/`spoiler`; standalone requests only `local`. See [optional diagrams](diagrams.md). |
 | `OCR_REVIEW_PROGRESS` | Operator / `ocr-ci review` | No | Empty / `false` | Case-insensitive `true` enables toolkit-only phase messages and a 30-second heartbeat on an interactive terminal or explicitly nonblocking embedding stream, capped at 120 messages per run. Conventional CI stderr pipes are deliberately unsupported. |
@@ -194,6 +196,8 @@ GitLab supplies the `CI_*` values in merge-request pipelines. The operator suppl
 | **`CI_PIPELINE_SOURCE`** | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
 | `OCR_GITLAB_TARGET_PROTECTION_MODE` | Operator / GitLab snapshot acquisition | No | `auto` | Closed selector: `auto` uses the actual target when protected, or the same project's protected default branch as policy authority when the actual target is unprotected. `required` rejects an unprotected target; `unprotected` retains the earlier constrained profile. An explicitly assigned empty, whitespace, mixed-case, malformed, or unknown value fails closed. |
 
+Local telemetry collection uses the active `glab` context. Its subprocess inherits configured GitLab host and repository overrides (`GITLAB_HOST`, `GITLAB_URI`, `GL_HOST`, `GITLAB_URL`, `GITLAB_API_HOST`, `GITLAB_REPO`) and authentication variables (`GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, `CI_JOB_TOKEN`). The installed `glab` selects its credentials. Offline report rendering reads the private snapshot. [Local telemetry guide](telemetry.md)
+
 ## Example-local variables
 
 These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell or pipeline controls, not additional toolkit configuration.
@@ -202,7 +206,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | --- | --- | --- | --- | --- |
 | **`OCR_VERSION`** | Example pipeline | Yes | Qualified OCR pin for the example's toolkit release | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
 | **`OCR_SHA256`** | Example pipeline | Yes | Manifest SHA-256 for `opencodereview-linux-amd64` | Exact digest pinned alongside `OCR_VERSION` in the pipeline; must belong to the same release entry. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.15.1` | Exact toolkit wheel version selected by the example; advance this table and the example together in the release PR. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | Toolkit release pinned in the pipeline | Selects the wheel from the [versioned GitLab example](../examples/gitlab/ocr-review.gitlab-ci.yml). |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |

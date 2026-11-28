@@ -22,6 +22,7 @@ from ocr_toolkit.evidence.mcp import handle_request, serve
 from ocr_toolkit.evidence.repository import GitRepositoryReader
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import formatting
+from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 from ocr_toolkit.providers.local import local_summary
 from ocr_toolkit.reporting import diagram as rendering
 from ocr_toolkit.reporting.model import report_from_result
@@ -62,7 +63,7 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
     execution = DiagramExecution.prepare(
         "local",
         local=True,
-        native_version="1.13.3",
+        native_version=RECOMMENDED_OCR_VERSION,
         review_range=review_range,
         path=artifacts.diagram,
     )
@@ -138,7 +139,7 @@ def execution(tmp_path: Path) -> DiagramExecution:
     return DiagramExecution.prepare(
         "local",
         local=True,
-        native_version="1.13.3",
+        native_version=RECOMMENDED_OCR_VERSION,
         review_range=REVIEW_RANGE,
         path=tmp_path / "diagram.json",
     )
@@ -230,7 +231,7 @@ def test_lifecycle_faults_leave_an_explicit_omission(
         prepared = DiagramExecution.prepare(
             "local",
             local=True,
-            native_version="1.13.3",
+            native_version=RECOMMENDED_OCR_VERSION,
             review_range=REVIEW_RANGE,
             path=tmp_path / "new.json",
         )

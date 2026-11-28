@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, line_number
@@ -11,13 +12,15 @@ from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, li
 if TYPE_CHECKING:
     from ocr_toolkit.posting.gitlab import GitLabConfig
 
+REVIEW_REVISION: ContextVar[tuple[str, int] | None] = ContextVar("review_revision", default=None)
+
 MARKER = "<!-- open-code-review-bot -->"
 WRITE_ID_RE = re.compile(r"[0-9a-f]{32}")
 WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->")
 
 
 MARKER_WITH_FINGERPRINT_RE = re.compile(
-    r"^<!-- open-code-review-bot(?:\s+fp=([0-9a-f]{8,64}))?\s*-->"
+    r"^<!-- open-code-review-bot(?:[ \t]+fp=([0-9a-f]{8,64}))?(?: head=(?P<head>[0-9a-f]{40}) version=(?P<version>[1-9][0-9]{0,18}))?[ \t]*-->(?=\r?\n|\Z)"
 )
 SUMMARY_RUN_MARKER_RE = re.compile(r"(?m)^<!-- open-code-review-summary run=[0-9a-f]{32} -->$")
 SETUP_PENDING_MARKER = "<!-- open-code-review-setup-pending -->"
@@ -274,9 +277,20 @@ def comment_fingerprint_candidates(comment: dict[str, Any]) -> set[str]:
 def build_marker(fingerprint: str | None) -> str:
     """Render the OCR marker, embedding the fingerprint when available."""
 
-    if fingerprint:
-        return f"<!-- open-code-review-bot fp={fingerprint} -->"
-    return MARKER
+    revision = REVIEW_REVISION.get()
+    return (
+        "<!-- open-code-review-bot"
+        + (f" fp={fingerprint}" if fingerprint else "")
+        + (f" head={revision[0]} version={revision[1]}" if revision else "")
+        + " -->"
+    )
+
+
+def note_review_revision(body: str) -> tuple[str, int] | None:
+    match = MARKER_WITH_FINGERPRINT_RE.match(body)
+    if not match or not match["head"]:
+        return None
+    return match["head"], int(match["version"])
 
 
 def note_starts_with_marker(body: str) -> bool:
@@ -307,7 +321,8 @@ def has_summary_run_marker(body: str) -> bool:
     if not note_starts_with_marker(body):
         return False
     lines = body.splitlines()
-    return len(lines) >= 2 and SUMMARY_RUN_MARKER_RE.fullmatch(lines[1]) is not None
+    start = 2 if len(lines) > 1 and WRITE_MARKER_RE.fullmatch(lines[1]) else 1
+    return len(lines) > start and SUMMARY_RUN_MARKER_RE.fullmatch(lines[start]) is not None
 
 
 def has_setup_pending_marker(body: str) -> bool:
@@ -316,7 +331,15 @@ def has_setup_pending_marker(body: str) -> bool:
     if not note_starts_with_marker(body):
         return False
     lines = body.splitlines()
-    return len(lines) >= 2 and lines[1] == SETUP_PENDING_MARKER
+    start = 2 if len(lines) > 1 and WRITE_MARKER_RE.fullmatch(lines[1]) else 1
+    if lines[start : start + 1] == [SETUP_PENDING_MARKER]:
+        return True
+    headings = {"**Open Code Review setup is pending**", "**⏳ Open Code Review setup is pending**"}
+    return (
+        len(lines) > start
+        and lines[start] in headings
+        and lines[start + 1 : start + 3] == ["", SETUP_PENDING_MARKER]
+    )
 
 
 def author_id_from_note(note: dict[str, Any]) -> int | None:

@@ -5,6 +5,10 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
+import shutil
+import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +49,8 @@ def _render_python_constant(name: str, value: str | tuple[str, ...]) -> str:
 
     if isinstance(value, str):
         return f"{name} = {json.dumps(value)}"
+    if not value:
+        return f"{name} = ()"
     items = "".join(f"    {json.dumps(item)},\n" for item in value)
     return f"{name} = (\n{items})"
 
@@ -111,7 +117,7 @@ def assess_automatic_chain(
         if candidate[:2] != previous[:2] or candidate[2] != previous[2] + 1:
             contiguous = False
         if (
-            item.get("schema_version") not in {2, 3}
+            item.get("schema_version") not in {2, 3, 4, 5}
             or item.get("tested_baseline_version") != tested_baseline
             or item.get("comparison_version") != comparison
             or item.get("result") != "compatible"
@@ -148,12 +154,73 @@ def _generated_destination(path: Path, payload: bytes) -> bool:
     return False
 
 
+def _commit_outputs(outputs: list[tuple[Path, bytes]], new: set[Path]) -> None:
+    """Stage every write before replacing files, restoring originals on an I/O failure."""
+
+    retained: set[Path] = set()
+
+    def cleanup(directory: Path) -> None:
+        if directory not in retained:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    with ExitStack() as staging:
+        staged: list[tuple[Path, Path, Path | None]] = []
+        for path, content in outputs:
+            directory = Path(tempfile.mkdtemp(dir=path.parent, prefix=".ocr-promotion-"))
+            staging.callback(cleanup, directory)
+            replacement = directory / "new"
+            replacement.write_bytes(content)
+            original = None
+            if path not in new and path.exists():
+                if path.is_symlink() or not path.is_file():
+                    core._fail(f"promotion destination must be a regular file: {path}")
+                original = directory / "old"
+                os.link(path, original)
+                shutil.copymode(path, replacement)
+            staged.append((path, replacement, original))
+
+        attempted: list[tuple[Path, Path, Path | None]] = []
+        try:
+            for path, replacement, original in staged:
+                # Journal before the syscall: interruption may follow a successful
+                # link/rename before Python executes the next statement.
+                attempted.append((path, replacement, original))
+                if original is None:
+                    os.link(replacement, path)
+                else:
+                    os.replace(replacement, path)
+        except (OSError, KeyboardInterrupt) as exc:
+            recovery = []
+            for path, replacement, original in reversed(attempted):
+                try:
+                    if original is None:
+                        if path.exists() and path.samefile(replacement):
+                            path.unlink()
+                    elif not path.exists() or not path.samefile(original):
+                        os.replace(original, path)
+                except OSError:
+                    retained.add(replacement.parent)
+                    action = (
+                        f"restore {original} to {path}"
+                        if original
+                        else f"remove {path} after comparing to {replacement}"
+                    )
+                    recovery.append(action)
+            if recovery:
+                detail = "promotion rollback incomplete: " + ", ".join(recovery)
+                raise core.CompatibilityError(detail) from exc
+            if isinstance(exc, KeyboardInterrupt):
+                raise
+            raise core.CompatibilityError("failed to commit promotion outputs") from exc
+
+
 def prepare_update(
     *,
     manifest_path: Path,
     evidence: dict[str, Any] | list[dict[str, Any]],
     fragment_number: int,
     human_conclusions: dict[str, str] | None = None,
+    incompatible_statuses: list[dict[str, Any]] | None = None,
     root: Path = settings.ROOT,
 ) -> list[Path]:
     """Prepare one cumulative promotion from a validated adjacent evidence chain."""
@@ -165,13 +232,28 @@ def prepare_update(
     old_version = str(manifest["recommended_version"])
     old_supported, old_deprecated = contract_rules.qualified_runtime_versions(manifest)
     evidences = [evidence] if isinstance(evidence, dict) else list(evidence)
-    if not evidences or len(evidences) > settings.MAX_QUALIFICATION_CHAIN:
+    statuses = [
+        contract_rules.validate_incompatible_receipt(status)
+        for status in incompatible_statuses or []
+    ]
+    chain_limit = (
+        settings.MAX_RELEASE_PAGES * settings.MAX_RELEASES_PER_PAGE
+        if statuses or human_conclusions
+        else settings.MAX_QUALIFICATION_CHAIN
+    )
+    if not evidences or len(evidences) + len(statuses) > chain_limit:
         core._fail("candidate evidence chain must be a non-empty bounded list")
     evidences.sort(key=lambda item: core._version(str(item.get("version", ""))))
+    chain = sorted(
+        [(item, False) for item in evidences] + [(status, True) for status in statuses],
+        key=lambda attempt: core._version(str(attempt[0].get("version", ""))),
+    )
+    if chain[-1][1]:
+        core._fail("candidate chain must end in a compatible release")
     conclusions = human_conclusions or {}
     expected_comparison = old_version
     versions: list[str] = []
-    for item in evidences:
+    for item, incompatible in chain:
         version = item.get("version")
         if not isinstance(version, str):
             core._fail("candidate evidence version must be a string")
@@ -182,32 +264,29 @@ def prepare_update(
         transition = core._release_transition(comparison, candidate)
         if transition is None:
             core._fail("candidate evidence chain is not a contiguous release sequence")
-        if transition != "patch" and item.get("schema_version") not in {2, 3}:
-            core._fail("minor and major promotions require chain-aware evidence schema 2 or 3")
-        if item.get("result") != "compatible":
-            core._fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")
-        if schema_version in {2, 3}:
+        if not incompatible and transition != "patch" and schema_version not in {2, 3, 4, 5}:
+            core._fail("minor and major promotions require chain-aware evidence schema 2 or later")
+        expected_result = "incompatible" if incompatible else "compatible"
+        if item.get("result") != expected_result:
+            core._fail(f"candidate evidence does not qualify {version} as {expected_result}")
+        if incompatible or schema_version in {2, 3, 4, 5}:
             if item.get("tested_baseline_version") != old_version:
                 core._fail(f"candidate evidence {version} has a stale tested baseline")
             if item.get("comparison_version") != expected_comparison:
                 core._fail(f"candidate evidence {version} has a non-adjacent comparison version")
-        elif schema_version != 1 or len(evidences) != 1:
-            core._fail("multi-release promotion requires chain-aware evidence schema 2 or 3")
-        classification = item.get("classification")
+        elif schema_version != 1 or len(chain) != 1:
+            core._fail("multi-release promotion requires chain-aware evidence schema 2 or later")
+        classification = "human-review-required" if incompatible else item.get("classification")
         conclusion = conclusions.get(version)
-        if conclusion is not None and (
-            not isinstance(conclusion, str)
-            or not conclusion.strip()
-            or len(conclusion) > 2_000
-            or any(ord(character) < 32 and character not in "\n\t" for character in conclusion)
-        ):
+        if conclusion is not None and not contract_rules._valid_human_conclusion(conclusion):
             core._fail(f"candidate {version} conclusion must be bounded plain text")
-        if classification == "human-review-required":
-            if conclusion is None:
-                core._fail(f"human-reviewed candidate {version} requires a bounded conclusion")
-        elif classification != "automatic-safe":
+        if classification not in ("human-review-required", "automatic-safe"):
             core._fail(f"candidate evidence {version} has an invalid classification")
+        if conclusion is None and (
+            classification == "human-review-required" or (statuses and item is chain[-1][0])
+        ):
+            core._fail(f"human-reviewed candidate {version} requires a bounded conclusion")
         if transition != "patch" and classification != "human-review-required":
             core._fail("minor and major promotions require explicit human review")
         versions.append(version)
@@ -217,8 +296,8 @@ def prepare_update(
         core._fail("human conclusions may reference only evidence versions in this promotion")
 
     for item in evidences:
-        if item.get("schema_version") != 3:
-            core._fail("current candidate requires evidence schema 3")
+        if item.get("schema_version") not in {3, 4, 5}:
+            core._fail("current candidate requires supported evidence schema")
         candidate_version = item.get("version")
         if not isinstance(candidate_version, str):
             core._fail("candidate evidence version must be a string")
@@ -262,25 +341,7 @@ def prepare_update(
         payload = core.canonical_json(item)
         destinations.append(destination)
         evidence_payloads.append(payload)
-        assets = item.get("assets")
-        if not isinstance(assets, list) or len(assets) != len(settings.REQUIRED_ASSETS):
-            core._fail(
-                f"candidate evidence {candidate_version} assets must be the supported matrix"
-            )
-        asset_names: set[str] = set()
-        for asset in assets:
-            if not isinstance(asset, dict):
-                core._fail(f"candidate evidence {candidate_version} asset must be an object")
-            name, size, sha256 = asset.get("name"), asset.get("size"), asset.get("sha256")
-            if not isinstance(name, str) or name in asset_names or Path(name).name != name:
-                core._fail(f"candidate evidence {candidate_version} asset name is invalid")
-            asset_names.add(name)
-            if not isinstance(size, int) or size <= 0 or size > settings.MAX_ASSET_BYTES:
-                core._fail(f"candidate evidence {candidate_version}/{name} size is invalid")
-            if not isinstance(sha256, str) or settings.SHA256_RE.fullmatch(sha256) is None:
-                core._fail(f"candidate evidence {candidate_version}/{name} digest is invalid")
-        if asset_names != settings.REQUIRED_ASSETS:
-            core._fail(f"candidate evidence {candidate_version} asset set is invalid")
+        assets = contract_rules.validate_candidate_assets(item, candidate_version)
         contracts = item.get("contracts")
         capabilities = (
             contracts.get("optional_capabilities", []) if isinstance(contracts, dict) else []
@@ -309,6 +370,21 @@ def prepare_update(
                     f"https://github.com/{settings.UPSTREAM_REPOSITORY}/releases/tag/v{candidate_version}"
                 ),
                 "status": "tested",
+                "version": candidate_version,
+            }
+        )
+    for receipt, status in zip(incompatible_statuses or [], statuses, strict=True):
+        candidate_version = status["version"]
+        evidence_name = f"ocr-{candidate_version}-incompatible.json"
+        payload = core.canonical_json(receipt)
+        destinations.append(root / "compatibility" / "evidence" / evidence_name)
+        evidence_payloads.append(payload)
+        releases.append(
+            {
+                "evidence": f"compatibility/evidence/{evidence_name}",
+                "evidence_sha256": hashlib.sha256(payload).hexdigest(),
+                "human_conclusion": conclusions[candidate_version].strip(),
+                "status": "incompatible",
                 "version": candidate_version,
             }
         )
@@ -360,10 +436,17 @@ def prepare_update(
     # runtime support has actually been delivered.
     changelog_dir = root / "changelog.d"
     fragment = changelog_dir / f"{fragment_number}.maintenance.md"
-    qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
-    fragment_text = (
-        f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
-    )
+    if statuses:
+        excluded = ", ".join(status["version"] for status in statuses)
+        fragment_text = (
+            f"Target checksum-verified Open Code Review {version}; "
+            f"record incompatible releases {excluded}.\n"
+        )
+    else:
+        qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
+        fragment_text = (
+            f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
+        )
     outputs = [
         *zip(destinations, evidence_payloads, strict=True),
         (fragment, fragment_text.encode()),
@@ -371,17 +454,37 @@ def prepare_update(
     pending = [
         (path, payload) for path, payload in outputs if _generated_destination(path, payload)
     ]
+    handoff_path = preflight_path.with_name("_qualified_handoffs.json")
+    handoff_payload = None
+    if core._version(version) >= settings.BEHAVIORAL_EPOCH:
+        candidates = {item["version"]: item for item in evidences}
+        inventory = {}
+        for release in releases:
+            release_version = release["version"]
+            if release_version in new_supported:
+                observed = candidates.get(release_version)
+                if observed is None:
+                    observed = core.load_json(root / release["evidence"])
+                inventory[release_version] = observed["contracts"]["native_handoffs"]
+        if handoff_path.is_symlink() or (handoff_path.exists() and not handoff_path.is_file()):
+            core._fail("native handoffs destination must be a regular file")
+        handoff_payload = core.canonical_json(inventory)
 
     # Validate every input and transformation before changing the checkout, then
     # write each accepted evidence snapshot together with its linked manifest.
     destinations[0].parent.mkdir(parents=True, exist_ok=True)
     changelog_dir.mkdir(exist_ok=True)
-    for destination, payload in pending:
-        with destination.open("xb") as output:
-            output.write(payload)
-    manifest_path.write_bytes(manifest_payload)
-    preflight_path.write_text(preflight, encoding="utf-8")
-    return [manifest_path, *destinations, preflight_path, fragment]
+    writes = [
+        *pending,
+        (preflight_path, preflight.encode("utf-8")),
+    ]
+    outputs_written = [manifest_path, *destinations, preflight_path, fragment]
+    if handoff_payload is not None:
+        writes.append((handoff_path, handoff_payload))
+        outputs_written.append(handoff_path)
+    writes.append((manifest_path, manifest_payload))
+    _commit_outputs(writes, {path for path, _ in pending})
+    return outputs_written
 
 
 def parse_human_conclusions(values: list[str]) -> dict[str, str]:

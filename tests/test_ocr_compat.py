@@ -26,6 +26,7 @@ from tests.support import PROJECT_ROOT, patched_attr, patched_env
 
 SCRIPT = PROJECT_ROOT / "scripts" / "ocr_compat.py"
 MANIFEST = PROJECT_ROOT / "compatibility" / "ocr-support.json"
+FROZEN_113_VERSION = "1.13.10"
 
 
 def load_script() -> ModuleType:
@@ -134,15 +135,13 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
 
 def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-    rules = module.contracts._language_rules_for_version(preflight.RECOMMENDED_OCR_VERSION)
+    rules = module.contracts._language_rules_for_version(FROZEN_113_VERSION)
     assert rules["policies/authz.rego"] == "**/*.rego"
     assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
     assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
     assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
-    assert set(
-        module.contracts._language_negative_paths_for_version(preflight.RECOMMENDED_OCR_VERSION)
-    ) == {
+    assert set(module.contracts._language_negative_paths_for_version(FROZEN_113_VERSION)) == {
         "rtl/include.svh",
         "nested/BUILD.bak",
     }
@@ -190,13 +189,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     assert manifest["schema_version"] == 2
     assert manifest["recommended_version"] == preflight.RECOMMENDED_OCR_VERSION
     assert manifest["monitoring_floor"] == preflight.RECOMMENDED_OCR_VERSION
-    assert manifest["runtime_support"] == {
-        "deprecated_lines": ["1.11"],
-        "qualified_patches_only": True,
-        "rejected_before": "1.11.0",
-        "supported_lines": ["1.12", "1.13"],
-    }
-    assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
+    historical_releases = [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
         ("1.8.1", "tested"),
@@ -260,35 +253,11 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.10", "tested"),
     ]
 
+    releases = [(item["version"], item["status"]) for item in manifest["releases"]]
+    assert releases[: len(historical_releases)] == historical_releases
     assert module.contracts.qualified_runtime_versions(manifest) == (
-        [
-            "1.12.0",
-            "1.12.1",
-            "1.12.2",
-            "1.12.3",
-            "1.12.4",
-            "1.12.5",
-            "1.12.6",
-            "1.12.7",
-            "1.12.8",
-            "1.12.9",
-            "1.12.10",
-            "1.12.11",
-            "1.12.12",
-            "1.12.13",
-            "1.13.0",
-            "1.13.1",
-            "1.13.2",
-            "1.13.3",
-            "1.13.4",
-            "1.13.5",
-            "1.13.6",
-            "1.13.7",
-            "1.13.8",
-            "1.13.9",
-            "1.13.10",
-        ],
-        [f"1.11.{patch}" for patch in range(10)],
+        list(preflight.SUPPORTED_OCR_VERSIONS),
+        list(preflight.DEPRECATED_OCR_VERSIONS),
     )
 
 
@@ -296,7 +265,7 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     contracts = current_contracts(module, version)
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
@@ -314,7 +283,7 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [(preflight.RECOMMENDED_OCR_VERSION, 52, "reported")],
+    [(FROZEN_113_VERSION, 52, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -560,19 +529,19 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
     module = load_script()
     output = tmp_path / "evidence.json"
     status_output = tmp_path / "status.json"
-    binary_digest = "0" * 64
+    binary_digest = hashlib.sha256(b"x").hexdigest()
     assets = [
         module.core.Asset(
             name="opencodereview-linux-amd64",
             size=1,
             sha256=binary_digest,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/bin",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.14.0/bin",
         ),
         module.core.Asset(
             name="sha256sum.txt",
             size=1,
             sha256="1" * 64,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/sums",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.14.0/sums",
         ),
     ]
 
@@ -600,16 +569,14 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
     monkeypatch.setattr(
         module.probes,
         "run_contracts",
-        lambda binary, _version, directory: module.comments._comment_arguments_probe(
+        lambda binary, _version, directory, _asset: module.comments._comment_arguments_probe(
             binary, directory
         ),
     )
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(
-            module.assets, "_request_json", lambda _url: release(preflight.RECOMMENDED_OCR_VERSION)
-        ),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.14.0")),
     ):
         result = module.cli.main(
             [
@@ -617,11 +584,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                f"v{preflight.RECOMMENDED_OCR_VERSION}",
-                "--comparison-version",
-                "1.12.13",
-                "--tested-baseline-version",
-                "1.12.13",
+                "v1.14.0",
                 "--output",
                 str(output),
                 "--status-output",
@@ -661,8 +624,9 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = manifest_before_1_11_3(module)
     first_page = [release("1.11.3")]
-    first_page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.11.2")]
+    first_page.append(release("1.10.99"))
+    first_page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 2))
+    second_page = [release("2.0.0"), release("1.11.2")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -672,7 +636,7 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module.assets, "_request_json", fake_request):
         unseen = module.assets.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.11.3"]
+    assert [item["tag_name"] for item in unseen] == ["v1.11.3", "v2.0.0"]
     assert len(requested) == 2
 
 
@@ -770,6 +734,21 @@ def test_qualification_matrix_rejects_duplicate_releases() -> None:
 
     with pytest.raises(module.core.CompatibilityError, match="duplicate version"):
         module.assets.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
+
+
+def test_large_qualification_queue_starts_with_oldest_ten() -> None:
+    module = load_script()
+    manifest = {"recommended_version": "2.0.0"}
+    candidates = [release(f"2.0.{patch}") for patch in range(11, 0, -1)]
+    result = module.assets.qualification_matrix(manifest, candidates)
+    assert [entry["tag"] for entry in result["include"]] == [f"v2.0.{n}" for n in range(1, 11)]
+    assert result["include"][-1]["comparison_version"] == "2.0.9"
+    continued = module.assets.qualification_matrix(manifest, candidates, after_tag="v2.0.10")
+    assert continued["include"] == [
+        {"tag": "v2.0.11", "comparison_version": "2.0.10", "tested_baseline_version": "2.0.0"}
+    ]
+    with pytest.raises(module.core.CompatibilityError, match="was not discovered"):
+        module.assets.qualification_matrix(manifest, candidates, after_tag="v2.0.12")
 
 
 @pytest.mark.parametrize(
@@ -2125,9 +2104,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
             Path("/synthetic/probe"),
         )
 
-    assert result == module.contracts._numeric_contract_for_version(
-        preflight.RECOMMENDED_OCR_VERSION
-    )
+    assert result == module.contracts._numeric_contract_for_version(FROZEN_113_VERSION)
     assert "stderr" not in json.dumps(result)
 
 
@@ -2606,7 +2583,7 @@ def test_current_clojure_qualification_requires_main_rules_and_actual_context(
     mutation: str,
 ) -> None:
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
     if mutation == "missing":
         del evidence["contracts"]["clojure_context_probe"]
@@ -2932,7 +2909,7 @@ def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None
 
 def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    version = preflight.RECOMMENDED_OCR_VERSION
+    version = FROZEN_113_VERSION
     current = module.contracts._language_rules_for_version(version)
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",

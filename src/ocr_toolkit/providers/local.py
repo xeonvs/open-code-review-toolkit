@@ -135,7 +135,7 @@ def prepare_local_report_path(path: Path, *, other_outputs: tuple[Path, ...]) ->
     os.close(parent_descriptor)
 
 
-def publish_local_report(report: ReviewReport, path: Path) -> None:
+def publish_local_report(report: ReviewReport, path: Path, analysis_section: str = "") -> None:
     """Publish complete private Markdown atomically without replacing another file."""
 
     prepare_local_report_path(path, other_outputs=())
@@ -155,6 +155,9 @@ def publish_local_report(report: ReviewReport, path: Path) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             descriptor = -1
             write_local_report(report, stream)
+            if analysis_section:
+                stream.write("\n" + analysis_section)
+            stream.flush()
             os.fsync(stream.fileno())
         # Unlike replace(), link() rejects a destination created since preflight.
         current = os.stat(temporary, dir_fd=parent_descriptor, follow_symlinks=False)

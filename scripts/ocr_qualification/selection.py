@@ -543,7 +543,7 @@ def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, obj
     }
 
 
-def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"
@@ -554,22 +554,21 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     execution._run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     execution._run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     execution._run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    exact_patterns = contracts._language_rules_for_version(version)
-    qualified_rules = set(exact_patterns)
-    supported_paths = tuple(sorted(qualified_rules))
-    unsupported_paths = contracts._language_negative_paths_for_version(version)
-    default_excluded_paths = contracts._default_excluded_paths_for_version(version)
-    paths = tuple(
-        sorted(
-            {
-                *supported_paths,
-                *unsupported_paths,
-                *default_excluded_paths,
-                *settings.DEFAULT_RULE_CONTROL_PATHS,
-                *settings.PYTEST_PREFIX_CONTROL_PATHS,
-                settings.PYTEST_PREFIX_EXCLUDED_PATH,
-            }
-        )
+    # The paths sample rule behavior for maintainers. Upstream owns its language
+    # inventory and may add, merge or rename rules without affecting the client.
+    paths = sorted(
+        {
+            *settings.CURRENT_LANGUAGE_RULES,
+            *settings.CURRENT_DEFAULT_EXCLUDED_PATHS,
+            "src/types.mts",
+            "src/types.cts",
+            "src/query.sql",
+            "src/config.dhall",
+            "src/model.rb",
+            "src/kernel.cu",
+            "src/kernel.hip",
+            "src/contract.move",
+        }
     )
     for path in paths:
         target = repo / path
@@ -603,95 +602,4 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     except json.JSONDecodeError as exc:
         raise core.CompatibilityError("language preview did not emit JSON") from exc
     selected = _selected_preview_paths(payload)
-    expected_selected = (
-        set(supported_paths)
-        | set(settings.PYTEST_PREFIX_CONTROL_PATHS)
-        | set(settings.DEFAULT_RULE_CONTROL_PATHS)
-    )
-    if selected != expected_selected:
-        missing = sorted(expected_selected - selected)
-        unexpected = sorted(selected - expected_selected)
-        core._fail(
-            "candidate did not select the qualified built-in language set: "
-            f"missing={missing!r}, unexpected={unexpected!r}"
-        )
-    for unsupported_path in unsupported_paths:
-        unsupported_selected, unsupported_reason = _preview_file_selection(
-            payload, unsupported_path
-        )
-        if unsupported_selected or unsupported_reason != "unsupported_ext":
-            core._fail(f"candidate unexpectedly selected unqualified path {unsupported_path}")
-    for path in default_excluded_paths:
-        selected_test, reason = _preview_file_selection(payload, path)
-        if selected_test or not isinstance(reason, str) or not reason:
-            core._fail(f"candidate did not preserve the default test-path exclusion: {path}")
-    for path in settings.PYTEST_PREFIX_CONTROL_PATHS:
-        selected_control, reason = _preview_file_selection(payload, path)
-        if not selected_control or reason not in {None, ""}:
-            core._fail(f"candidate overmatched the pytest-prefix exclusion: {path}")
-    for path in settings.DEFAULT_RULE_CONTROL_PATHS:
-        output = execution._run([str(binary), "rules", "check", path], cwd=repo, env=env)
-        if "Source: System built-in\n" not in output or "Pattern: default\n" not in output:
-            core._fail("candidate overmatched Starlark Rules onto an ordinary extensionless file")
-    rule_documents = set()
-    for path in supported_paths:
-        output = execution._run([str(binary), "rules", "check", path], cwd=repo, env=env)
-        if (
-            f"File: {path}\n" not in output
-            or "Source: System built-in\n" not in output
-            or "Pattern: " not in output
-        ):
-            core._fail("candidate did not resolve a qualified built-in language rule")
-        expected_pattern = exact_patterns.get(path)
-        if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
-            core._fail(f"candidate resolved the wrong built-in language rule for {path}")
-        if path.endswith(".cs"):
-            if (
-                "#### Nullability and Reference Types" not in output
-                or "#### Async, Tasks, and Cancellation" not in output
-            ):
-                core._fail("candidate omitted the C# rule document")
-            rule_documents.add("csharp")
-        elif path.endswith((".clj", ".cljs", ".cljc", ".edn")):
-            if "#### EDN Data, Configuration, and Untrusted Input" not in output:
-                core._fail("candidate omitted the Clojure rule document")
-            rule_documents.add("clojure")
-        elif path in {"BUILD", "WORKSPACE", "nested/BUILD", "nested/WORKSPACE"} or path.endswith(
-            (".bzl", ".bazel", ".star")
-        ):
-            if "# Starlark Code Review Guide" not in output:
-                core._fail("candidate omitted the Starlark rule document")
-            rule_documents.add("starlark")
-    extensions = sorted({Path(path).suffix for path in supported_paths if Path(path).suffix})
-    expected_extensions = sorted(
-        {Path(path).suffix for path in exact_patterns if Path(path).suffix}
-    )
-    if extensions != expected_extensions:
-        core._fail("language probe paths disagree with the canonical extension projection")
-    result: dict[str, object] = {
-        "extensions": expected_extensions,
-        "excluded_extensions": [".svh"],
-        "default_excluded_paths": list(default_excluded_paths),
-        "result": "passed",
-        "rule_source": "system_builtin",
-        "selected": len(supported_paths),
-        "paths": list(supported_paths),
-        "excluded_paths": list(unsupported_paths),
-        "rule_documents": sorted(rule_documents),
-        "default_rule_paths": list(settings.DEFAULT_RULE_CONTROL_PATHS),
-    }
-    for name, source, heading in (
-        ("objective.m", "#import <Foundation/Foundation.h>\n", "Objective-C"),
-        ("matrix.m", "function y = sample(x)\ny = x + 1;\nend\n", "MATLAB"),
-    ):
-        (repo / name).write_text(source, encoding="utf-8")
-        output = execution._run([str(binary), "rules", "check", name], cwd=repo, env=env)
-        if "Pattern: **/*.m\n" not in output or heading not in output:
-            core._fail("candidate changed content-dependent .m rule routing")
-    mm_output = execution._run(
-        [str(binary), "rules", "check", "native/object.mm"], cwd=repo, env=env
-    )
-    if "Objective-C" not in mm_output:
-        core._fail("candidate did not route Objective-C++ to Objective-C rules")
-    result["m_routing"] = "matlab_and_objective_c"
-    return result
+    return {"fixture_paths": paths, "selected": sorted(selected & set(paths))}

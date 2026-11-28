@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import subprocess
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -24,6 +27,67 @@ class QualificationStageError(CompatibilityError):
         super().__init__(message)
         self.phase = phase
         self.reason = reason
+        self.probe: str | None = None
+        self.category: str | None = None
+
+
+class QualificationContractMismatch(QualificationStageError):
+    """A successful controlled observation contradicted a toolkit requirement."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        if reason not in settings.CONTRACT_MISMATCH_REASONS:
+            raise ValueError("unknown compatibility mismatch reason")
+        super().__init__(message, phase="contracts", reason=reason)
+        self.verified_executable: dict[str, str | int] | None = None
+
+
+@contextmanager
+def probe(name: str) -> Iterator[None]:
+    """Keep a closed diagnostic for inconclusive probes without exposing process data."""
+
+    if name not in {
+        "identity",
+        "range-preview",
+        "review-result",
+        "native-handoffs",
+        "authentication",
+        "analysis",
+        "budget",
+        "numeric-controls",
+        "completion-cap",
+        "reasoning",
+        "stream",
+        "comment-arguments",
+        "comparison-sides",
+        "selection-observations",
+    }:
+        raise ValueError("unknown qualification probe")
+    try:
+        yield
+    except QualificationStageError:
+        raise
+    except Exception as exc:
+        cause: BaseException | None = exc
+        category = (
+            "invalid-observation" if isinstance(exc, CompatibilityError) else "unexpected-error"
+        )
+        while cause is not None:
+            if isinstance(cause, (TimeoutError, subprocess.TimeoutExpired)):
+                category = "timeout"
+                break
+            if isinstance(cause, subprocess.CalledProcessError):
+                category = "signal" if cause.returncode < 0 else "process-exit"
+                break
+            if isinstance(cause, (UnicodeError, json.JSONDecodeError)):
+                category = "invalid-output"
+                break
+            if isinstance(cause, OSError):
+                category = "io-error"
+                break
+            cause = cause.__cause__
+        error = QualificationStageError(str(exc), phase="contracts", reason="contract-probe-failed")
+        error.probe, error.category = name, category
+        raise error from exc
 
 
 @dataclass(frozen=True)
@@ -45,6 +109,18 @@ class Asset:
     size: int
     sha256: str
     url: str
+
+    def verify_file(self, path: Path) -> None:
+        """Bind local consumer execution and final receipts to the verified release bytes."""
+
+        if path.is_symlink() or not path.is_file():
+            _fail("executable differs from verified candidate")
+        with path.open("rb") as stream:
+            if (
+                os.fstat(stream.fileno()).st_size != self.size
+                or hashlib.file_digest(stream, "sha256").hexdigest() != self.sha256
+            ):
+                _fail("executable differs from verified candidate")
 
 
 def _fail(message: str) -> NoReturn:

@@ -253,3 +253,52 @@ def test_missing_delivery_credentials_stop_before_identity_acquisition(monkeypat
         lambda *args: pytest.fail("missing credential reached provider"),
     )
     assert gitlab.load_gitlab_config() is None
+
+
+def test_history_preserves_prior_revision_and_only_replaces_same_revision(monkeypatch):
+    from ocr_toolkit.posting.markers import build_summary_run_marker
+
+    current, old = "a" * 40, "b" * 40
+
+    def note(index, head, version=1):
+        marker = (
+            "<!-- open-code-review-bot"
+            + (f" head={head} version={version}" if head else "")
+            + " -->"
+        )
+        return {
+            "id": index,
+            "author": {"id": 1},
+            "body": marker + "\n" + build_summary_run_marker("c" * 32),
+        }
+
+    notes = [note(12, current, 3), note(11, old, 2), note(10, current, 1), note(9, None)]
+    monkeypatch.setenv("CI_COMMIT_SHA", current)
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.delenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", raising=False)
+    monkeypatch.setattr(
+        snapshot,
+        "api_get_paginated",
+        lambda _, route, **kw: (
+            notes
+            if route.startswith("/notes?")
+            else (
+                [{"id": "synthetic", "individual_note": True, "notes": [notes[0]]}]
+                if route == "/discussions"
+                else []
+            )
+        ),
+    )
+    config = gitlab_config()
+    for item in notes:
+        item["author"]["id"] = config.current_user_id
+    token = snapshot.REVIEW_REVISION.set((current, 3))
+    try:
+        refs = snapshot.collect_review_refs(config)
+    finally:
+        snapshot.REVIEW_REVISION.reset(token)
+    assert refs.summary_plain_note_ids == [12]
+    assert refs.plain_note_ids == [12]
+    assert refs.all_plain_note_ids == [12, 11, 10, 9]
+    monkeypatch.setenv("CI_COMMIT_SHA", "d" * 40)
+    assert snapshot.collect_review_refs(config).plain_note_ids == []

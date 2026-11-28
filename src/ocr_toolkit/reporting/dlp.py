@@ -173,6 +173,22 @@ def _dlp_state(value: Any, *, allow_unknown_coverage: bool) -> str | None:
             for key, item in value.items()
             if key not in {"schema", "private_sanitization"}
         }
+    if (
+        versioned
+        and isinstance(original := value.get("original"), dict)
+        and "operational_partial" in original
+    ):
+        if (
+            original["operational_partial"] is not True
+            or original.get("outcome") != "partial"
+            or type(original.get("failed")) is not int
+            or original["failed"] < 1
+        ):
+            return None
+        value = {
+            **value,
+            "original": {k: v for k, v in original.items() if k != "operational_partial"},
+        }
     if value == {"state": "disabled"}:
         return "disabled"
     if value == {"state": "passed"}:

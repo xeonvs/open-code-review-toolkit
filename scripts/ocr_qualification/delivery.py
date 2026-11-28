@@ -5,12 +5,203 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
+import stat
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
-from . import assets, contracts, core, settings
+from . import assets, contracts, core, promotion, settings
+
+
+class DuplicateQualificationIssues(core.CompatibilityError):
+    """Safe-to-publish conflict containing only GitHub issue numbers."""
+
+    def __init__(self, numbers: list[int]) -> None:
+        super().__init__(
+            "multiple qualification issues contain the exact version marker: "
+            + ", ".join(f"#{number}" for number in numbers)
+        )
+
+
+def _artifact_bytes(path: Path, limit: int) -> bytes:
+    if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
+        core._fail("expected regular candidate artifact")
+    with path.open("rb") as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            core._fail("candidate artifact exceeds its size bound")
+        payload = source.read(limit + 1)
+    if len(payload) > limit:
+        core._fail("candidate artifact exceeds its size bound")
+    return payload
+
+
+def _artifact_json(path: Path, limit: int) -> dict[str, Any]:
+    try:
+        result = json.loads(_artifact_bytes(path, limit))
+    except (ValueError, RecursionError) as exc:
+        raise core.CompatibilityError("invalid qualification artifact JSON") from exc
+    if not isinstance(result, dict):
+        core._fail("expected qualification artifact object")
+    return result
+
+
+def load_incompatible_receipt(status_path: Path) -> dict[str, Any]:
+    receipt = _artifact_json(status_path.with_name("incompatibility.json"), 4096)
+    status = contracts.validate_incompatible_receipt(receipt)
+    if _artifact_json(status_path, 4096) != status:
+        core._fail("verified executable receipt does not match the retained status")
+    return receipt
+
+
+def _candidate_record(
+    candidate: Path, entry: dict[str, str], head: str
+) -> tuple[dict[str, str], dict[str, Any] | None]:
+    if _artifact_bytes(candidate / "checkout.txt", 41).decode("ascii").strip() != head:
+        core._fail("candidate checkout mismatch")
+    status = contracts.validate_qualification_status(
+        _artifact_json(candidate / "status.json", 4096)
+    )
+    if any(status[key] != value for key, value in entry.items()):
+        core._fail("candidate identity mismatch")
+    result = status["result"]
+    evidence = None
+    if result == "compatible":
+        if (candidate / "incompatibility.json").exists():
+            core._fail("compatible candidate also has an incompatible executable receipt")
+        evidence = _artifact_json(candidate / "evidence.json", 1_048_576)
+        if any(evidence.get(key) != status[key] for key in (*entry, "version", "result")):
+            core._fail("candidate evidence mismatch")
+        contracts._validate_evidence_contracts(status["version"], evidence)
+        if evidence.get("classification") not in (
+            "automatic-safe",
+            "human-review-required",
+        ):
+            core._fail("invalid candidate classification")
+        if (
+            core._version(status["version"]) < settings.BEHAVIORAL_EPOCH
+            and evidence.get("schema_version") != 3
+        ):
+            core._fail("invalid candidate evidence schema")
+        if evidence.get("upstream_repository") != settings.UPSTREAM_REPOSITORY:
+            core._fail("invalid candidate upstream repository")
+        contracts.validate_candidate_assets(evidence, status["version"])
+        render_issue(evidence).encode("utf-8")
+    elif result == "incompatible" and (candidate / "evidence.json").exists():
+        core._fail("incompatible candidate also has compatible evidence")
+    if result == "incompatible":
+        load_incompatible_receipt(candidate / "status.json")
+    return status, evidence
+
+
+def _normalize_single_download(artifacts: Path, expected: set[str]) -> None:
+    """Restore the candidate directory when download-artifact extracts one archive flat."""
+
+    if not artifacts.is_dir():
+        return
+    files = list(artifacts.iterdir())
+    if all(item.name in expected for item in files):
+        return
+    allowed = {"checkout.txt", "status.json", "evidence.json", "incompatibility.json"}
+    if any(item.name not in allowed or item.is_symlink() or not item.is_file() for item in files):
+        core._fail("qualification artifacts include an unexpected candidate")
+    try:
+        status = contracts.validate_qualification_status(
+            _artifact_json(artifacts / "status.json", 4096)
+        )
+    except (OSError, core.CompatibilityError):
+        # No trustworthy tag. The regular assessment records every missing candidate.
+        return
+    name = f"ocr-compatibility-{status['tag']}"
+    if name not in expected:
+        core._fail("qualification artifacts include an unexpected candidate")
+    destination = artifacts / name
+    destination.mkdir()
+    for item in files:
+        item.rename(destination / item.name)
+
+
+def assess_matrix(
+    manifest: dict[str, Any],
+    matrix: dict[str, Any],
+    artifacts: Path,
+    head: str,
+    *,
+    after_tag: str | None = None,
+    issue_repository: str | None = None,
+    run_url: str | None = None,
+) -> dict[str, Any]:
+    """Bind each job's retained outcome to the discovered tag, baselines and checkout."""
+
+    entries = matrix.get("include")
+    if (
+        re.fullmatch(r"[0-9a-f]{40}", head) is None
+        or not isinstance(entries, list)
+        or not 1 <= len(entries) <= settings.MAX_QUALIFICATION_CHAIN
+        or any(not isinstance(entry, dict) for entry in entries)
+    ):
+        core._fail("invalid qualification matrix or checkout")
+    releases = [{"tag_name": entry.get("tag")} for entry in entries]
+    if bool(issue_repository) != bool(run_url):
+        core._fail("issue publication requires a repository and run URL")
+    if after_tag:
+        releases.insert(0, {"tag_name": after_tag})
+    if matrix != assets.qualification_matrix(manifest, releases, after_tag=after_tag):
+        core._fail("expected qualification matrix does not match the active baseline")
+    expected = {f"ocr-compatibility-{entry['tag']}" for entry in entries}
+    _normalize_single_download(artifacts, expected)
+
+    outcomes = {}
+    evidences = []
+    incomplete = False
+    for entry in entries:
+        tag = entry["tag"]
+        candidate = artifacts / f"ocr-compatibility-{tag}"
+        try:
+            status, evidence = _candidate_record(candidate, entry, head)
+        except (OSError, ValueError, TypeError, RecursionError, core.CompatibilityError):
+            incomplete = True
+            outcomes[tag] = "missing or inconsistent qualification artifact"
+            continue
+        result = status["result"]
+        if evidence is not None:
+            evidences.append(evidence)
+        incomplete |= result == "failed"
+        outcomes[tag] = f"{result} ({status['reason']})"
+        if issue_repository and run_url:
+            try:
+                issue = upsert_qualification_issue(
+                    repository=issue_repository,
+                    run_url=run_url,
+                    evidence=evidence,
+                    status=status if evidence is None else None,
+                )
+                core.write_atomic_bytes(
+                    candidate / "issue-number.txt", f"{issue}\n".encode(), label="issue number"
+                )
+            except DuplicateQualificationIssues as exc:
+                incomplete = True
+                outcomes[tag] += f"; {exc}"
+            except (OSError, core.CompatibilityError):
+                incomplete = True
+                outcomes[tag] += "; issue delivery failed"
+    if incomplete:
+        classification = "incomplete"
+    elif len(evidences) < len(entries):
+        classification = "incompatible"
+    elif after_tag:
+        classification = "human-review-required"
+    else:
+        classification = promotion.assess_automatic_chain(manifest, evidences)["classification"]
+    return {
+        "classification": classification,
+        "target_version": entries[-1]["tag"].removeprefix("v"),
+        "outcomes": outcomes,
+        "checkout": head,
+    }
 
 
 def _issue_api_request(
@@ -51,7 +242,7 @@ def _issue_api_request(
         core._fail("GitHub issue response exceeds the configured byte limit")
     try:
         value = json.loads(response_data)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
         raise core.CompatibilityError("GitHub issue response is not JSON") from exc
     if not isinstance(value, (dict, list)):
         core._fail("GitHub issue response has unsupported shape")
@@ -178,13 +369,18 @@ def render_workflow_failure_issue(status: dict[str, Any], run_url: str) -> str:
     """Render a failed attempt from closed status values, never private detail."""
 
     checked = contracts.validate_qualification_status(status)
-    if checked["result"] != "failed":
-        core._fail("failure issue requires a failed qualification status")
+    if checked["result"] not in {"failed", "incompatible"}:
+        core._fail("failure issue requires a failed or incompatible qualification status")
     version = checked["version"]
+    title = (
+        "is incompatible with the toolkit contract"
+        if checked["result"] == "incompatible"
+        else "compatibility qualification failed"
+    )
     return (
         f"<!-- ocr-compat-candidate:v{version} -->\n"
-        f"## OCR v{version} compatibility qualification failed\n\n"
-        "- machine result: **failed**\n"
+        f"## OCR v{version} {title}\n\n"
+        f"- machine result: **{checked['result']}**\n"
         f"- closed phase: `{checked['phase']}`\n"
         f"- closed reason: `{checked['reason']}`\n"
         f"- current tested baseline: `v{checked['tested_baseline_version']}`\n"
@@ -264,10 +460,7 @@ def find_qualification_issue(repository: str, marker: str) -> int | None:
         core._fail(f"issue lookup exceeded {settings.MAX_ISSUE_PAGES} pages")
     matches = sorted(set(matches))
     if len(matches) > 1:
-        core._fail(
-            "multiple qualification issues contain the exact version marker: "
-            + ", ".join(f"#{number}" for number in matches)
-        )
+        raise DuplicateQualificationIssues(matches)
     return matches[0] if matches else None
 
 

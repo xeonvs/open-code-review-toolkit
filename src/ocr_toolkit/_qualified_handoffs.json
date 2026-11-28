@@ -1,0 +1,32 @@
+{
+  "1.14.0": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
+  ],
+  "1.14.1": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
+  ],
+  "1.14.2": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
+  ],
+  "1.14.3": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
+  ],
+  "1.14.4": [
+    "analysis",
+    "chatgpt_auth",
+    "diagram_output",
+    "gitlink_projection"
+  ]
+}

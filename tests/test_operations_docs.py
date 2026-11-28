@@ -83,8 +83,8 @@ def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
     assert "not the installation\nsmoke test" in install
 
 
-def test_current_operator_guidance_uses_manifest_with_only_gitlink_ocr_literal() -> None:
-    """Keep general pins in the manifest while naming the fixed gitlink boundary."""
+def test_current_operator_guidance_uses_manifest_for_toolkit_and_ocr_pins() -> None:
+    """Keep release-specific installation pins in their canonical owners."""
 
     for document in (
         README,
@@ -95,10 +95,7 @@ def test_current_operator_guidance_uses_manifest_with_only_gitlink_ocr_literal()
     ):
         content = document.read_text(encoding="utf-8")
         assert "compatibility/ocr-support.json" in content
-        assert all(
-            match.group() == "OCR 1.13.3"
-            for match in re.finditer(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
-        )
+        assert not re.search(r"(?:OCR|Open Code Review|toolkit)\s+v?\d+\.\d+\.\d+", content, re.I)
         assert not re.search(r"open-code-review/releases/tag/v\d+\.\d+\.\d+", content)
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     assert "Qualified OCR pin for the example's toolkit release" in configuration
@@ -496,7 +493,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         "http-rate-limited",
         "not toolkit telemetry",
         "Neither setting is presented as the proven cause",
-        "does not create a potentially stale MR failure note",
+        "Provider diagnostics alone keep the failure in the job",
         "the previous successful review is preserved",
         "automatic approval is not attempted",
     ):
@@ -877,7 +874,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
     assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow
-    assert "|| ! uv sync --locked --no-default-groups --python 3.14" in workflow
+    assert "|| ! uv sync --locked --group dev --python 3.14" in workflow
     assert "record-setup-failure" in workflow
     assert '--through-tag "${THROUGH_TAG}"' in workflow
     assert "contents: read" in workflow
@@ -886,7 +883,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "persist-credentials: false" in workflow
     assert "max-parallel: 2" in workflow
     assert "build-matrix" in workflow
-    assert "assess-chain" in workflow
+    assert "assess-matrix" in workflow
+    assert '--head "${GITHUB_SHA}"' in workflow
     assert "pattern: ocr-compatibility-v*" in workflow
     assert workflow.count("prepare-update") == 1
     assert "README.md docs/gitlab.md docs/security.md" not in workflow
@@ -899,10 +897,10 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "gh auth setup-git" in workflow
     assert "git switch -C" in workflow
     assert "git push --force-with-lease" in workflow
-    assert workflow.count("upsert-issue") == 1
+    assert workflow.count("issues: write") == 1
     assert "continue-on-error: true" in workflow
     qualify_job = workflow.split("  qualify:\n", 1)[1].split("  aggregate:\n", 1)[0]
-    dependency_sync = "uv sync --locked --no-default-groups --python 3.14"
+    dependency_sync = "uv sync --locked --group dev --python 3.14"
     assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}(?:\s|$)", qualify_job)
     assert dependency_sync in qualify_job
     assert qualify_job.index("name: Qualify candidate") < qualify_job.index(dependency_sync)
@@ -910,13 +908,19 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify"
     )
     assert "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify" in qualify_job
-    assert "PYTHONPATH=src python scripts/ocr_compat.py upsert-issue" in qualify_job
+    config = yaml.safe_load(workflow)
+    for name in ("discover", "qualify"):
+        permissions = config["jobs"][name].get("permissions", config["permissions"])
+        assert permissions == "read-all" or (
+            isinstance(permissions, dict) and set(permissions.values()) <= {"none", "read"}
+        )
+    assert config["jobs"]["aggregate"]["permissions"] == {"contents": "read", "issues": "write"}
+    assert "--issue-repository" not in qualify_job
+    aggregate = workflow.split("  aggregate:\n", 1)[1]
+    assert "issues: write" in aggregate and "--issue-repository" in aggregate
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
-    assert "QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}" in workflow
-    assert 'case "${QUALIFICATION_OUTCOME}" in' in workflow
-    assert "success) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
-    assert "failure) input=(--status /tmp/ocr-compat/status.json)" in workflow
-    assert "if: ${{ !cancelled() }}" in workflow
+    assert "/tmp/ocr-compat/incompatibility.json" in qualify_job
+    assert workflow.count("github.ref == 'refs/heads/main' && !inputs.qualification_only") == 2
     assert "if: ${{ always() && !cancelled() }}" in workflow
     assert "if: steps.qualify.outcome == 'failure'" in workflow
     assert "run: exit 1" in workflow

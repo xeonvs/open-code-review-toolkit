@@ -39,14 +39,18 @@ Download its platform asset, verify it against that release entry's asset SHA-25
 and place the verified binary on `PATH`. Do not substitute the latest upstream
 release or use another toolkit revision's manifest.
 
+When upgrading, install the wheel and its matching OCR binary together.
+See the [migration instructions and platform checksum](docs/compatibility.md#upgrading-the-toolkit-and-ocr).
+
 Verify the installation without contacting an LLM provider:
 
 ```console
 ocr --version
+ocr-ci --version
 ocr-ci --help
 ```
 
-`ocr --version` must report the manifest's exact `recommended_version`; `ocr-ci --help` must exit
+`ocr --version` must report the manifest's exact `recommended_version`. Check that `ocr-ci --version` reports the intended toolkit release and that `ocr-ci --help` exits
 successfully. `ocr-ci preflight` is an operational configuration check, not the installation
 smoke test.
 
@@ -91,12 +95,13 @@ intentionally not used because it can block a review.
 
 ## How GitLab reviews evolve
 
+Collect GitLab review delivery and process metrics on a workstation for a single project with `ocr-ci telemetry collect --project example/service --no-costs`. Replace `example/service` with the project path. This skips the provider pricing request. Generate a private HTML report and aggregate JSON offline with `ocr-ci telemetry report`. See [local GitLab reports](docs/telemetry.md).
+
 On a successful rerun, the toolkit replaces untouched OCR-only notes instead of accumulating stale reviews. A human reply transfers that discussion to the team: the conversation is preserved and a matching finding is suppressed. Reply with `/ocr suppress` or `@<live-bot-username> suppress` to keep a discussion open without future repeats; use the corresponding `resolve` command to resolve it after the next successful posting transaction. For example, a bot named `mr.bot` accepts the exact reply `@mr.bot resolve`.
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
-For a safely separable changed Git submodule pointer under qualified OCR
-1.13.3, the toolkit reviews selected ordinary files and labels repository
+For a safely separable changed Git submodule pointer with a qualified OCR binary, the toolkit reviews selected ordinary files and labels repository
 coverage partial. It leaves the pointer and submodule contents unreviewed,
 preserves prior finding threads and cannot automatically approve. A diff with
 no selected ordinary files starts no model review and posts an advisory status.
@@ -123,7 +128,7 @@ The shipped Repository Evidence Engine reads immutable base/head Git objects, st
 
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
 2. Pin and checksum the OCR binary.
-3. With toolkit 0.13.0, leave `OCR_GITLAB_TARGET_PROTECTION_MODE` unset to use its `auto` default for a single MR targeting an unprotected branch under the same project's protected default-branch policy. Select explicit `required` to reject unprotected targets, or `unprotected` for the earlier limited profile.
+3. Leave `OCR_GITLAB_TARGET_PROTECTION_MODE` unset to use its `auto` default for a single MR targeting an unprotected branch under the same project's protected default-branch policy. Select explicit `required` to reject unprotected targets, or `unprotected` for the earlier limited profile.
 4. Merge repository review configuration, including the Rules path, into the protected policy branch before relying on it.
 5. Enable the CI review job in a later merge request and install this package.
 6. Run the four public helper stages around `ocr review`:

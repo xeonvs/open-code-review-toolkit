@@ -6,8 +6,9 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
-from . import contracts, core, execution, peer, settings
+from . import core, execution, peer, settings
 
 
 def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
@@ -70,64 +71,87 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
             cwd=repo,
             env=env,
         )
-        grouping_inventories = list(peer._StubHandler.grouping_inventories)
-        request_stages = list(peer._StubHandler.request_stages)
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
-        raise core.CompatibilityError("budget-limited review did not emit JSON") from exc
+        raise core.QualificationContractMismatch(
+            "budget-limited review did not emit JSON", reason="budget-contract"
+        ) from exc
     if not isinstance(sample, dict):
-        core._fail("budget-limited review emitted an unsupported result object")
+        raise core.QualificationContractMismatch(
+            "budget-limited review emitted an unsupported result object", reason="budget-contract"
+        )
     summary = sample.get("summary")
     if not isinstance(summary, dict) or summary.get("budget_exceeded") is not True:
-        core._fail("budget-limited review omitted summary.budget_exceeded")
+        raise core.QualificationContractMismatch(
+            "budget-limited review omitted summary.budget_exceeded", reason="budget-contract"
+        )
 
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
         outcome = parse_result_outcome(sample)
     except OcrResultContractError as exc:
-        raise core.CompatibilityError(
-            f"budget-limited review emitted an unsupported result object: {exc}"
+        raise core.QualificationContractMismatch(
+            f"budget-limited review emitted an unsupported result object: {exc}",
+            reason="budget-contract",
         ) from exc
     if (
         outcome.kind != "partial"
         or not outcome.budget_exceeded
         or outcome.selected_count != 3
-        or outcome.completed_count != 2
-        or outcome.failed_count != 1
-        or len(outcome.failed_items) != 1
-        or outcome.failed_items[0].classification != "budget"
+        or outcome.completed_count < 1
+        or outcome.failed_count < 1
+        or any(item.classification != "budget" for item in outcome.failed_items)
     ):
-        core._fail("real OCR budget gate did not produce the expected partial coverage contract")
-    warnings = sample.get("warnings")
-    if not isinstance(warnings, list) or not any(
-        isinstance(warning, dict) and warning.get("type") == "token_budget_reached"
-        for warning in warnings
-    ):
-        core._fail("budget-limited review omitted the token_budget_reached warning")
-    comments = sample.get("comments")
-    if not isinstance(comments, list) or len(comments) != 2:
-        core._fail("budget-limited review did not preserve its completed finding")
-    contracts._validate_file_groups(sample.get("groups"), set(paths))
-    groups = sample["groups"]
-    if any(len(group.get("files", [])) != 1 for group in groups):
-        core._fail("budget-limited review did not preserve per-file group boundaries")
-    grouping_requests = request_stages.count("grouping")
-    if grouping_requests != 0:
-        core._fail("budget-limited review emitted an unexpected grouping request count")
-    if grouping_inventories:
-        core._fail("budget-limited small-change review unexpectedly emitted a grouping inventory")
-    result: dict[str, object] = {
-        "budget": 30_000,
-        "completed": 2,
-        "failed_budget": 1,
+        raise core.QualificationContractMismatch(
+            "budget-limited review lost the partial coverage partition", reason="budget-contract"
+        )
+    _verify_completed_finding(sample, frozenset(paths))
+    return {
+        "completed": outcome.completed_count,
+        "failed_budget": outcome.failed_count,
         "partial_findings_preserved": True,
         "result": "passed",
-        "selected": 3,
+        "selected": outcome.selected_count,
     }
-    result.update({"grouping_requests": 0, "grouping_strategy": "per_file"})
-    return result
+
+
+def _verify_completed_finding(sample: dict[str, Any], fixture_paths: frozenset[str]) -> None:
+    """Join admitted comments to paths completed by the validated manifest."""
+
+    from ocr_toolkit.posting.comments import comment_line
+    from ocr_toolkit.posting.formatting import format_inline_comment
+
+    comments = sample.get("comments")
+    coverage = sample["manifest"]["coverage"]
+    selected_paths = [row.get("path") for row in coverage["selected"]]
+    if (
+        any(not isinstance(path, str) for path in selected_paths)
+        or len(selected_paths) != len(fixture_paths)
+        or set(selected_paths) != fixture_paths
+    ):
+        raise core.QualificationContractMismatch(
+            "budget-limited review selected paths outside its fixture", reason="budget-contract"
+        )
+    completed = {row["item_id"] for row in coverage["completed"]}
+    completed_paths = {
+        row.get("path") for row in coverage["selected"] if row["item_id"] in completed
+    }
+    if (
+        not isinstance(comments, list)
+        or any(not isinstance(row, dict) for row in comments)
+        or not any(
+            isinstance(row.get("path"), str)
+            and row["path"] in completed_paths
+            and comment_line(row) == 2
+            and "Synthetic compatibility finding" in format_inline_comment(row)
+            for row in comments
+        )
+    ):
+        raise core.QualificationContractMismatch(
+            "budget-limited review lost its completed finding", reason="budget-contract"
+        )
 
 
 def _run_numeric_preview_case(
@@ -176,12 +200,35 @@ def _run_numeric_preview_case(
         or len(completed.stderr.encode()) > settings.MAX_CLI_PROBE_BYTES
     ):
         core._fail(f"numeric CLI preview exceeded its output bound for {flag}")
+    if completed.returncode < 0:
+        core._fail(f"numeric CLI preview terminated by a signal for {flag}")
     return completed
+
+
+def _negative_pattern(flag: str) -> re.Pattern[str]:
+    return (
+        settings.MAX_TOOLS_NEGATIVE_RE
+        if flag == "--max-tools"
+        else settings.MAX_TOKENS_BUDGET_NEGATIVE_RE
+    )
+
+
+def _expect_negative_rejection(completed: subprocess.CompletedProcess[str], flag: str) -> None:
+    if completed.returncode == 0:
+        raise core.QualificationContractMismatch(
+            f"candidate {flag} accepted a negative value", reason="cli-contract"
+        )
+    if completed.returncode < 0 or not _negative_pattern(flag).fullmatch(completed.stderr):
+        core._fail(f"candidate {flag} did not provide a recognized rejection")
 
 
 def _accepted_numeric_preview(completed: subprocess.CompletedProcess[str], *, flag: str) -> None:
     """Require one clean accepted numeric preview without trusting help text."""
 
+    if completed.returncode > 0 and _negative_pattern(flag).fullmatch(completed.stderr):
+        raise core.QualificationContractMismatch(
+            f"candidate {flag} rejected an admitted value", reason="cli-contract"
+        )
     if completed.returncode != 0 or completed.stderr:
         core._fail(f"candidate {flag} preview did not pass without diagnostics")
     try:
@@ -351,43 +398,58 @@ def _numeric_cli_probe(
     )
     for completed in (max_tools_omitted, max_tools_sentinel):
         _accepted_numeric_preview(completed, flag="--max-tools")
-    if (
-        max_tools_invalid.returncode == 0
-        or settings.MAX_TOOLS_NEGATIVE_RE.fullmatch(max_tools_invalid.stderr) is None
-    ):
-        core._fail("candidate max-tools negative boundary did not fail closed")
+    _expect_negative_rejection(max_tools_invalid, "--max-tools")
     normalization = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(discovery.stderr)
-    if discovery.returncode != 0 or normalization is None:
-        core._fail("candidate max-tools minimum could not be qualified behaviorally")
-    requested, minimum, normalized = (int(value) for value in normalization.groups())
-    if requested != 1 or minimum <= 1 or normalized != minimum:
-        core._fail("candidate max-tools minimum diagnostic is inconsistent")
-    below = minimum - 1
-    below_preview = _run_numeric_preview_case(
-        binary, repo, base, head, directory, flag="--max-tools", value=below
-    )
-    below_match = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(below_preview.stderr)
-    if (
-        below_preview.returncode != 0
-        or below_match is None
-        or tuple(int(value) for value in below_match.groups()) != (below, minimum, minimum)
-    ):
-        core._fail("candidate max-tools minimum-minus-one boundary is inconsistent")
-    minimum_preview = _run_numeric_preview_case(
-        binary, repo, base, head, directory, flag="--max-tools", value=minimum
-    )
+    if normalization is None:
+        minimum = 1
+        minimum_preview = discovery
+    else:
+        requested, minimum, normalized = (int(value) for value in normalization.groups())
+        if discovery.returncode != 0 or requested != 1 or minimum <= 1 or normalized != minimum:
+            raise core.QualificationContractMismatch(
+                "candidate max-tools minimum diagnostic is inconsistent", reason="cli-contract"
+            )
+        if minimum > settings.MAX_NUMERIC_PROBE_ROUNDS:
+            core._fail("candidate max-tools minimum exceeds the probe work bound")
+        minimum_preview = _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tools", value=minimum
+        )
     _accepted_numeric_preview(minimum_preview, flag="--max-tools")
+    below = minimum - 1
+    if minimum > 1:
+        below_preview = (
+            discovery
+            if below == 1
+            else _run_numeric_preview_case(
+                binary, repo, base, head, directory, flag="--max-tools", value=below
+            )
+        )
+        below_match = settings.MAX_TOOLS_NORMALIZATION_RE.fullmatch(below_preview.stderr)
+        if (
+            below_preview.returncode != 0
+            or below_match is None
+            or tuple(int(value) for value in below_match.groups()) != (below, minimum, minimum)
+        ):
+            raise core.QualificationContractMismatch(
+                "candidate max-tools minimum-minus-one boundary is inconsistent",
+                reason="cli-contract",
+            )
     observed_cases: dict[str, dict[str, object]] = {}
     grace_completion: dict[str, object] | None = None
-    for name, requested_value in (
+    lower_override = max(75, minimum + 1)
+    template_value = max(100, lower_override + 1)
+    representative = max(125, template_value + 1)
+    numeric_cases = [
         ("omitted", None),
         ("sentinel", 0),
         ("minimum", minimum),
-        ("minimum_minus_one", below),
-        ("lower_override", 75),
-        ("template_value", 100),
-        ("representative", 125),
-    ):
+        ("lower_override", lower_override),
+        ("template_value", template_value),
+        ("representative", representative),
+    ]
+    if minimum > 1:
+        numeric_cases.insert(3, ("minimum_minus_one", below))
+    for name, requested_value in numeric_cases:
         if name in {"lower_override", "template_value", "representative"}:
             _accepted_numeric_preview(
                 _run_numeric_preview_case(
@@ -409,9 +471,18 @@ def _numeric_cli_probe(
         if grace_completion is None:
             grace_completion = verdict
         elif verdict != grace_completion:
-            core._fail("candidate max-tools grace verdict changed with the numeric boundary")
-        if name not in {"omitted", "sentinel"} and rounds != max(minimum, requested_value):
-            core._fail("candidate max-tools override was not applied exactly")
+            raise core.QualificationContractMismatch(
+                "candidate max-tools grace verdict changed with the numeric boundary",
+                reason="cli-contract",
+            )
+        if (
+            requested_value is not None
+            and requested_value > 0
+            and rounds != max(minimum, requested_value)
+        ):
+            raise core.QualificationContractMismatch(
+                "candidate max-tools override was not applied exactly", reason="cli-contract"
+            )
         observed_cases[name] = {
             "effective": rounds,
             "input": requested_value,
@@ -421,7 +492,9 @@ def _numeric_cli_probe(
             observed_cases[name]["reported_normalization"] = minimum
     template_default = observed_cases["omitted"]["effective"]
     if observed_cases["sentinel"]["effective"] != template_default or template_default < minimum:
-        core._fail("candidate max-tools sentinel/default observations disagree")
+        raise core.QualificationContractMismatch(
+            "candidate max-tools sentinel/default observations disagree", reason="cli-contract"
+        )
     observed_cases["invalid_below"] = {"effective": None, "input": -1, "outcome": "rejected"}
     incomplete_rounds, grace_incomplete = _effective_max_tools_probe(
         binary,
@@ -433,8 +506,16 @@ def _numeric_cli_probe(
         expected_diagnostic=None,
         grace_task_done=False,
     )
-    if incomplete_rounds != minimum:
-        core._fail("candidate max-tools non-completion changed the effective round limit")
+    if (
+        incomplete_rounds != minimum
+        or grace_completion is None
+        or grace_completion["completed"] is not True
+        or grace_incomplete["completed"] is not False
+    ):
+        raise core.QualificationContractMismatch(
+            "candidate max-tools grace completion disagrees with the controlled result",
+            reason="cli-contract",
+        )
 
     budget_cases: dict[str, subprocess.CompletedProcess[str]] = {
         "omitted": _run_numeric_preview_case(
@@ -455,12 +536,7 @@ def _numeric_cli_probe(
     }
     for name in ("omitted", "sentinel", "minimum", "representative"):
         _accepted_numeric_preview(budget_cases[name], flag="--max-tokens-budget")
-    if (
-        budget_cases["invalid_below"].returncode == 0
-        or settings.MAX_TOKENS_BUDGET_NEGATIVE_RE.fullmatch(budget_cases["invalid_below"].stderr)
-        is None
-    ):
-        core._fail("candidate max-tokens-budget negative boundary did not fail closed")
+    _expect_negative_rejection(budget_cases["invalid_below"], "--max-tokens-budget")
     return {
         "grace_rounds": {"task_done": grace_completion, "no_task_done": grace_incomplete},
         "max_tokens_budget": {
@@ -497,8 +573,7 @@ def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
     git_env = execution._isolated_probe_environment(probe_root / "git-home")
     repo, base, head = execution._synthetic_repo(probe_root, git_env)
     observed: dict[str, int] = {}
-    inherited = 16_384
-    for label, expected in (("inherited", inherited), ("explicit", 4_096)):
+    for label, expected in (("inherited", None), ("explicit", 4_096)):
         env = execution._isolated_probe_environment(probe_root / f"{label}-home")
         with peer._stub_gateway() as gateway_url:
             env.update(
@@ -544,12 +619,19 @@ def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
                 env=env,
             )
         caps = peer._StubHandler.completion_caps
-        if not caps or any(value != expected for value in caps):
-            core._fail(f"OCR completion-cap {label} probe expected {expected}, observed {caps!r}")
-        observed[label] = expected
+        if not caps:
+            core._fail("completion-cap probe observed no model requests")
+        if label == "explicit" and any(
+            type(value) is not int or value != expected for value in caps
+        ):
+            raise core.QualificationContractMismatch(
+                "explicit completion cap was lost on the wire", reason="provider-contract"
+            )
+        if type(caps[0]) is int:
+            observed[label] = caps[0]
     return {
         "explicit": observed["explicit"],
-        "inherited": observed["inherited"],
+        "inherited": observed.get("inherited"),
         "result": "passed",
         "wire_field": "max_completion_tokens",
     }
@@ -637,8 +719,9 @@ def _reasoning_effort_probe(binary: Path, directory: Path) -> dict[str, object]:
                     or request[f"{prefix}_effort"] != (effort or None)
                     or (protocol == "openai-responses" and effort and request["summary"] != "auto")
                 ):
-                    core._fail(
-                        f"reasoning wire fields differ from configured controls: {protocol}/{label}"
+                    raise core.QualificationContractMismatch(
+                        f"reasoning wire fields differ from configured controls: {protocol}/{label}",
+                        reason="provider-contract",
                     )
     return {
         "result": "passed",

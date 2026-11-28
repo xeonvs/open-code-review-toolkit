@@ -359,3 +359,23 @@ def test_malformed_projection_and_private_extensions_never_reach_renderer() -> N
 
     result["retry_report"]["failed_requests"] = 2
     assert provider_failure_projection(result) is None
+
+
+@pytest.mark.parametrize("field", ["outcome", "failure_phase", "error_class"])
+def test_container_in_closed_failure_field_cannot_interrupt_handoff_cleanup(field: str) -> None:
+    attempt = _error_attempt(status=401, error_class="authentication", phase="http")
+    attempt[field] = []
+    assert provider_failure_projection(_result([_request("failed", [attempt])])) is None
+
+
+@pytest.mark.parametrize("field", ["failure_phase", "error_class"])
+def test_recovered_success_requires_string_classification(field: str) -> None:
+    recovered = _success_attempt(2)
+    recovered[field] = []
+    failure = _error_attempt(status=401, error_class="authentication", phase="http")
+    assert (
+        provider_failure_projection(
+            _result([_request("recovered", [failure, recovered]), _request("failed", [failure])])
+        )
+        is None
+    )

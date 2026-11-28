@@ -580,7 +580,13 @@ class PreflightTests(unittest.TestCase):
             preflight.validate_ocr_binary()
 
     def test_validate_ocr_binary_rejects_unsupported_version(self) -> None:
-        for version in ("1.7.10", "1.10.2"):
+        for version in (
+            "1.7.10",
+            "1.10.2",
+            "1.13.10",
+            f"v{preflight.EXPECTED_OCR_VERSION}-rc.1",
+            f"v{preflight.EXPECTED_OCR_VERSION}+local",
+        ):
             with self.subTest(version=version):
                 completed = subprocess.CompletedProcess(
                     args=["ocr", "--version"], returncode=0, stdout=f"ocr {version}\n", stderr=""
@@ -592,26 +598,23 @@ class PreflightTests(unittest.TestCase):
                 ):
                     preflight.validate_ocr_binary()
 
-    def test_validate_ocr_binary_warns_for_exact_deprecated_patch(self) -> None:
+    def test_validate_ocr_binary_reads_only_the_version_banner(self) -> None:
+        recommended = preflight.RECOMMENDED_OCR_VERSION
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"],
-            returncode=0,
-            stdout=f"ocr {preflight.DEPRECATED_OCR_VERSIONS[-1]}\n",
-            stderr="",
+            ["ocr", "--version"],
+            0,
+            stdout=f"open-code-review v{recommended}-rc.1 (e74f2c6b) darwin/arm64\n",
+            stderr=f"recommended stable release is v{recommended}\n",
         )
-        stderr = io.StringIO()
         with (
-            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
             patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
-            redirect_stderr(stderr),
+            self.assertRaises(preflight.PreflightError),
         ):
-            preflight.validate_ocr_binary()
-        self.assertIn("deprecated", stderr.getvalue())
-        self.assertIn(preflight.RECOMMENDED_OCR_VERSION, stderr.getvalue())
+            preflight.validate_ocr_binary(executable="/usr/bin/ocr")
 
     def test_validate_ocr_binary_rejects_unqualified_patch_in_supported_line(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.12.99\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.14.99\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

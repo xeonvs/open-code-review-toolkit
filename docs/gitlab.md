@@ -10,6 +10,24 @@ Start with the [complete checksum-pinned pipeline](../examples/gitlab/ocr-review
 
 ## Required configuration
 
+Behavior/Impact Analysis requires the wheel and qualified binary described in
+the [paired upgrade instructions](compatibility.md#upgrading-the-toolkit-and-ocr).
+Use the example from the matching release tag once published. The preceding
+release’s example still pins the older wheel and ignores the Analysis setting.
+Set `OCR_ANALYSIS=true` on the ordinary review job to investigate the same MR diff alongside the main review. Set `OCR_ANALYSIS_MAX_TOKENS_BUDGET` to cap the investigation separately. By default the result stays in the private job JSON. The example uploads no report artifact.
+
+To show the investigation to MR readers, add one flag to the existing post command in that job:
+
+```sh
+ocr-ci post --include-analysis --result "/tmp/ocr-result-${CI_JOB_ID}.json" --stderr "/tmp/ocr-stderr-${CI_JOB_ID}.log"
+```
+
+The standard GitLab job token binds the admitted text to this job and its review identity. Both commands must run in the same job for Analysis publication. The MR displays report text literally to keep model-generated mentions and markup inert.
+
+The summary includes a collapsed Behavior/Impact Analysis section with its own status and completeness. DLP-filtered text stays private. If the section exceeds the remaining comment budget the summary includes a short omission notice when it fits. Without publication the private result expires with the runner. Findings and approval continue to use the main review.
+
+A successful rerun may replace the previous review of the same source commit. A new source commit starts a new review history entry. Human discussions and old notes lacking verifiable revision metadata are preserved.
+
 The complete variable inventory, owner, requirement, exact default, and behavior are in [Environment configuration](configuration.md). The principal secrets are:
 
 - `GITLAB_API_TOKEN`: a dedicated bot token with the minimum project/API permissions needed for the selected reads and writes;
@@ -28,7 +46,7 @@ self-test does not bypass eligibility; neither does the toolkit's target-policy
 mode. Arrange an eligible trusted pipeline before enabling this recipe. See
 [GitLab's protected-resource requirements](https://docs.gitlab.com/ci/pipelines/merge_request_pipelines/#control-access-to-protected-variables-and-runners).
 
-The pipeline leaves `OCR_GITLAB_TARGET_PROTECTION_MODE` unset so its pinned toolkit wheel supplies the default. In toolkit 0.13.0, that default is `auto`. If the actual target is protected, it remains its own policy authority. If it is unprotected, the toolkit reviews only this MR's actual delta under the same project's captured protected default-branch policy. Set exact `required` to keep the former strict behavior, or exact `unprotected` to choose the earlier limited profile. Explicit empty, malformed, mixed-case, or unknown values fail closed. Neither unprotected-target path can add an automatic approval, even when `OCR_AUTO_APPROVE=true`; an earlier bot approval may remain until GitLab's own reset or invalidation policy removes it.
+The pipeline leaves `OCR_GITLAB_TARGET_PROTECTION_MODE` unset so its pinned toolkit wheel supplies the default. The default is `auto`. If the actual target is protected, it remains its own policy authority. If it is unprotected, the toolkit reviews only this MR's actual delta under the same project's captured protected default-branch policy. Set exact `required` to keep the former strict behavior, or exact `unprotected` to choose the earlier limited profile. Explicit empty, malformed, mixed-case, or unknown values fail closed. Neither unprotected-target path can add an automatic approval, even when `OCR_AUTO_APPROVE=true`; an earlier bot approval may remain until GitLab's own reset or invalidation policy removes it.
 
 Projects inheriting the unset value need no CI/CD variable or policy-field
 change. A shared CI template that explicitly sets `required` keeps rejecting
@@ -41,8 +59,8 @@ OCR semantically groups related changed files before review and filters candidat
 
 The summary keeps four inputs separate: OCR manifest coverage, publication integrity, published findings, and an optional OCR core advisory. Complete manifest coverage that later loses public fields keeps completed native analysis distinct from incomplete publication. It is labelled `Analysis complete; output incomplete`; it is warning-bearing and approval-ineligible, but it is not called incomplete OCR coverage and does not invent failed-file diagnostics. Actual partial, failed, waived, or budget-stopped manifest coverage keeps its stronger status. Ordinary OCR warnings retain their own complete-with-warnings state. The reviewer guide ranks bounded focus areas only when at least two findings are published; one finding remains in its inline or fallback discussion without a duplicate snippet. Security focus uses explicit published metadata, strong vulnerability terms, and closed injection classes rather than the standalone word `injection`, so neutral knowledge/dependency terminology cannot increase its count or effort estimate.
 
-Toolkit 0.13.1 adds a separate effective repository-coverage line when the MR
-changes a qualified Git submodule pointer. The installed OCR 1.13.3 reviews
+The summary includes a separate effective repository-coverage line when the MR
+changes a qualified Git submodule pointer. The qualified OCR binary reviews
 selected ordinary files against the original MR `B..H` range; the changed
 pointer and submodule contents remain unreviewed. Receipt v14 records only
 closed counts and the partial reason. The GitLab adapter checks those counts
@@ -102,6 +120,8 @@ An exact merge-request lifecycle read also precedes evidence collection. If the 
 GitLab Code Owners and code-owner approval rules are separate project merge policy. They are not prerequisites for OCR execution and cannot give unprotected repository content policy authority. Likewise, a green advisory pipeline or allowed-to-fail OCR job proves neither that `ocr-ci review` completed nor that OCR or its model executed. Inspect the review result, manifest coverage, receipt, and published status.
 
 ## Production bot configuration
+
+The review summary can display the selected model in Technical details. Posting uses the recorded review result and applies publication DLP before emitting the name. Local telemetry uses this field when estimating the cost of a run. [Local telemetry guide](telemetry.md)
 
 Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the selected reads, notes, drafts, discussion management, and optional approval. GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative.
 

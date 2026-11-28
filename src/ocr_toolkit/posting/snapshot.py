@@ -21,6 +21,7 @@ from ocr_toolkit.posting.gitlab import (
     discussion_id as parse_discussion_id,
 )
 from ocr_toolkit.posting.markers import (
+    REVIEW_REVISION,
     author_id_from_note,
     comment_fingerprint,
     comment_fingerprint_candidates,
@@ -33,6 +34,7 @@ from ocr_toolkit.posting.markers import (
     is_own_bot_note,
     legacy_comment_fingerprint,
     line_based_comment_fingerprint,
+    note_review_revision,
     reviewer_command_from_body,
 )
 from ocr_toolkit.posting.settings import post_mode, strict_posting
@@ -219,6 +221,7 @@ def process_discussion_for_refs(
     notes: Sequence[Any],
     *,
     preserve_human_touched: bool = True,
+    scope_review: bool = False,
 ) -> None:
     """Classify a discussion into cleanup, suppression, and resolve buckets.
 
@@ -260,15 +263,17 @@ def process_discussion_for_refs(
         fingerprint = fingerprint_from_marker(str(note.get("body") or ""))
         if fingerprint:
             fingerprints.append(fingerprint)
+            if not scope_review or (
+                REVIEW_REVISION.get() is not None
+                and note_review_revision(note["body"]) == REVIEW_REVISION.get()
+            ):
+                refs.published_fingerprints.add(fingerprint)
+                refs.published_fingerprint_counts[fingerprint] = (
+                    refs.published_fingerprint_counts.get(fingerprint, 0) + 1
+                )
 
     if not bot_notes:
         return
-
-    refs.published_fingerprints.update(fingerprints)
-    for fingerprint in fingerprints:
-        refs.published_fingerprint_counts[fingerprint] = (
-            refs.published_fingerprint_counts.get(fingerprint, 0) + 1
-        )
 
     reviewer_command = reviewer_command_in_thread(config, notes)
     inline_key = None
@@ -281,7 +286,13 @@ def process_discussion_for_refs(
     if preserve_human_touched and (
         is_resolved or reviewer_command in {"suppress", "resolve"} or human_reply
     ):
-        if inline_key is not None:
+        if inline_key is not None and (
+            not scope_review
+            or (
+                REVIEW_REVISION.get() is not None
+                and note_review_revision(str(first_note.get("body") or "")) == REVIEW_REVISION.get()
+            )
+        ):
             refs.suppressed_inline_keys.add(inline_key)
         refs.suppressed_fingerprints.update(fingerprints)
         if reviewer_command == "resolve" and not is_resolved:
@@ -294,8 +305,12 @@ def process_discussion_for_refs(
             refs.discussion_note_refs.append((discussion_id, note_id))
 
 
+def collect_review_refs(config: GitLabConfig) -> BotCommentRefs | None:
+    return collect_previous_bot_comment_refs(config, scope_review=True)
+
+
 def collect_previous_bot_comment_refs(
-    config: GitLabConfig, *, preserve_human_touched: bool = True
+    config: GitLabConfig, *, preserve_human_touched: bool = True, scope_review: bool = False
 ) -> BotCommentRefs | None:
     """Collect previous OCR bot notes without deleting them.
 
@@ -311,6 +326,13 @@ def collect_previous_bot_comment_refs(
     if plain_notes is None:
         return None
 
+    revision = REVIEW_REVISION.get()
+
+    def replaceable(note: dict[str, Any], field: str) -> bool:
+        return not scope_review or (
+            revision is not None and note_review_revision(str(note.get(field) or "")) == revision
+        )
+
     discussions = api_get_paginated(config, "/discussions", max_pages=50)
     if discussions is None:
         return None
@@ -319,6 +341,8 @@ def collect_previous_bot_comment_refs(
         if not isinstance(discussion, dict):
             continue
 
+        if discussion.get("individual_note") is True:
+            continue
         parsed_discussion_id = parse_discussion_id(discussion.get("id"))
         notes = discussion.get("notes")
         if parsed_discussion_id is None or not isinstance(notes, list):
@@ -334,13 +358,28 @@ def collect_previous_bot_comment_refs(
                 # note out of the plain-note baseline and cleanup path.
                 discussion_bot_note_ids.add(note_id)
 
+        start = len(refs.discussion_note_refs)
         process_discussion_for_refs(
             config,
             refs,
             parsed_discussion_id,
             notes,
             preserve_human_touched=preserve_human_touched,
+            scope_review=scope_review,
         )
+
+        if scope_review:
+            keep = {
+                note["id"]
+                for note in notes
+                if isinstance(note, dict)
+                and type(note.get("id")) is int
+                and note["id"] > 0
+                and replaceable(note, "body")
+            }
+            refs.discussion_note_refs[start:] = [
+                item for item in refs.discussion_note_refs[start:] if item[1] in keep
+            ]
 
     for note in plain_notes:
         if not isinstance(note, dict):
@@ -353,13 +392,16 @@ def collect_previous_bot_comment_refs(
 
         refs.all_plain_note_ids.append(note_id)
         if is_own_bot_note(config, note, body_field="body"):
-            refs.plain_note_ids.append(note_id)
-            if has_summary_run_marker(str(note.get("body") or "")):
+            if replaceable(note, "body"):
+                refs.plain_note_ids.append(note_id)
+            if replaceable(note, "body") and has_summary_run_marker(str(note.get("body") or "")):
                 refs.summary_plain_note_ids.append(note_id)
             if has_setup_pending_marker(str(note.get("body") or "")):
                 refs.setup_plain_note_ids.append(note_id)
             if has_terminal_mr_marker(str(note.get("body") or "")):
                 refs.terminal_plain_note_ids.append(note_id)
+            if not replaceable(note, "body"):
+                continue
             fingerprints = finding_fingerprints_from_marked_body(str(note.get("body") or ""))
             refs.published_fingerprints.update(fingerprints)
             for fingerprint in fingerprints:
@@ -382,8 +424,9 @@ def collect_previous_bot_comment_refs(
             continue
         refs.all_draft_note_ids.append(note_id)
         if is_own_bot_note(config, note, body_field="note"):
-            refs.draft_note_ids.append(note_id)
-            if has_summary_run_marker(str(note.get("note") or "")):
+            if replaceable(note, "note"):
+                refs.draft_note_ids.append(note_id)
+            if replaceable(note, "note") and has_summary_run_marker(str(note.get("note") or "")):
                 refs.summary_draft_note_ids.append(note_id)
             if has_setup_pending_marker(str(note.get("note") or "")):
                 refs.setup_draft_note_ids.append(note_id)

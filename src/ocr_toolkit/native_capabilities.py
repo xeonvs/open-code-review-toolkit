@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
+import json
+from importlib.resources import files
 from typing import Literal
 from urllib.parse import urlsplit
 
-NativeCapability = Literal["diagram_output", "gitlink_projection", "inference_query"]
+NativeCapability = Literal[
+    "analysis", "chatgpt_auth", "diagram_output", "gitlink_projection", "inference_query"
+]
 
-# Adjacent patches require the real controlled-peer consumer suite before entry.
-# A supported OCR version does not automatically qualify an optional handoff.
-_QUALIFIED_HANDOFFS = {
-    "1.13.3": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.4": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.5": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.6": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.7": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.8": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.9": frozenset({"diagram_output", "gitlink_projection"}),
-    "1.13.10": frozenset({"diagram_output", "gitlink_projection"}),
+# Generated during promotion from checksum-verified consumer evidence.
+_QUALIFIED_HANDOFFS: dict[str, frozenset[str]] = {
+    version: frozenset(capabilities)
+    for version, capabilities in json.loads(
+        files("ocr_toolkit").joinpath("_qualified_handoffs.json").read_bytes()
+    ).items()
 }
 
 

@@ -200,7 +200,7 @@ def ocr_exit_code() -> int:
         return int(raw)
     except ValueError:
         print(
-            "OCR_EXIT_CODE is not an integer; treating as failure (1).",
+            "OCR_EXIT_CODE is invalid; treating as an unclassified process failure.",
             file=sys.stderr,
         )
-        return 1
+        return 2

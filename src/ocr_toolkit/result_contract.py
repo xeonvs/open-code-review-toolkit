@@ -86,6 +86,16 @@ class ReviewOutcome:
     failed_items: tuple[CoverageFailure, ...] = ()
 
     @property
+    def operational_partial(self) -> bool:
+        """Match the non-zero native exit for partial work with operational failures."""
+
+        return (
+            self.manifest_present
+            and self.kind == "partial"
+            and any(item.classification != "budget" for item in self.failed_items)
+        )
+
+    @property
     def requires_evidence_mcp(self) -> bool:
         """Return whether the result represents review work that must use evidence."""
 

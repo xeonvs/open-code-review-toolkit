@@ -19,6 +19,7 @@ from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repositor
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting.workflow import publication_range_and_diagram
+from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 from ocr_toolkit.review_range import ReviewRange
 from tests.diagrams.support import flow_submission
 from tests.test_evidence_repository import git
@@ -224,7 +225,7 @@ def test_large_source_crosses_final_result_receipt_and_publication_readers(tmp_p
     execution = DiagramExecution.prepare(
         "local",
         local=True,
-        native_version="1.13.3",
+        native_version=RECOMMENDED_OCR_VERSION,
         review_range=review_range,
         path=artifacts.diagram,
     )

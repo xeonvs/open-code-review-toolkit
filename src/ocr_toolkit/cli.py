@@ -12,6 +12,7 @@ from ocr_toolkit import __version__, configure, mcp_config, preflight, review_ru
 from ocr_toolkit.dlp_audit import cli as dlp_cli
 from ocr_toolkit.dlp_audit.state import AuditError
 from ocr_toolkit.posting.workflow import main as posting_main
+from ocr_toolkit.telemetry import cli as telemetry_cli
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    telemetry_cli.configure_parser(
+        subparsers.add_parser("telemetry", help="Collect and report on GitLab reviews locally.")
+    )
     audit_parser = subparsers.add_parser(
         "dlp-audit",
         help="Run offline DLP audits of local text/code with private reports.",
@@ -55,6 +59,14 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
     review_parser.add_argument(
+        "--analysis", action="store_true", help="Request private Behavior/Impact Analysis."
+    )
+    review_parser.add_argument(
+        "--analysis-max-tokens-budget",
+        action="append",
+        help="Separate native Analysis token budget (0 means unlimited).",
+    )
+    review_parser.add_argument(
         "--local", action="store_true", help="Review immutable Git refs and publish local Markdown."
     )
     review_parser.add_argument(
@@ -67,7 +79,9 @@ def build_parser() -> argparse.ArgumentParser:
         "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
     )
 
-    post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
+    post_parser = subparsers.add_parser(
+        "post", allow_abbrev=False, help="Publish an OCR result artifact to GitLab."
+    )
     post_parser.add_argument(
         # The public GitLab example writes this fixed path inside an isolated CI job.
         "--result",
@@ -79,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--stderr",
         default="/tmp/ocr-stderr.log",  # nosec B108
         help="OCR stderr log path.",
+    )
+    post_parser.add_argument(
+        "--include-analysis",
+        action="store_true",
+        help="Include admitted impact analysis in the MR summary.",
     )
     return parser
 
@@ -100,6 +119,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("unrecognized arguments: " + " ".join(remaining))
     if args.command == "dlp-audit":
         return dlp_cli.run(args)
+    if args.command == "telemetry":
+        return telemetry_cli.run(args)
     if args.command == "preflight":
         return preflight.main(local=True) if args.local else preflight.main()
     if args.command == "configure":
@@ -108,6 +129,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return mcp_config.configure_mcp_servers()
     if args.command == "review":
         ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
+        if args.analysis:
+            ocr_args = [*ocr_args, "--analysis"]
+        for budget in args.analysis_max_tokens_budget or ():
+            ocr_args = [*ocr_args, "--analysis-max-tokens-budget", budget]
         try:
             return review_runner.run_evidence_review(
                 Path(args.result),
@@ -125,5 +150,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2
     if args.command == "post":
-        return posting_main([args.result, args.stderr])
+        return posting_main(
+            [args.result, args.stderr],
+            **({"include_analysis": True} if args.include_analysis else {}),
+        )
     raise AssertionError(f"unhandled command: {args.command}")

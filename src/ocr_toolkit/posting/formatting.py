@@ -82,6 +82,7 @@ from ocr_toolkit.reporting.usage import format_verified_mcp_usage
 from ocr_toolkit.reporting.usage import nonnegative_int as nonnegative_int
 from ocr_toolkit.reporting.usage import tool_call_counts_from_items as tool_call_counts_from_items
 from ocr_toolkit.reporting.usage import tool_call_name as tool_call_name
+from ocr_toolkit.review_model import admitted_model
 from ocr_toolkit.review_range import ReviewRange
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
 
@@ -382,7 +383,10 @@ def publication_dlp_signal(
             {
                 "retained": dict(publication["retained"]),
                 "omitted": dict(publication["omitted"]),
-                "original": dict(publication["original"]),
+                "original": {
+                    key: publication["original"][key]
+                    for key in ("outcome", "selected", "completed", "reused", "failed", "waived")
+                },
                 "carried_forward_comments": carried_forward_comments,
             }
         )
@@ -714,6 +718,8 @@ def summarize_result(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    review_model: str | None = None,
+    analysis_section: str = "",
     ocr_core_advisory_summary: str = "",
     publication_dlp_details: str = "",
     reviewer_guide: str = "",
@@ -819,6 +825,8 @@ def summarize_result(
     ):
         if summary:
             technical.append(summary)
+    if (model := admitted_model(review_model)) is not None:
+        technical.append(f"- Review model v1: `{model}`")
     technical.append(f"- Review mode: `{post_mode()}`")
 
     def technical_lines() -> list[str]:
@@ -837,8 +845,22 @@ def summarize_result(
         # Reserve the existing 1000-character/byte envelope for immutable note
         # and transaction markers. Never let the note limiter cut a condition.
         if max(len(candidate), len(candidate.encode("utf-8"))) <= FALLBACK_NOTE_CHUNK_BUDGET:
-            return candidate
+            return _append_analysis(candidate, analysis_section)
         if diagram_state_index is not None:
             technical[diagram_state_index] = "- Change diagram: `omitted-invalid` (note budget)"
         diagram_warning()
-    return "\n".join([*lines, *technical_lines()])
+    return _append_analysis("\n".join([*lines, *technical_lines()]), analysis_section)
+
+
+def _append_analysis(summary: str, section: str) -> str:
+    if not section:
+        return summary
+    available = FALLBACK_NOTE_CHUNK_BUDGET - len(summary.encode()) - 2
+    if len(section.encode()) > available:
+        section = (
+            section.partition("</summary>")[0]
+            + "</summary>\n\nReport omitted for space.\n\n</details>"
+        )
+    if len(section.encode()) > available:
+        return summary
+    return summary + "\n\n" + section

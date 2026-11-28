@@ -9,6 +9,22 @@ from typing import TypeVar
 ROOT = Path(__file__).resolve().parents[2]
 
 
+BEHAVIORAL_EPOCH = (1, 14, 0)
+NATIVE_HANDOFFS = frozenset({"analysis", "chatgpt_auth", "diagram_output", "gitlink_projection"})
+BEHAVIORAL_CHECKS = frozenset(
+    {
+        "identity",
+        "range_preview",
+        "user_exclusion",
+        "review_result",
+        "publication",
+        "budget_partial",
+        "numeric_controls",
+        "provider_controls",
+        "mcp",
+    }
+)
+
 DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
 
 
@@ -65,6 +81,9 @@ MAX_QUALIFICATION_CHAIN = 10
 
 
 MAX_CLI_PROBE_BYTES = 100_000
+
+
+MAX_NUMERIC_PROBE_ROUNDS = 1_000
 
 
 MAX_GROUPING_INVENTORY_ENTRIES = 100
@@ -293,7 +312,22 @@ QUALIFICATION_STATUS_SCHEMA = "ocr-toolkit.compatibility-status/v1"
 QUALIFICATION_PHASES = {"environment", "metadata", "artifact", "contracts", "evidence", "complete"}
 
 
+CONTRACT_MISMATCH_REASONS = frozenset(
+    {
+        "invalid-result",
+        "invalid-preview",
+        "publication-contract",
+        "range-contract",
+        "cli-contract",
+        "budget-contract",
+        "provider-contract",
+        "mcp-contract",
+        "analysis-contract",
+    }
+)
+
 QUALIFICATION_REASONS = {
+    *CONTRACT_MISMATCH_REASONS,
     "dependency-setup-failed",
     "metadata-invalid",
     "metadata-request-failed",

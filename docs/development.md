@@ -81,86 +81,72 @@ evidence. Generic fixtures derive the current identity from its runtime owner;
 frozen historical fixtures must not follow the current pin. A version-neutral
 description still needs semantic review when the consumed contract changes.
 
-Optional local ChatGPT authentication has a separate native-contract line and
-minimum patch in `local_chatgpt`; exact binary qualification still happens first
-through `preflight.validate_ocr_binary`. During OCR promotion, compare upstream
+Optional local ChatGPT authentication reads the exact binary's qualified native
+handoffs after preflight validates its version. During OCR promotion, compare upstream
 changes in native provider resolution, auth-store ownership, locking/refresh and
-supported request controls with the previously reviewed contract. An adjacent
-qualified patch in the same line inherits that contract when none of those
-surfaces changed; it does not need another version entry or a live model call.
-Update the native gate and focused evidence when the consumed contract or version
-line changes. API-provider qualification alone does not qualify native auth.
+supported request controls with the previously reviewed contract. Record the
+offline native-auth check in the candidate evidence. The check covers the CLI
+and configuration boundary. Account reachability requires a separate operator login.
 Keep personal credentials out of shared CI. Use an operator-authorized local
 native login/review when a changed consumed auth contract requires it.
 
-The live suite in `scripts/ocr_compat.py` runs the same forward-only probes for
-every candidate, then validates observations against the contract epoch owned by
-that candidate. Do not add old parser fallbacks or patch-specific fixture copies
-to live probes. Version checks belong to binary identity, release ordering,
-classification, promotion, and the frozen-versus-current contract boundary—not
-to choosing which behavioral checks execute. Change a probe only when a consumed
-upstream contract actually changes, and document the concrete before/after
-behavior.
+New qualifications of OCR 1.14 and later produce evidence schema 5. A blocking check must name its
+toolkit consumer and demonstrate a failure that affects that consumer.
+Use a verified native binary and the deterministic gateway to exercise the
+immutable range, user exclusions, result parser, partial coverage, configured
+provider controls, and advertised MCP tools. Record optional handoffs per exact
+binary. Package the validated handoff decisions with the wheel so an installed
+consumer can operate outside the source checkout.
 
-`scripts/ocr_compat_history.py` owns frozen validation of evidence from before the
-forward-only suite boundary. It never launches OCR and must not depend on current
-numeric defaults, language inventories or live fixtures. Preserve historical
-evidence bytes. Frozen epochs are readback-only: fresh `qualify` and
-`probe-local` requests below the live suite boundary fail before asset downloads
-or binary execution. Live projections also reject those frozen versions rather
-than reconstructing their old language, preview or numeric execution behavior.
-Their original expectations belong only to the frozen readback owner.
-Runtime support and validation of existing evidence remain
-owned by the compatibility manifest and the frozen validators. Generic promotion
-tests use a frozen baseline; only current-pin
-tests assert the latest supported version. Current promotion validates all required
-contract evidence and generated-output collisions before writing any pin or
-evidence file. Identical preplaced outputs are reusable; unrelated content is
-preserved and rejected.
+Keep observations about upstream defaults, language coverage and rule selection
+separate from blocking consumer checks. A new extension, a reordered group,
+a renamed Markdown heading or an equivalent rule glob can change a report
+without changing a consumed contract. Test that these changes survive evidence
+write, manifest readback and promotion. A malformed result or a controlled
+violation of the consumer contract must still identify the failing operation.
 
-When a consumed upstream contract changes, first freeze the last unaffected
-evidence epoch exactly, then advance the cutoff. The same version-selected
-validator must be used by manifest readback, `prepare-update`, and the live
-runner; a candidate cannot bypass a newly required probe merely because an
-older release remains readable. Evidence through OCR 1.12.7 is frozen in its
-original epoch. The OCR 1.12.8 epoch adds F# signature/script
-selection and its built-in Rules pattern, plus expanded dependency and build-output
-exclusions. The Rego and other previously consumed language contracts remain
-required. From OCR 1.12.11, Jinja `.jinja2` and `.j2` selection and the
-built-in Jinja Rules pattern are required; the same live fixture keeps these paths
-as explicit negative controls for earlier candidates. Historical evidence through
-OCR 1.12.13 is frozen unchanged. From OCR 1.13.0,
-the existing numeric max-tools probe also records grace-round completion and
-limit-warning observations, with a bounded no-`task_done` negative control. OCR
-1.13.0 retains the incomplete grace verdict; from OCR 1.13.1, grace `task_done`
-must complete coverage while preserving `review_limit_reached`. The negative
-control must remain incomplete. From OCR 1.13.2, PowerShell, Nushell, shader and
-OpenTofu selection and built-in Rules patterns are required. Earlier candidates
-keep `.ps1` selected with the default rule and the other new paths as unsupported
-negative controls. All candidates execute the same probes; only the shared
-evidence validator selects the required epoch. Scan-only prompt-overflow and
-token-budget changes do not extend the toolkit's consumed `review` contract.
+Archived evidence remains tied to its original schema and bytes.
+Evidence before 1.13.9 uses `scripts/ocr_compat_history.py` for readback.
+OCR 1.13.9–1.13.13 use the archived schema-3 checks in
+`scripts/ocr_qualification/contracts.py`. The initial schema-4 evidence for OCR 1.14.x remains readable in the
+manifest archive. Fresh checks and promotions on the behavioral line require
+schema 5 with per-handoff observations and immutable comparison-side evidence. A previously qualified release outside the selected
+line is historical. Test preflight and optional capability selection against
+the installed wheel.
 
-Use exact-tag dispatch for one candidate. When several unseen releases must be
-qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
-never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
+Use exact-tag dispatch for one candidate. For a scoped series, set
+`through_tag` to the authorized ceiling. Keep the tested baseline and adjacent
+comparison explicit. Review incompatible candidates independently and keep
+diagnostics for download, setup, integrity or harness failures. Check the
+aggregate against the discovery matrix before any promotion. Promotion must
+validate generated destinations before writing: reuse identical evidence and
+reject a conflicting destination.
 
-Evidence through OCR 1.13.8 is now frozen. Its 1.13.0–1.13.8 contract lives in
-the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
-numeric defaults and language inventories. Fresh execution starts at 1.13.9.
-The live max-tools probe separately measures omitted and zero defaults, explicit
-50/75/100/125 overrides and 49 normalization, then checks the native manifest's
-effective limit against actual counted rounds. The same probe implementation
-runs for all new candidates. Current template/JSONC/Scala selection and Rules
-requirements, C#/Starlark/Clojure Rules, unchanged C# and EDN context reads and
-explicit false streaming belong to the live contract; old evidence is never regenerated.
-The comparison-side probe additionally binds actual `file_read`, `file_find` and
+To refresh receipts for an already supported behavioral release window, verify
+that the qualification-only run succeeded at the reviewed full workflow SHA.
+Set `run_id` and `run_head` to that run number and SHA. Download only the
+candidate artifacts into a fresh directory, then refresh and validate:
+
+```sh
+artifacts=$(mktemp -d)
+gh run download "$run_id" --pattern 'ocr-compatibility-v*' --dir "$artifacts"
+PYTHONPATH=src python scripts/ocr_compat.py refresh-receipts --artifacts "$artifacts" \
+  --head "$run_head" --after-tag v1.13.13 --through-tag v1.14.2
+PYTHONPATH=src python scripts/ocr_compat.py validate
+```
+
+Refresh requires the original release asset identities. It updates per-version
+evidence, manifest hashes and packaged handoffs for the tested window.
+
+Schema-5 qualification exercises immutable comparison sides in the candidate
+run. The same boundary also has an opt-in native pytest case in
+`tests/test_ocr_comparison.py`. Request-declaration probes run separately in
+`tests/test_ocr_qualification_selection.py`; their results require that test
+when assessing this boundary. The comparison-side probe binds actual `file_read`, `file_find` and
 `code_search` calls/results to immutable base/head objects. Renamed/deleted paths,
 invalid side values, a different checked-out target and dirty files cannot borrow
 another side's content. Successful same-tool controls separate independent negative
 cases so OCR's repeated-failure guard cannot replace the rejection being tested.
-Extensionless build paths are recorded separately from actual extension suffixes.
-Similar ordinary names retain default Rules instead of acquiring Starlark Rules.
 Excluded coverage is checked independently from the selected terminal partition.
 Request-scoped tools retain declared reads across review rounds. The negative
 grace control requests a registered read that is absent from that request's tool

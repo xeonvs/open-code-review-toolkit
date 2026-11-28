@@ -126,7 +126,7 @@ class SettingsTests(unittest.TestCase):
 
         with redirect_stderr(stderr):
             with patched_env(OCR_EXIT_CODE="not-a-number-with-sensitive-shape"):
-                self.assertEqual(settings.ocr_exit_code(), 1)
+                self.assertEqual(settings.ocr_exit_code(), 2)
 
         self.assertNotIn("not-a-number-with-sensitive-shape", stderr.getvalue())
 

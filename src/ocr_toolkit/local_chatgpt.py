@@ -8,12 +8,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.native_capabilities import supports_native_capability
 from ocr_toolkit.provider_config import ProviderConfigError, request_controls_from_environment
 
-# Exact binary versions are qualified by preflight.validate_ocr_binary first.
-# Native auth is an independently reviewed capability within that qualified line.
-CHATGPT_CONTRACT_LINE = (1, 13)
-CHATGPT_MIN_PATCH = 2
 _CONFLICTING_SETTINGS = (
     "OCR_LLM_URL",
     "OCR_LLM_TOKEN",
@@ -82,16 +79,9 @@ def provider_entry(environment: Mapping[str, str]) -> dict[str, Any]:
 def require_supported_version(version: str) -> None:
     """Require the reviewed native-auth contract after exact binary qualification."""
 
-    parts = version.split(".")
-    if (
-        len(version) > 32
-        or len(parts) != 3
-        or any(not part.isascii() or not part.isdecimal() for part in parts)
-        or tuple(map(int, parts[:2])) != CHATGPT_CONTRACT_LINE
-        or int(parts[2]) < CHATGPT_MIN_PATCH
-    ):
+    if not supports_native_capability(version, "chatgpt_auth"):
         raise LocalChatGPTError(
-            "ChatGPT authentication requires qualified OCR 1.13.2 or later in the 1.13 line"
+            "ChatGPT authentication requires an OCR binary qualified for native authentication"
         )
 
 

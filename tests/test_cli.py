@@ -32,6 +32,10 @@ class CliTests(unittest.TestCase):
             "dlp-audit",
         )
 
+    def test_analysis_publication_requires_exact_flag(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            cli.main(["post", "--i"])
+
     def test_invalid_top_level_command_keeps_normal_cli_error(self) -> None:
         with (
             contextlib.redirect_stderr(io.StringIO()) as stderr,

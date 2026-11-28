@@ -77,6 +77,20 @@ The main trust transitions are:
    authority. Generated promotion outputs reject conflicting existing content
    before any pin is changed; exclusive creation protects new destinations.
 
+### Local GitLab telemetry
+
+The operator chooses a trusted local `glab` installation, authenticated context and private state directory. A person who can write an MR, note, reaction or project setting can influence observations. Those inputs cannot grant collection access, publish a finding or approve an MR.
+
+| Boundary | Controls and residual exposure |
+| --- | --- |
+| GitLab session → collector | Requests use the same local executable, working directory and credential context. Responses cannot select a new host for an authenticated request. Collection checks the instance and project identities, pins the numeric bot identity, and interprets supported bot publications. Missing permissions and incomplete history affect coverage. |
+| Review → MR audience | The optional model field binds the native selection to the configuration of that run. The receipt and publication checks admit the bounded identifier and apply DLP. Readers of the MR can see the published identifier. A model alias does not attest to the provider's underlying deployment. |
+| Project settings and catalog → cost estimate | A project with historical usage that needs a model can trigger a read of the exact default-scope variable. GitLab returns visibility flags together with the value. The collector checks them after receiving the response and discards protected, masked, hidden or inadmissible values before storage. The pricing request uses the operator-configured HTTPS catalog and its own credentials. It sends no MR text or GitLab token. The report distinguishes the recorded run model from a later project setting and reports missing coverage. |
+| Snapshot → local files | Collection normalizes notes before persistence. Owner-only directories and files, checked directory descriptors, exclusive locking and atomic replacement protect the snapshot and report outputs. The snapshot and ordinary HTML can identify people, projects or MRs. Storage is plaintext. Copies from another operator require a trusted transfer and source. A process with the same user privileges can modify or read these files. |
+| Snapshot → browser | Rendering works offline. Dynamic text is escaped, and MR links are checked against the saved HTTPS instance, project path and IID. Following a link contacts GitLab. Anonymized HTML omits MR links and uses local labels. Aggregate counts and small cohorts can still identify a team or an event, so all report variants remain private. |
+
+[Collection, cost coverage and private file handling](telemetry.md)
+
 ### Static declaration parsing
 
 Static .NET inputs are hostile repository data. XML construction rejects DTDs,
@@ -111,8 +125,8 @@ query-preservation qualification before review. The toolkit's independent
 metadata client may use an explicit queried URL and sends the configured model
 credential/headers to that operator-selected endpoint.
 
-The trusted OCR child inherits the operator environment except
-`OCR_RAW_LOGGING`. Its fresh private HOME isolates session/configuration files;
+The binary version probe inherits the process environment and its current HOME. Standalone preflight and the early Analysis or ChatGPT capability probe use the operator HOME. Diagram and gitlink fallback probes run after review setup has selected the private session HOME. Before launching the OCR preview and model review, the toolkit removes `OCR_RAW_LOGGING` and consumes
+`OCR_ANALYSIS` and `OCR_ANALYSIS_MAX_TOKENS_BUDGET`. The child inherits the remaining operator environment. Its fresh private HOME isolates session/configuration files;
 it does not clear environment variables or sandbox the executable. Gateway
 credentials stay out of OCR configuration and arguments, but corresponding
 operator variables can remain in the inherited environment. Trust the installed
@@ -159,6 +173,12 @@ old finding-thread cleanup; the native OCR manifest retains its own meaning.
 `post` independently rechecks the original Git trees and selected native work
 before a GitLab write. A v6 no-model status contains only closed counts or a
 closed unqualified reason, with the authenticated MR identity.
+With Behavior/Impact Analysis enabled, the private JSON can contain admitted
+report Markdown, status, declared completeness and bounded token counts. Treat
+that artifact as private repository material. Only an explicit `post --include-analysis` can publish admitted report text in the MR. The posting path verifies the HMAC over the report and validated review identity with the current GitLab job token and rechecks DLP before rendering. The standard job uploads no Analysis artifact. Native session paths, raw
+observations and traces belong to the isolated execution directory. GitLab
+findings, approval and coverage derive from the main review.
+
 If publication DLP removes a finding or warning, the filtered handoff omits
 the native manifest. Only after validating that manifest, the toolkit carries
 a path-free selection proof made of item digests and the source-artifact digest;
